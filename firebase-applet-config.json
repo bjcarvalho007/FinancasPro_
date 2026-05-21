@@ -1,10 +1,10 @@
 {
-  "projectId": "",
-  "appId": "",
-  "apiKey": "",
-  "authDomain": "",
-  "firestoreDatabaseId": "",
-  "storageBucket": "",
-  "messagingSenderId": "",
-  "measurementId": ""
+  "projectId": "financaspro-bcbb4",
+  "appId": "1:838794865527:web:d3af0d4c3d85f594e5cf72",
+  "apiKey": "AIzaSyCJBEyT3saaWEdNhABwnLvGvPcgDJy18j0",
+  "authDomain": "financaspro-bcbb4.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "financaspro-bcbb4.firebasestorage.app",
+  "messagingSenderId": "838794865527",
+  "measurementId": "G-XG2YC8QZJC"
 }

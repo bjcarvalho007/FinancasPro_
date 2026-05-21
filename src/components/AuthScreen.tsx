@@ -7,8 +7,8 @@ import {
   GoogleAuthProvider
 } from 'firebase/auth';
 import { auth } from '../firebase';
-import { Mail, Lock, Sparkles, TrendingUp, ShieldCheck, HelpCircle, ArrowRight } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Mail, Lock, Sparkles, TrendingUp, ShieldCheck, HelpCircle, ArrowRight, AlertCircle, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface AuthScreenProps {
   onSuccess: () => void;
@@ -25,11 +25,39 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
   const [fullName, setFullName] = useState<string>('');
   
   const [loading, setLoading] = useState<boolean>(false);
+  const [errorAlert, setErrorAlert] = useState<string | null>(null);
+  const [shakeTrigger, setShakeTrigger] = useState<number>(0);
+
+  const getAuthErrorMessage = (err: any): string => {
+    const code = err?.code || '';
+    switch (code) {
+      case 'auth/wrong-password':
+      case 'auth/invalid-credential':
+        return 'A senha inserida está incorreta ou as credenciais fornecidas são inválidas. Verifique os dados e tente novamente.';
+      case 'auth/user-not-found':
+        return 'Nenhum usuário correspondente a este e-mail foi encontrado em nosso sistema.';
+      case 'auth/email-already-in-use':
+        return 'Este endereço de e-mail já está sendo utilizado por outro usuário.';
+      case 'auth/weak-password':
+        return 'A senha fornecida é muito fraca. Ela deve conter no mínimo 6 caracteres.';
+      case 'auth/invalid-email':
+        return 'O formato do endereço de e-mail informado é inválido.';
+      case 'auth/user-disabled':
+        return 'Esta conta foi desativada. Entre em contato com o suporte para reativação.';
+      case 'auth/too-many-requests':
+        return 'Acesso bloqueado temporariamente por excesso de tentativas incorretas. Tente novamente mais tarde.';
+      default:
+        return err?.message || 'Ocorreu um erro inesperado ao conectar. Por favor, tente novamente.';
+    }
+  };
 
   const handleEmailAuth = async (e: FormEvent) => {
     e.preventDefault();
+    setErrorAlert(null);
+
     if (!email || !email.includes('@')) {
-      showToast('Por favor, informe um email válido.', 'error');
+      setErrorAlert('Por favor, informe um endereço de email válido.');
+      setShakeTrigger(prev => prev + 1);
       return;
     }
 
@@ -40,7 +68,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         showToast('Link de recuperação enviado para o seu e-mail!', 'success');
         setIsResetMode(false);
       } catch (err: any) {
-        showToast(err.message || 'Falha ao processar redefinição.', 'error');
+        setErrorAlert(getAuthErrorMessage(err));
+        setShakeTrigger(prev => prev + 1);
       } finally {
         setLoading(false);
       }
@@ -48,17 +77,20 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
     }
 
     if (!password) {
-      showToast('Por favor, insira uma senha.', 'error');
+      setErrorAlert('Por favor, insira sua senha de acesso.');
+      setShakeTrigger(prev => prev + 1);
       return;
     }
 
     if (isRegister) {
       if (password.length < 6) {
-        showToast('A senha precisa ter no mínimo 6 caracteres.', 'error');
+        setErrorAlert('A senha precisa ter no mínimo 6 caracteres por segurança.');
+        setShakeTrigger(prev => prev + 1);
         return;
       }
       if (password !== confirmPassword) {
-        showToast('As senhas não coincidem.', 'error');
+        setErrorAlert('As senhas digitadas não coincidem. Digite novamente.');
+        setShakeTrigger(prev => prev + 1);
         return;
       }
       
@@ -68,7 +100,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         showToast('Conta criada com sucesso!', 'success');
         onSuccess();
       } catch (err: any) {
-        showToast(err.message || 'Erro ao registrar usuário.', 'error');
+        setErrorAlert(getAuthErrorMessage(err));
+        setShakeTrigger(prev => prev + 1);
       } finally {
         setLoading(false);
       }
@@ -79,7 +112,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         showToast('Bem-vindo de volta!', 'success');
         onSuccess();
       } catch (err: any) {
-        showToast('Credenciais incorretas ou inválidas.', 'error');
+        setErrorAlert(getAuthErrorMessage(err));
+        setShakeTrigger(prev => prev + 1);
       } finally {
         setLoading(false);
       }
@@ -88,13 +122,17 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
 
   const handleGoogleAuth = async () => {
     setLoading(true);
+    setErrorAlert(null);
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
       showToast('Autenticado com sucesso via Google!', 'success');
       onSuccess();
     } catch (err: any) {
-      showToast('Conexão Google cancelada ou indisponível.', 'error');
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setErrorAlert('Falha na autenticação via Google. Conexão cancelada ou indisponível.');
+        setShakeTrigger(prev => prev + 1);
+      }
     } finally {
       setLoading(false);
     }
@@ -198,6 +236,44 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 : 'Insira suas credenciais abaixo para carregar seu caixa'}
           </p>
         </div>
+
+        {/* Animated Custom Error Banner */}
+        <AnimatePresence>
+          {errorAlert && (
+            <motion.div
+              key={shakeTrigger}
+              initial={{ opacity: 0, y: -12, scale: 0.95 }}
+              animate={{ 
+                opacity: 1, 
+                y: 0, 
+                scale: 1,
+                x: [0, -12, 12, -10, 10, -5, 5, 0]
+              }}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              transition={{ 
+                type: 'spring', 
+                duration: 0.4,
+                x: { duration: 0.45, ease: 'easeInOut' }
+              }}
+              className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-start gap-3 relative overflow-hidden shadow-lg shadow-rose-950/20"
+            >
+              <div className="w-5 h-5 rounded-lg bg-rose-500/20 flex items-center justify-center shrink-0 text-rose-400 mt-0.5 animate-pulse">
+                <AlertCircle className="w-3.5 h-3.5" />
+              </div>
+              <div className="flex-1 text-[11px] leading-relaxed pr-5 font-semibold">
+                <span className="font-extrabold text-rose-200 block mb-0.5 uppercase tracking-wide text-[9px]">Falha na Operação</span>
+                {errorAlert}
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorAlert(null)}
+                className="absolute top-3 right-3 text-rose-400/50 hover:text-rose-200 transition-colors p-1 rounded-lg hover:bg-rose-500/15 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Input Form */}
         <form onSubmit={handleEmailAuth} className="space-y-4">

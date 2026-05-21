@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import {
   onAuthStateChanged,
@@ -99,6 +99,7 @@ export default function App() {
 
   // Income parameters custom configuration trigger modal
   const [isIncomeOpen, setIsIncomeOpen] = useState<boolean>(false);
+  const [isLogoutOpen, setIsLogoutOpen] = useState<boolean>(false);
   const [tempIncomeStr, setTempIncomeStr] = useState<string>('');
   const [tempBalanceStr, setTempBalanceStr] = useState<string>('');
   const [tempExtraStr, setTempExtraStr] = useState<string>('');
@@ -341,7 +342,10 @@ export default function App() {
       type: data.type,
       cat: data.cat,
       due: data.due,
-      monthKey: currentMonthKey,
+      monthKey: editingTransaction ? editingTransaction.monthKey : currentMonthKey,
+      masterId: data.type === 'fixos' 
+        ? (editingTransaction?.masterId || editingTransaction?.id || docId)
+        : undefined,
       paid_amount: fallbackPaid,
       paid_at: fallbackPaidAt,
       createdAt: editingTransaction?.createdAt || new Date().toISOString(),
@@ -358,12 +362,22 @@ export default function App() {
   };
 
   const handleDeleteTransaction = async (id: string) => {
-    const confirm = window.confirm("Deseja mesmo remover permanentemente esse gasto?");
+    let confirmMessage = "Deseja mesmo remover permanentemente esse gasto?";
+    const isVirtual = id.startsWith('v_');
+    let realIdToDelete = id;
+
+    if (isVirtual) {
+      confirmMessage = "Esta é uma despesa fixa recorrente. Ao confirmar, ela será removida de todos os meses. Deseja prosseguir?";
+      const lastUnderscore = id.lastIndexOf('_');
+      realIdToDelete = id.substring(2, lastUnderscore);
+    }
+
+    const confirm = window.confirm(confirmMessage);
     if (!confirm) return;
-    const path = `transactions/${id}`;
+    const path = `transactions/${realIdToDelete}`;
     
     try {
-      await deleteDoc(doc(db, 'transactions', id));
+      await deleteDoc(doc(db, 'transactions', realIdToDelete));
       triggerToast('Lançamento excluído!', 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, path);
@@ -377,7 +391,7 @@ export default function App() {
 
   // Payments / Income confirmation flow
   const handleOpenPay = (txId: string) => {
-    const tx = transactions.find(t => t.id === txId);
+    const tx = activeMonthTransactions.find(t => t.id === txId);
     if (!tx) return;
     setPayTransactionId(txId);
     const pendingVal = tx.amount - (tx.paid_amount || 0);
@@ -390,7 +404,7 @@ export default function App() {
     const payVal = handleParseMoney(confirmValueStr);
     if (payVal <= 0) return;
 
-    const tx = transactions.find(t => t.id === payTransactionId);
+    const tx = activeMonthTransactions.find(t => t.id === payTransactionId);
     if (!tx) return;
 
     const targetPaidSum = (tx.paid_amount || 0) + payVal;
@@ -593,9 +607,12 @@ export default function App() {
   };
 
   // Logout trigger user friendly
-  const handleUserLogout = async () => {
-    const confirm = window.confirm("Deseja realmente desconectar-se do painel?");
-    if (!confirm) return;
+  const handleUserLogout = () => {
+    setIsLogoutOpen(true);
+  };
+
+  const executeLogout = async () => {
+    setIsLogoutOpen(false);
     try {
       await signOut(auth);
       triggerToast('Sessão encerrada com sucesso.', 'success');
@@ -606,7 +623,66 @@ export default function App() {
 
   // Math ledger computation definitions
   const activeMonthCategoryList = [...defaultCategories, ...categories];
-  const activeMonthTransactions = transactions.filter(t => t.monthKey === currentMonthKey);
+  const activeMonthTransactions = useMemo(() => {
+    // 1. Get real transactions for this month
+    const realTransactionsThisMonth = transactions.filter(t => t.monthKey === currentMonthKey);
+
+    // 2. Find all unique fixed master transaction definitions in the whole database
+    const fixedTransactions = transactions.filter(t => t.type === 'fixos');
+    
+    // Group them uniquely by recurring identity to avoid duplicates.
+    const mastersMap = new Map<string, Transaction>();
+    
+    // Sort so the latest updated templates come first
+    const sortedFixed = [...fixedTransactions].sort((a, b) => {
+      const dateA = a.updatedAt || a.createdAt || '';
+      const dateB = b.updatedAt || b.createdAt || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    for (const tx of sortedFixed) {
+      const matchKey = tx.masterId || `name_${tx.name.trim().toLowerCase()}`;
+      if (!mastersMap.has(matchKey)) {
+        mastersMap.set(matchKey, tx);
+      }
+    }
+
+    const enrichedTransactions = [...realTransactionsThisMonth];
+
+    mastersMap.forEach((masterTx) => {
+      // Check if there is already a transaction for this month that matches this master
+      const exists = realTransactionsThisMonth.some(t => {
+        if (masterTx.masterId && t.masterId === masterTx.masterId) return true;
+        if (t.id === masterTx.id) return true;
+        if (t.name.trim().toLowerCase() === masterTx.name.trim().toLowerCase()) return true;
+        return false;
+      });
+
+      if (!exists) {
+        // Create virtual projection
+        const virtualId = `v_${masterTx.masterId || masterTx.id}_${currentMonthKey}`;
+        const virtualTx: Transaction = {
+          id: virtualId,
+          userId: masterTx.userId,
+          name: masterTx.name,
+          amount: masterTx.amount,
+          type: 'fixos',
+          cat: masterTx.cat,
+          due: masterTx.due,
+          paid_amount: 0,
+          paid_at: '',
+          masterId: masterTx.masterId || masterTx.id,
+          monthKey: currentMonthKey,
+          createdAt: masterTx.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        enrichedTransactions.push(virtualTx);
+      }
+    });
+
+    return enrichedTransactions;
+  }, [transactions, currentMonthKey]);
+
   const activeTabTransactions = activeMonthTransactions.filter(t => t.type === activeTab);
 
   // Summaries Calculations
@@ -628,6 +704,110 @@ export default function App() {
   const fixosSum = activeMonthTransactions.filter(t => t.type === 'fixos').reduce((sum, t) => sum + t.amount, 0);
   const variableSum = activeMonthTransactions.filter(t => t.type === 'variaveis').reduce((sum, t) => sum + t.amount, 0);
   const parcelasSum = activeMonthTransactions.filter(t => t.type === 'parcelas').reduce((sum, t) => sum + t.amount, 0);
+  const renderSummaryCardsMobile = () => {
+    if (activeTab === 'dashboard' || activeTab === 'goals' || activeTab === 'settings') {
+      return null;
+    }
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:hidden">
+        {/* Core card leftover surplus */}
+        <motion.div
+          whileHover={{ scale: 1.01 }}
+          onClick={handleOpenIncome}
+          className={`p-6 rounded-3xl ${
+            theme === 'light' 
+              ? 'bg-gradient-to-br from-[#effaf3] to-white border-[#b7ebd1] text-slate-900 shadow-sm shadow-emerald-100/30' 
+              : 'bg-gradient-to-br from-emerald-950/70 to-teal-950/15 border-emerald-500/30 text-white shadow-xl shadow-black/20'
+          } border glow-emerald relative overflow-hidden flex flex-col justify-between cursor-pointer group`}
+        >
+          <div className="absolute top-4 right-4 text-emerald-400/40 group-hover:text-emerald-400 group-hover:rotate-12 transition-all">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>Sobra Estimada de Caixa</span>
+            <h3 className={`font-mono text-3xl font-extrabold ${theme === 'light' ? 'text-emerald-700' : 'text-white'} tracking-tight leading-none mb-2`}>
+              {formatCurrency(leftoverCash)}
+            </h3>
+          </div>
+          <div className={`text-[11px] ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400/80'} font-bold uppercase tracking-wider mt-4`}>
+            Sobre disponível de {formatCurrency(totalInflowsSum)}
+          </div>
+        </motion.div>
+
+        {/* Core card liabilities total */}
+        <motion.div
+          whileHover={{ scale: 1.01 }}
+          onClick={() => setActiveTab('dashboard')}
+          className={`p-6 rounded-3xl ${
+            theme === 'light' 
+              ? 'bg-white border-slate-200 shadow-sm shadow-slate-100/30 text-slate-900' 
+              : 'bg-slate-950/40 border-white/5 text-white shadow-xl'
+          } border flex flex-col justify-between cursor-pointer`}
+        >
+          <div>
+            <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>Total a Pagar Pendente</span>
+            <h3 className="font-mono text-3xl font-extrabold text-rose-450 tracking-tight leading-none mb-2">
+              {formatCurrency(pendingTotalDebt)}
+            </h3>
+          </div>
+          <div className={`text-[11px] font-bold uppercase tracking-wider mt-4 ${theme === 'light' ? 'text-slate-500' : 'text-slate-500'}`}>
+            Comprometido do mês: {formatCurrency(totalSpentInMonth)}
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
+
+  const renderSummaryCardsPC = () => {
+    return (
+      <div className="space-y-4 hidden lg:flex flex-col">
+        {/* PC Stacked Leftover Card */}
+        <motion.div
+          whileHover={{ scale: 1.01 }}
+          onClick={handleOpenIncome}
+          className={`p-6 rounded-3xl ${
+            theme === 'light' 
+              ? 'bg-gradient-to-br from-[#f0fdf4] to-white border-emerald-200 text-slate-900 shadow-md shadow-emerald-100/10' 
+              : 'bg-gradient-to-br from-emerald-950/40 to-teal-950/15 border border-emerald-500/20 text-white shadow-xl shadow-black/20'
+          } border glow-emerald relative overflow-hidden flex flex-col h-32 justify-between cursor-pointer group`}
+        >
+          <div className="absolute top-4 right-4 text-emerald-400/40 group-hover:text-emerald-400 group-hover:rotate-12 transition-all">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <span className={`text-[9px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>Sobra Estimada de Caixa</span>
+            <h3 className={`font-mono text-2xl font-black ${theme === 'light' ? 'text-emerald-700' : 'text-white'} tracking-tight leading-none`}>
+              {formatCurrency(leftoverCash)}
+            </h3>
+          </div>
+          <div className={`text-[10px] ${theme === 'light' ? 'text-emerald-650' : 'text-emerald-400/80'} font-extrabold uppercase tracking-wider`}>
+            Do total de {formatCurrency(totalInflowsSum)}
+          </div>
+        </motion.div>
+
+        {/* PC Stacked Liabilities Card */}
+        <motion.div
+          whileHover={{ scale: 1.01 }}
+          onClick={() => setActiveTab('dashboard')}
+          className={`p-6 rounded-3xl ${
+            theme === 'light' 
+              ? 'bg-white border-slate-205 shadow-md shadow-slate-100/10 text-slate-900' 
+              : 'bg-slate-950/40 border-white/5 text-white shadow-xl shadow-black/20'
+          } border flex flex-col h-32 justify-between cursor-pointer`}
+        >
+          <div>
+            <span className={`text-[9px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>Total a Pagar Pendente</span>
+            <h3 className="font-mono text-2xl font-black text-rose-400 tracking-tight leading-none">
+              {formatCurrency(pendingTotalDebt)}
+            </h3>
+          </div>
+          <div className={`text-[10px] ${theme === 'light' ? 'text-slate-450' : 'text-slate-500'} font-extrabold uppercase tracking-wider`}>
+            Comprometido: {formatCurrency(totalSpentInMonth)}
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
 
   if (loadingUser) {
     return (
@@ -648,9 +828,110 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen w-full flex flex-col transition-colors duration-300 ${
+    <div className={`min-h-screen w-full flex flex-col lg:flex-row transition-colors duration-300 ${
       theme === 'light' ? 'bg-[#f4f7fa] text-slate-900 font-sans' : 'bg-[#070a13] text-slate-100 font-sans'
     }`}>
+      {/* PERSISTENT ELEGANT DESKTOP SIDEBAR */}
+      <aside className={`hidden lg:flex w-64 shrink-0 flex-col justify-between p-6 sticky top-0 h-screen border-r transition-colors duration-300 ${
+        theme === 'light' 
+          ? 'bg-white border-slate-200/80 text-slate-900 shadow-sm' 
+          : 'bg-[#090d1a] border-white/5 text-slate-100'
+      }`}>
+        <div className="space-y-8">
+          {/* Logo Section */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center glow-emerald">
+              <TrendingUp className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="font-display font-black text-sm tracking-tight leading-none">
+                FINANÇAS<span className="text-emerald-400">PRO</span>
+              </h2>
+              <span className="text-[8px] text-slate-500 font-extrabold uppercase tracking-widest block mt-0.5">SaaS de Gestão Segura</span>
+            </div>
+          </div>
+
+          {/* Navigation Items (Vertical menu for PC) */}
+          <nav className="space-y-1.5" aria-label="Desktop menu">
+            {[
+              { id: 'fixos', val: '📌 Gasto Fixo' },
+              { id: 'variaveis', val: '📊 Gasto Variável' },
+              { id: 'parcelas', val: '💳 Parcelas' },
+              { id: 'dashboard', val: '📉 Dashboard' },
+              { id: 'goals', val: '🎯 Metas Poupança' },
+              { id: 'settings', val: '⚙️ Configurações' }
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`w-full text-left py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all duration-200 cursor-pointer flex items-center justify-between group ${
+                    isActive 
+                      ? theme === 'light'
+                        ? 'bg-indigo-50 border border-indigo-200 text-indigo-700 shadow-sm'
+                        : 'bg-indigo-600/15 border border-indigo-500/30 text-indigo-400'
+                      : theme === 'light'
+                        ? 'text-slate-600 hover:text-slate-900 border border-transparent hover:bg-slate-50'
+                        : 'text-slate-400 hover:text-white border border-transparent hover:bg-white/3'
+                  }`}
+                >
+                  <span>{tab.val}</span>
+                  <div className={`w-1.5 h-1.5 rounded-full transition-all ${
+                    isActive 
+                      ? theme === 'light' ? 'bg-indigo-600' : 'bg-indigo-400' 
+                      : 'bg-transparent group-hover:bg-slate-400'
+                  }`} />
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* User profile & controls */}
+        <div className={`pt-4 border-t ${theme === 'light' ? 'border-slate-100' : 'border-white/5'} space-y-4`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 select-none ${
+              theme === 'light' ? 'bg-slate-100 text-slate-700' : 'bg-slate-900 text-slate-300 border border-white/5'
+            }`}>
+              {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className={`text-[9px] uppercase font-bold tracking-wider block ${
+                theme === 'light' ? 'text-slate-400' : 'text-slate-500'
+              }`}>Empresa / Usuário</span>
+              <p className="text-xs font-semibold truncate leading-tight" title={user.email || ''}>
+                {user.email || 'Conectado'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleOpenIncome}
+              className={`flex-1 py-2.5 rounded-xl text-[10px] font-semibold tracking-wider uppercase transition-all flex items-center justify-center gap-1 cursor-pointer border ${
+                theme === 'light' 
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/70' 
+                  : 'bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400 border-emerald-500/10'
+              }`}
+            >
+              <DollarSign className="w-3.5 h-3.5" /> Ganhos
+            </button>
+            <button
+              onClick={handleUserLogout}
+              className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all cursor-pointer border ${
+                theme === 'light'
+                  ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-705'
+                  : 'bg-rose-500/5 hover:bg-rose-500/10 text-rose-450 border-rose-500/10'
+              }`}
+              title="Sair da plataforma"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+
       {/* Dynamic Animated Toast */}
       {showToast && (
         <motion.div
@@ -715,11 +996,11 @@ export default function App() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto h-screen"
       >
-        <div className="max-w-2xl mx-auto px-4 py-6 md:py-10 space-y-6">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 md:py-8 space-y-6">
           {isFirebaseOffline && (
-            <div className="p-5 rounded-3xl bg-amber-950/20 border border-amber-500/20 text-amber-200 text-xs space-y-3 shadow-xl relative overflow-hidden">
+            <div className="p-5 rounded-3xl bg-amber-955/20 border border-amber-500/20 text-text-amber-200 text-xs space-y-3 shadow-xl relative overflow-hidden">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400 shrink-0">
                   <AlertCircle className="w-4 h-4 text-amber-400 animate-pulse" />
@@ -760,14 +1041,18 @@ export default function App() {
             </div>
           )}
 
-          {/* Main Top Header Block */}
-          <header className="flex items-center justify-between pb-4 border-b border-white/5">
+          {/* Main Top Header Block (MOBILE ONLY) */}
+          <header className={`flex lg:hidden items-center justify-between pb-4 border-b ${
+            theme === 'light' ? 'border-slate-200' : 'border-white/5'
+          }`}>
             <div className="flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center glow-emerald">
                 <TrendingUp className="w-5 h-5 text-emerald-400" />
               </div>
               <div>
-                <h2 className="font-display font-black text-white text-base tracking-tight leading-none">
+                <h2 className={`font-display font-black text-base tracking-tight leading-none ${
+                  theme === 'light' ? 'text-slate-900' : 'text-white'
+                }`}>
                   FINANÇAS<span className="text-emerald-400">PRO</span>
                 </h2>
                 <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-widest block mt-1">SaaS de Gestão Segura</span>
@@ -778,9 +1063,13 @@ export default function App() {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleOpenIncome}
-                className="bg-white/3 hover:bg-white/6 text-slate-200 border border-white/5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
+                  theme === 'light' 
+                    ? 'bg-white border-slate-200 text-slate-700 shadow-sm' 
+                    : 'bg-white/3 hover:bg-white/6 text-slate-200 border border-white/5'
+                }`}
               >
-                <DollarSign className="w-4 h-4 text-emerald-400" /> Ganhos do Mês
+                <DollarSign className="w-4 h-4 text-emerald-400" /> Ganhos
               </button>
               
               <button
@@ -793,63 +1082,36 @@ export default function App() {
             </div>
           </header>
 
-          {/* Quick interactive parameters estimates dashboard cards */}
-          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Core card leftover surplus */}
-              <motion.div
-                whileHover={{ scale: 1.01 }}
-                onClick={handleOpenIncome}
-                className="p-6 rounded-3xl bg-gradient-to-br from-emerald-950/70 to-teal-950/15 border border-emerald-500/30 glow-emerald relative overflow-hidden flex flex-col justify-between cursor-pointer group"
-              >
-                <div className="absolute top-4 right-4 text-emerald-400/40 group-hover:text-emerald-400 group-hover:rotate-12 transition-all">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Sobra Estimada de Caixa</span>
-                  <h3 className="font-mono text-3xl font-extrabold text-white tracking-tight leading-none mb-2">
-                    {formatCurrency(leftoverCash)}
-                  </h3>
-                </div>
-                <div className="text-[11px] text-emerald-400/80 font-bold uppercase tracking-wider mt-4">
-                  Sobre disponível de {formatCurrency(totalInflowsSum)}
-                </div>
-              </motion.div>
-
-              {/* Core card liabilities total */}
-              <motion.div
-                whileHover={{ scale: 1.01 }}
-                onClick={() => setActiveTab('dashboard')}
-                className="p-6 rounded-3xl bg-slate-950/40 border border-white/5 flex flex-col justify-between cursor-pointer"
-              >
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Total a Pagar Pendente</span>
-                  <h3 className="font-mono text-3xl font-extrabold text-rose-400 tracking-tight leading-none mb-2">
-                    {formatCurrency(pendingTotalDebt)}
-                  </h3>
-                </div>
-                <div className="text-[11px] text-slate-500 font-bold uppercase tracking-wider mt-4">
-                  Comprometido do mês: {formatCurrency(totalSpentInMonth)}
-                </div>
-              </motion.div>
-            </div>
-          )}
+          {/* Render Mobile summary cards */}
+          {renderSummaryCardsMobile()}
 
           {/* Ledger Calendar Month Navigator */}
-          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white/3 border border-white/5">
+          <div className={`flex items-center justify-between p-3.5 rounded-2xl border ${
+            theme === 'light' ? 'bg-white border-slate-205 shadow-sm text-slate-900' : 'bg-white/3 border-white/5 text-white'
+          }`}>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => handleMonthTurn(-1)}
-                className="w-9 h-9 rounded-xl bg-slate-900 border border-white/5 hover:border-white/10 text-white flex items-center justify-center transition-all cursor-pointer"
+                className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                  theme === 'light' 
+                    ? 'bg-slate-50 border-slate-200 hover:bg-slate-100/70 text-slate-800' 
+                    : 'bg-slate-900 border-white/5 hover:border-white/10 text-white'
+                }`}
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <h4 className="font-display font-black text-white text-sm tracking-wide select-none min-w-[124px] text-center">
+              <h4 className={`font-display font-black text-sm tracking-wide select-none min-w-[124px] text-center ${
+                theme === 'light' ? 'text-slate-800' : 'text-white'
+              }`}>
                 {monthsPortuguese[calendarDate.getMonth()].toUpperCase()} {calendarDate.getFullYear()}
               </h4>
               <button
                 onClick={() => handleMonthTurn(1)}
-                className="w-9 h-9 rounded-xl bg-slate-900 border border-white/5 hover:border-white/10 text-white flex items-center justify-center transition-all cursor-pointer"
+                className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                  theme === 'light' 
+                    ? 'bg-slate-50 border-slate-200 hover:bg-slate-100/70 text-slate-800' 
+                    : 'bg-slate-900 border-white/5 hover:border-white/10 text-white'
+                }`}
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
@@ -866,8 +1128,8 @@ export default function App() {
             </button>
           </div>
 
-          {/* Navigational Segment Tabs */}
-          <div className="flex gap-1 bg-slate-950/60 p-1 rounded-2xl border border-white/5 overflow-x-auto pr-2">
+          {/* Navigational Segment Tabs (MOBILE ONLY) */}
+          <div className="flex lg:hidden gap-1 bg-slate-950/60 p-1 rounded-2xl border border-white/5 overflow-x-auto pr-2">
             {[
               { id: 'fixos', val: '📌 FIXOS' },
               { id: 'variaveis', val: '📊 VARIÁVEIS' },
@@ -890,105 +1152,154 @@ export default function App() {
             ))}
           </div>
 
-          {/* Active Tab Screen Render */}
-          <main className="space-y-4 pt-1">
-            {activeTab === 'dashboard' ? (
-              <DashboardAnalytics
-                transactions={activeMonthTransactions}
-                categoriesList={activeMonthCategoryList}
-                totalAvailable={totalInflowsSum}
-                leftover={leftoverCash}
-                income={inc}
-                balance={bal}
-                extra={ext}
-              />
-            ) : activeTab === 'goals' ? (
-              <GoalsPanel
-                goals={goals}
-                onCreateGoal={handleCreateGoal}
-                onUpdateGoalProgress={handleUpdateGoalProgress}
-                onDeleteGoal={handleDeleteGoal}
-              />
-            ) : activeTab === 'settings' ? (
-              <SettingsPanel
-                currentTheme={theme}
-                onChangeTheme={handleThemeModify}
-                currentCurrency={currency}
-                onChangeCurrency={handleCurrencyModify}
-                baseIncome={inc}
-                baseBalance={bal}
-                onSavePreferences={handlePresetConfigsSave}
-                transactions={transactions}
-                showToast={triggerToast}
-              />
-            ) : (
-              /* Normal transactional listings lists */
-              <div className="space-y-3">
-                {activeTabTransactions.length === 0 ? (
-                  <div className="p-12 text-center border border-dashed border-white/5 rounded-3xl text-xs text-slate-500 select-none">
-                    Sem lançamentos registrados sob "{activeTab.toUpperCase()}" para o mês selecionado.
-                  </div>
-                ) : (
+          {/* Grid Layout that splits screen on PC, but rolls standard single col on Mobile */}
+          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Main lists column */}
+              <div className="lg:col-span-8 space-y-4">
+                <main className="space-y-4 pt-1">
                   <div className="space-y-3">
-                    {activeTabTransactions.map((tx) => {
-                      const categoryObj = activeMonthCategoryList.find(c => c.value === tx.cat) || { icon: '📦' };
-                      const remDue = tx.amount - (tx.paid_amount || 0);
-                      const isPaid = remDue <= 0;
+                    {activeTabTransactions.length === 0 ? (
+                      <div className={`p-12 text-center border border-dashed rounded-3xl text-xs select-none ${
+                        theme === 'light' ? 'border-slate-300 text-slate-500 bg-white' : 'border-white/5 text-slate-500'
+                      }`}>
+                        Sem lançamentos registrados sob "{activeTab.toUpperCase()}" para o mês selecionado.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {activeTabTransactions.map((tx) => {
+                          const categoryObj = activeMonthCategoryList.find(c => c.value === tx.cat) || { icon: '📦' };
+                          const remDue = tx.amount - (tx.paid_amount || 0);
+                          const isPaid = remDue <= 0;
 
-                      return (
-                        <div
-                          key={tx.id}
-                          className="p-4 rounded-2xl bg-white/2 border border-white/5 flex items-center justify-between gap-4 hover:border-white/10 transition-colors"
-                        >
-                          <div className="flex items-center gap-3.5 min-w-0 cursor-pointer" onClick={() => handleOpenEdit(tx)}>
-                            <div className="w-10 h-10 rounded-xl bg-slate-900 border border-white/5 flex items-center justify-center text-lg shadow-sm">
-                              {categoryObj.icon}
-                            </div>
-                            <div className="min-w-0">
-                              <h4 className="font-display font-bold text-white text-xs truncate flex items-center gap-1.5 leading-tight">
-                                {tx.name} {isPaid && <span className="text-emerald-400">✓</span>}
-                              </h4>
-                              <p className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">
-                                {tx.due || 'Sem vencimento'} • {tx.cat} 
-                                {tx.paid_amount > 0 && !isPaid && ` • Parcial: ${formatCurrency(tx.paid_amount)}`}
-                              </p>
-                            </div>
-                          </div>
+                          return (
+                            <div
+                              key={tx.id}
+                              className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-colors ${
+                                theme === 'light' 
+                                  ? 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-sm' 
+                                  : 'bg-white/2 border border-white/5 hover:border-white/10'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3.5 min-w-0 cursor-pointer" onClick={() => handleOpenEdit(tx)}>
+                                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-lg shadow-sm ${
+                                  theme === 'light' ? 'bg-slate-50 border-slate-100' : 'bg-slate-900 border border-white/5'
+                                }`}>
+                                  {categoryObj.icon}
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className={`font-display font-bold text-xs truncate flex items-center gap-1.5 leading-tight ${
+                                    theme === 'light' ? 'text-slate-800' : 'text-white'
+                                  }`}>
+                                    {tx.name} {isPaid && <span className="text-emerald-450">✓</span>}
+                                  </h4>
+                                  <p className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">
+                                    {tx.due || 'Sem vencimento'} • {tx.cat} 
+                                    {tx.paid_amount > 0 && !isPaid && ` • Parcial: ${formatCurrency(tx.paid_amount)}`}
+                                  </p>
+                                </div>
+                              </div>
 
-                          <div className="flex items-center gap-3">
-                            <span className="font-mono text-xs font-extrabold text-white">
-                              {formatCurrency(tx.amount)}
-                            </span>
-                            
-                            <div className="flex gap-1.5">
-                              <button
-                                onClick={() => handleOpenPay(tx.id)}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-bold tracking-wider uppercase cursor-pointer transition-colors ${
-                                  isPaid 
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                                    : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/5'
-                                }`}
-                              >
-                                {isPaid ? 'PAGO' : 'PAGAR'}
-                              </button>
+                              <div className="flex items-center gap-3">
+                                <span className={`font-mono text-xs font-extrabold ${
+                                  theme === 'light' ? 'text-slate-900' : 'text-white'
+                                }`}>
+                                  {formatCurrency(tx.amount)}
+                                </span>
+                                
+                                <div className="flex gap-1.5">
+                                  <button
+                                    onClick={() => handleOpenPay(tx.id)}
+                                    className={`px-3 py-1.5 rounded-lg text-[9px] font-bold tracking-wider uppercase cursor-pointer transition-colors ${
+                                      isPaid 
+                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                        : theme === 'light'
+                                          ? 'bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700'
+                                          : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/5'
+                                    }`}
+                                  >
+                                    {isPaid ? 'PAGO' : 'PAGAR'}
+                                  </button>
 
-                              <button
-                                onClick={() => handleDeleteTransaction(tx.id)}
-                                className="w-8 h-8 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/5 text-rose-400 flex items-center justify-center cursor-pointer transition-colors"
-                                title="Deletar lançamento"
-                              >
-                                ✕
-                              </button>
+                                  <button
+                                    onClick={() => handleDeleteTransaction(tx.id)}
+                                    className="w-8 h-8 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/5 text-rose-400 flex items-center justify-center cursor-pointer transition-colors"
+                                    title="Deletar lançamento"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
+                </main>
               </div>
-            )}
-          </main>
+
+              {/* Sidebar metrics persistent column for PC view */}
+              <div className="hidden lg:flex flex-col gap-4 lg:col-span-4 sticky top-6">
+                {renderSummaryCardsPC()}
+
+                {/* Local Advisory / Quick guidance on PC */}
+                <div className={`p-5 rounded-3xl border ${
+                  theme === 'light' 
+                    ? 'bg-slate-50 border-slate-200 text-slate-600' 
+                    : 'bg-white/2 border-white/5 text-slate-400'
+                } text-xs space-y-2`}>
+                  <p className="font-bold text-indigo-400 uppercase tracking-wider text-[9px] flex items-center gap-1 leading-none">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Dificuldades de caixa?
+                  </p>
+                  <p className="font-light leading-relaxed text-[11px]">
+                    {transactions.length === 0 
+                      ? 'Adicione despesas recorrentes e parcelas para auditar suas margens de sobrevivência líquidas.'
+                      : leftoverCash < 0 
+                        ? 'Alerta crítico: Suas despesas excederam seus ganhos. Tente parcializar faturas ou reduzir despesas variáveis.'
+                        : 'Organização em dia! Seu caixa está limpo e suas obrigações orçamentárias estão controladas.'
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Dashboard, Goals, Settings screens occupy the full 12 column grid */
+            <div className="w-full">
+              <main className="space-y-4 pt-1">
+                {activeTab === 'dashboard' ? (
+                  <DashboardAnalytics
+                    transactions={activeMonthTransactions}
+                    categoriesList={activeMonthCategoryList}
+                    totalAvailable={totalInflowsSum}
+                    leftover={leftoverCash}
+                    income={inc}
+                    balance={bal}
+                    extra={ext}
+                  />
+                ) : activeTab === 'goals' ? (
+                  <GoalsPanel
+                    goals={goals}
+                    onCreateGoal={handleCreateGoal}
+                    onUpdateGoalProgress={handleUpdateGoalProgress}
+                    onDeleteGoal={handleDeleteGoal}
+                  />
+                ) : (
+                  <SettingsPanel
+                    currentTheme={theme}
+                    onChangeTheme={handleThemeModify}
+                    currentCurrency={currency}
+                    onChangeCurrency={handleCurrencyModify}
+                    baseIncome={inc}
+                    baseBalance={bal}
+                    onSavePreferences={handlePresetConfigsSave}
+                    transactions={transactions}
+                    showToast={triggerToast}
+                  />
+                )}
+              </main>
+            </div>
+          )}
 
           {/* Standard Page Footer credits/helpline */}
           <footer className="pt-10 border-t border-white/5 text-center space-y-2">
@@ -1144,6 +1455,73 @@ export default function App() {
                   className="px-4 py-3 rounded-xl bg-slate-900 border border-white/10 text-slate-450 hover:text-white text-[11px] font-bold cursor-pointer"
                 >
                   Voltar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </AnimatePresence>
+      )}
+
+      {/* Logout Elegant Interactive Alert Modal */}
+      {isLogoutOpen && (
+        <AnimatePresence shadow-none="true">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsLogoutOpen(false)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', duration: 0.4 }}
+              className={`w-full max-w-sm rounded-3xl p-6 shadow-2xl relative z-10 text-center space-y-5 border transition-all ${
+                theme === 'light' 
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-100/30' 
+                  : 'bg-[#0f1524] border-white/10 text-white'
+              }`}
+            >
+              {/* Logout Icon Graphic */}
+              <div className={`mx-auto w-12 h-12 rounded-2xl flex items-center justify-center border transition-all ${
+                theme === 'light'
+                  ? 'bg-rose-50 border-rose-100 text-rose-650'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+              }`}>
+                <LogOut className="w-5 h-5" />
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-display font-black text-sm uppercase tracking-wider">
+                  Sair do Sistema?
+                </h4>
+                <p className={`text-xs leading-relaxed ${
+                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>
+                  Ao desconectar, sua sessão segura será imediatamente finalizada e você precisará se autenticar novamente para visualizar o painel das suas economias.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <button
+                  id="confirm-logout-btn"
+                  onClick={executeLogout}
+                  className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg shadow-rose-600/10 active:scale-[0.98] rounded-xl"
+                >
+                  Sim, Desconectar
+                </button>
+                <button
+                  onClick={() => setIsLogoutOpen(false)}
+                  className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer border transition-all duration-200 ${
+                    theme === 'light'
+                      ? 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                      : 'bg-slate-900 border-white/10 hover:bg-slate-850 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Cancelar
                 </button>
               </div>
             </motion.div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Transaction, Category } from '../types';
-import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus } from 'lucide-react';
+import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface TransactionFormModalProps {
@@ -31,6 +31,7 @@ export default function TransactionFormModal({
   const [type, setType] = useState<'fixos' | 'variaveis' | 'parcelas'>('fixos');
   const [cat, setCat] = useState<string>('moradia');
   const [due, setDue] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
   
   // Custom interactive sub-state for creating categories on the flow
   const [showCatDropdown, setShowCatDropdown] = useState<boolean>(false);
@@ -40,6 +41,7 @@ export default function TransactionFormModal({
 
   useEffect(() => {
     if (isOpen) {
+      setError(null);
       if (initialData) {
         setName(initialData.name);
         setAmountStr(formatMoney(initialData.amount));
@@ -80,13 +82,14 @@ export default function TransactionFormModal({
   };
 
   const handleSubmit = () => {
+    setError(null);
     if (!name.trim()) {
-      alert("Por favor, preencha a descrição do lançamento.");
+      setError("Por favor, preencha a descrição do lançamento de forma clara.");
       return;
     }
     const amountVal = parseMoney(amountStr);
     if (amountVal <= 0) {
-      alert("Por favor, digite um valor maior que zero.");
+      setError("Por favor, digite um valor maior de lançamento que zero.");
       return;
     }
 
@@ -146,6 +149,17 @@ export default function TransactionFormModal({
               <X className="w-4 h-4" />
             </button>
           </div>
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3.5 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-250 text-xs flex items-center gap-2.5"
+            >
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span className="font-semibold">{error}</span>
+            </motion.div>
+          )}
 
           <div className="space-y-4">
             {/* Description input */}

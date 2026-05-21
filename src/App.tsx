@@ -93,6 +93,22 @@ export default function App() {
   // Modal display parameters
   const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  
+  // Custom confirmation dialog state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmText?: string;
+    cancelText?: string;
+    classNameConfirm?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
   const [isPayOpen, setIsPayOpen] = useState<boolean>(false);
   const [payTransactionId, setPayTransactionId] = useState<string | null>(null);
   const [confirmValueStr, setConfirmValueStr] = useState<string>('');
@@ -361,7 +377,7 @@ export default function App() {
     }
   };
 
-  const handleDeleteTransaction = async (id: string) => {
+  const handleDeleteTransaction = (id: string) => {
     let confirmMessage = "Deseja mesmo remover permanentemente esse gasto?";
     const isVirtual = id.startsWith('v_');
     let realIdToDelete = id;
@@ -372,16 +388,24 @@ export default function App() {
       realIdToDelete = id.substring(2, lastUnderscore);
     }
 
-    const confirm = window.confirm(confirmMessage);
-    if (!confirm) return;
-    const path = `transactions/${realIdToDelete}`;
-    
-    try {
-      await deleteDoc(doc(db, 'transactions', realIdToDelete));
-      triggerToast('Lançamento excluído!', 'success');
-    } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, path);
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Excluir Lançamento Recorrente',
+      message: confirmMessage,
+      confirmText: 'Confirmar Exclusão',
+      cancelText: 'Manter Lançamento',
+      classNameConfirm: 'bg-rose-600 hover:bg-rose-700 text-white font-bold',
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        const path = `transactions/${realIdToDelete}`;
+        try {
+          await deleteDoc(doc(db, 'transactions', realIdToDelete));
+          triggerToast('Lançamento excluído com sucesso!', 'success');
+        } catch (e) {
+          handleFirestoreError(e, OperationType.DELETE, path);
+        }
+      }
+    });
   };
 
   const handleOpenEdit = (tx: Transaction) => {
@@ -532,17 +556,25 @@ export default function App() {
     }
   };
 
-  const handleDeleteGoal = async (goalId: string) => {
-    const confirm = window.confirm("Deseja de fato remover essa meta de poupança?");
-    if (!confirm) return;
-    const path = `goals/${goalId}`;
-
-    try {
-      await deleteDoc(doc(db, 'goals', goalId));
-      triggerToast('Plano de meta excluído.', 'success');
-    } catch (e) {
-      handleFirestoreError(e, OperationType.DELETE, path);
-    }
+  const handleDeleteGoal = (goalId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Remover Meta Poupança',
+      message: 'Você tem certeza definitiva? Esta ação removerá eternamente este planejamento de metas do sistema.',
+      confirmText: 'Remover Meta',
+      cancelText: 'Manter Planejamento',
+      classNameConfirm: 'bg-rose-600 hover:bg-rose-700 text-white font-bold',
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        const path = `goals/${goalId}`;
+        try {
+          await deleteDoc(doc(db, 'goals', goalId));
+          triggerToast('Plano de meta excluído.', 'success');
+        } catch (e) {
+          handleFirestoreError(e, OperationType.DELETE, path);
+        }
+      }
+    });
   };
 
   // Settings pane customization changes
@@ -1528,6 +1560,75 @@ export default function App() {
           </div>
         </AnimatePresence>
       )}
+
+      {/* Global Confirmation Modal */}
+      <AnimatePresence>
+        {confirmModal.isOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', duration: 0.4 }}
+              className={`w-full max-w-sm rounded-3xl p-6 shadow-2xl relative z-10 text-center space-y-5 border transition-all ${
+                theme === 'light' 
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-100/30' 
+                  : 'bg-[#0f1524] border-white/10 text-white'
+              }`}
+            >
+              {/* Alert Warning Icon Graphic */}
+              <div className={`mx-auto w-12 h-12 rounded-2xl flex items-center justify-center border transition-all ${
+                theme === 'light'
+                  ? 'bg-amber-50 border-amber-100 text-amber-600'
+                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+              }`}>
+                <AlertCircle className="w-5 h-5 animate-pulse" />
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-display font-black text-sm uppercase tracking-wider">
+                  {confirmModal.title}
+                </h4>
+                <p className={`text-xs leading-relaxed ${
+                  theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>
+                  {confirmModal.message}
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <button
+                  id="confirm-modal-exec-btn"
+                  onClick={confirmModal.onConfirm}
+                  className={`w-full py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg active:scale-[0.98] rounded-xl ${
+                    confirmModal.classNameConfirm || 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  }`}
+                >
+                  {confirmModal.confirmText || 'Confirmar'}
+                </button>
+                <button
+                  onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                  className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer border transition-all duration-200 ${
+                    theme === 'light'
+                      ? 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                      : 'bg-slate-900 border-white/10 hover:bg-slate-850 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {confirmModal.cancelText || 'Cancelar'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

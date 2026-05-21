@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Goal } from '../types';
-import { Target, Trash2, Plus, PlusCircle, Minus, Calendar, Percent, Sparkles } from 'lucide-react';
+import { Target, Trash2, Plus, PlusCircle, Minus, Calendar, Percent, Sparkles, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface GoalsPanelProps {
@@ -21,6 +21,7 @@ export default function GoalsPanel({
   const [targetAmountStr, setTargetAmountStr] = useState<string>('');
   const [currentAmountStr, setCurrentAmountStr] = useState<string>('');
   const [deadline, setDeadline] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
 
   // Deposit/Withdraw helper per goal
   const [activeGoalIdForTransaction, setActiveGoalIdForTransaction] = useState<string | null>(null);
@@ -45,12 +46,16 @@ export default function GoalsPanel({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    setError(null);
+    if (!title.trim()) {
+      setError("Por favor, preencha o título da meta.");
+      return;
+    }
     const target = parseMoney(targetAmountStr);
     const current = parseMoney(currentAmountStr);
     
     if (target <= 0) {
-      alert("Por favor, informe a meta total alvo.");
+      setError("Por favor, informe um valor de meta alvo maior que zero.");
       return;
     }
 
@@ -102,6 +107,16 @@ export default function GoalsPanel({
             </h5>
             
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-250 text-xs flex items-center gap-2"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span className="font-semibold">{error}</span>
+                </motion.div>
+              )}
               <div>
                 <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Nome/Objetivo da Meta</label>
                 <input

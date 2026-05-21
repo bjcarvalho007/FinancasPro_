@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Transaction } from '../types';
 import { auth } from '../firebase';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
-import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon } from 'lucide-react';
+import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface SettingsPanelProps {
   currentTheme: 'dark' | 'light';
@@ -33,6 +34,7 @@ export default function SettingsPanel({
   const [balStr, setBalStr] = useState<string>(
     baseBalance > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseBalance) : ''
   );
+  const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState<boolean>(false);
 
   const formatMoney = (val: number): string => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -97,12 +99,12 @@ export default function SettingsPanel({
     showToast('Dados exportados com sucesso em CSV!', 'success');
   };
 
-  const handleDeleteAccount = async () => {
-    const confirm = window.confirm(
-      "TEM CERTEZA DEFINITIVA? Esta operação é irreversível e removerá sua conta e todos os lançamentos financeiros vinculados do Firestore."
-    );
-    if (!confirm) return;
+  const handleDeleteAccount = () => {
+    setIsDeleteAccountOpen(true);
+  };
 
+  const executeDeleteAccount = async () => {
+    setIsDeleteAccountOpen(false);
     try {
       if (auth.currentUser) {
         await deleteUser(auth.currentUser);
@@ -278,6 +280,72 @@ export default function SettingsPanel({
           </button>
         </div>
       </div>
+
+      {/* Account Deletion Premium Modal */}
+      <AnimatePresence>
+        {isDeleteAccountOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteAccountOpen(false)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', duration: 0.4 }}
+              className={`w-full max-w-sm rounded-3xl p-6 shadow-2xl relative z-10 text-center space-y-5 border transition-all ${
+                currentTheme === 'light' 
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-100/30' 
+                  : 'bg-[#0f1524] border-white/10 text-white'
+              }`}
+            >
+              <div className={`mx-auto w-12 h-12 rounded-2xl flex items-center justify-center border transition-all ${
+                currentTheme === 'light'
+                  ? 'bg-rose-50 border-rose-100 text-rose-650'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+              }`}>
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-display font-black text-sm uppercase tracking-wider text-rose-500">
+                  Operação Crítica Irreversível!
+                </h4>
+                <p className={`text-xs leading-relaxed ${
+                  currentTheme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                }`}>
+                  Você tem certeza definitiva? Ao prosseguir, seu perfil, configurações cambiais, e todos os lançamentos financeiros vinculados serão deletados permanentemente do banco de dados.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <button
+                  id="confirm-delete-account-btn"
+                  onClick={executeDeleteAccount}
+                  className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg shadow-rose-600/10 active:scale-[0.98] rounded-xl"
+                >
+                  Excluir Permanentemente
+                </button>
+                <button
+                  onClick={() => setIsDeleteAccountOpen(false)}
+                  className={`w-full py-3 rounded-xl text-[10px] font-bold uppercase tracking-wider cursor-pointer border transition-all duration-200 ${
+                    currentTheme === 'light'
+                      ? 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                      : 'bg-slate-900 border-white/10 hover:bg-slate-850 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Voltar ao Painel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

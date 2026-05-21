@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "Represents a user profile in the system",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique identifier of the user in Firebase Auth" },
+        "email": { "type": "string", "description": "User's email address" },
+        "displayName": { "type": "string", "description": "Visible display name" },
+        "photoURL": { "type": "string", "description": "Profile picture URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account registration timestamp" }
+      },
+      "required": ["uid", "email"]
+    },
+    "transaction": {
+      "title": "Transaction",
+      "description": "Represents an income or expense transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique transaction ID" },
+        "userId": { "type": "string", "description": "UID of the owner user" },
+        "name": { "type": "string", "description": "Transaction description, e.g., Rent" },
+        "amount": { "type": "number", "description": "Total value of the transaction in BRL" },
+        "type": { "type": "string", "enum": ["fixos", "variaveis", "parcelas"], "description": "Category of ledger: fixed, variable, or installment" },
+        "cat": { "type": "string", "description": "Category key matching established groups" },
+        "due": { "type": "string", "description": "Due date formatted as day (e.g. Dia 15) or ISO date" },
+        "paid_amount": { "type": "number", "description": "Current paid amount to support partial payments" },
+        "paid_at": { "type": "string", "description": "Timestamp indicating when the full or last payment went through" },
+        "masterId": { "type": "string", "description": "Linked ID for pinned master fixed expenses" },
+        "monthKey": { "type": "string", "description": "Format YYYY-MM representing the target ledger period" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name", "amount", "type", "cat", "monthKey"]
+    },
+    "category": {
+      "title": "Category",
+      "description": "User's custom category representation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "icon": { "type": "string", "description": "Emoji character or icon identifier" },
+        "label": { "type": "string", "description": "Label displayed to the user" },
+        "value": { "type": "string", "description": "Unique category identifier string prefix" }
+      },
+      "required": ["id", "userId", "icon", "label", "value"]
+    },
+    "goal": {
+      "title": "Goal",
+      "description": "Represents financial objectives or goals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string", "description": "Description of the target, e.g., Car trip" },
+        "targetAmount": { "type": "number" },
+        "currentAmount": { "type": "number" },
+        "deadline": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "targetAmount", "currentAmount"]
+    },
+    "setting": {
+      "title": "Setting",
+      "description": "Personalization parameters for the user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "currency": { "type": "string", "enum": ["BRL", "USD", "EUR"] },
+        "theme": { "type": "string", "enum": ["dark", "light"] },
+        "income": { "type": "number", "description": "Configured recurring base income" },
+        "balance": { "type": "number", "description": "Initial base cash in hand" },
+        "extras": { "type": "object", "description": "Aggregated month key to cumulative extra gains dictionary mapping" }
+      },
+      "required": ["userId"]
+    },
+    "notification": {
+      "title": "Notification",
+      "description": "In-app alerts or notifications regarding bills due",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "body", "read"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "User profile collection root"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "transaction",
+      "description": "All financial ledgers: expenses and income transactions"
+    },
+    "/categories/{categoryId}": {
+      "schema": "category",
+      "description": "Customized user category collection"
+    },
+    "/goals/{goalId}": {
+      "schema": "goal",
+      "description": "Financial goals collection"
+    },
+    "/settings/{userId}": {
+      "schema": "setting",
+      "description": "User preferences and base values"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "notification",
+      "description": "User notifications regarding approaching bills or events"
+    }
+  }
+}

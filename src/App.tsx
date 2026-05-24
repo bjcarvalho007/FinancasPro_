@@ -536,7 +536,15 @@ export default function App() {
   };
 
   // Goals operations bound: ADD/PROGRESS/DELETE
-  const handleCreateGoal = async (title: string, target: number, current: number, deadline: string) => {
+  const handleCreateGoal = async (
+    title: string,
+    target: number,
+    current: number,
+    deadline: string,
+    initialAmount?: number,
+    monthlyContribution?: number,
+    targetMonths?: number
+  ) => {
     if (!user) return;
     const id = `goal_${Date.now()}`;
     const newG: Goal = {
@@ -546,6 +554,9 @@ export default function App() {
       targetAmount: target,
       currentAmount: current,
       deadline,
+      initialAmount: initialAmount || 0,
+      monthlyContribution: monthlyContribution || 0,
+      targetMonths: targetMonths || 12,
       createdAt: new Date().toISOString()
     };
 
@@ -1419,7 +1430,7 @@ export default function App() {
           <footer className="pt-10 border-t border-white/5 text-center space-y-2">
             <span className="text-[9px] text-slate-500 uppercase tracking-widest font-extrabold block">BJC DESENVOLVIMENTOS SAAS</span>
             <p className="text-[11px] text-slate-400 font-light max-w-sm mx-auto leading-relaxed">
-              Dúvidas ou suporte na integração? Envie um e-mail para <a href="mailto:bjcarvalho007@gmail.com" className="text-indigo-400 hover:underline">bjcarvalho007@gmail.com</a> ou fale diretamente com nossa engenharia.
+              Dúvidas ou suporte na integração? <a href="https://wa.me/5563992092699?text=Olá,%20gostaria%20de%20suporte%20no%20FinançasPro" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Fale diretamente com nossa engenharia</a>.
             </p>
           </footer>
         </div>

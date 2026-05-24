@@ -139,8 +139,10 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col md:flex-row items-center justify-center p-4 md:p-0 bg-[#070a13] bg-[radial-gradient(circle_at_50%_0%,#152039_0%,#070a13_100%)]">
-      {/* Visual left column for branding / SaaS intro */}
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 md:p-8 bg-[#070a13] bg-[radial-gradient(circle_at_50%_0%,#152039_0%,#070a13_100%)]">
+      {/* Content wrapper */}
+      <div className="w-full max-w-5xl flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12 flex-1">
+        {/* Visual left column for branding / SaaS intro */}
       <div className="w-full md:w-1/2 max-w-lg p-6 md:p-12 text-left hidden md:flex flex-col justify-center">
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
@@ -409,6 +411,15 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
           Entrar com a Conta Google
         </button>
       </motion.div>
+      </div>
+
+      {/* Standard page footer credits/helpline */}
+      <footer className="mt-8 pt-6 border-t border-white/5 w-full max-w-md text-center space-y-1.5 shrink-0">
+        <span className="text-[9px] text-slate-500 uppercase tracking-widest font-extrabold block">BJC DESENVOLVIMENTOS SAAS</span>
+        <p className="text-[10px] text-slate-400 font-light leading-relaxed">
+          Dúvidas ou suporte na integração? <a href="https://wa.me/5563992092699?text=Olá,%20gostaria%20de%20suporte%20no%20FinançasPro" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Fale diretamente com nossa engenharia</a>.
+        </p>
+      </footer>
     </div>
   );
 }

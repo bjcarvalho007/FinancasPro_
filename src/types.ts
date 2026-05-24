@@ -29,6 +29,9 @@ export interface Goal {
   targetAmount: number;
   currentAmount: number;
   deadline: string;
+  initialAmount?: number;
+  monthlyContribution?: number;
+  targetMonths?: number;
   createdAt?: string;
 }
 

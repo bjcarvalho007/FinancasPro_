@@ -16,6 +16,7 @@ interface TransactionFormModalProps {
   initialData?: Transaction | null;
   categoriesList: Category[];
   onCreateCategory: (icon: string, label: string) => void;
+  defaultType?: 'fixos' | 'variaveis' | 'parcelas';
 }
 
 export default function TransactionFormModal({
@@ -24,7 +25,8 @@ export default function TransactionFormModal({
   onSave,
   initialData,
   categoriesList,
-  onCreateCategory
+  onCreateCategory,
+  defaultType = 'fixos'
 }: TransactionFormModalProps) {
   const [name, setName] = useState<string>('');
   const [amountStr, setAmountStr] = useState<string>('');
@@ -51,7 +53,7 @@ export default function TransactionFormModal({
       } else {
         setName('');
         setAmountStr('');
-        setType('fixos');
+        setType(defaultType);
         setCat('moradia');
         setDue('Dia 10');
       }
@@ -59,7 +61,7 @@ export default function TransactionFormModal({
       setShowAddCustomCat(false);
       setCustomCatName('');
     }
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData, defaultType]);
 
   const formatMoney = (val: number): string => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);

@@ -350,6 +350,22 @@ export default function App() {
     const fallbackPaid = editingTransaction ? editingTransaction.paid_amount : 0;
     const fallbackPaidAt = editingTransaction ? editingTransaction.paid_at : '';
 
+    // Determine robust masterId identifier if this belongs to a series
+    let inferredMasterId = editingTransaction?.masterId;
+    if (!inferredMasterId && editingTransaction?.id) {
+      if (editingTransaction.id.startsWith('v_')) {
+        const parts = editingTransaction.id.split('_');
+        if (parts.length >= 2) {
+          inferredMasterId = parts[1]; // Extract the original master ID
+        }
+      } else if (editingTransaction.type === 'fixos' || data.type === 'fixos') {
+        inferredMasterId = editingTransaction.id;
+      }
+    }
+    if (!inferredMasterId && data.type === 'fixos') {
+      inferredMasterId = docId;
+    }
+
     const newTx: Transaction = {
       id: docId,
       userId: user.uid,
@@ -359,9 +375,7 @@ export default function App() {
       cat: data.cat,
       due: data.due,
       monthKey: editingTransaction ? editingTransaction.monthKey : currentMonthKey,
-      masterId: data.type === 'fixos' 
-        ? (editingTransaction?.masterId || editingTransaction?.id || docId)
-        : undefined,
+      masterId: inferredMasterId || undefined,
       paid_amount: fallbackPaid,
       paid_at: fallbackPaidAt,
       createdAt: editingTransaction?.createdAt || new Date().toISOString(),
@@ -684,8 +698,9 @@ export default function App() {
     mastersMap.forEach((masterTx) => {
       // Check if there is already a transaction for this month that matches this master
       const exists = realTransactionsThisMonth.some(t => {
-        if (masterTx.masterId && t.masterId === masterTx.masterId) return true;
         if (t.id === masterTx.id) return true;
+        if (masterTx.masterId && t.masterId === masterTx.masterId) return true;
+        if (t.masterId === masterTx.id) return true;
         if (t.name.trim().toLowerCase() === masterTx.name.trim().toLowerCase()) return true;
         return false;
       });
@@ -1308,6 +1323,7 @@ export default function App() {
                     income={inc}
                     balance={bal}
                     extra={ext}
+                    currentTheme={theme}
                   />
                 ) : activeTab === 'goals' ? (
                   <GoalsPanel
@@ -1354,6 +1370,7 @@ export default function App() {
         initialData={editingTransaction}
         categoriesList={activeMonthCategoryList}
         onCreateCategory={handleCreateCustomCategory}
+        defaultType={(activeTab === 'fixos' || activeTab === 'variaveis' || activeTab === 'parcelas') ? activeTab : 'fixos'}
       />
 
       {/* Sub-Modal confirmation download for Payments */}

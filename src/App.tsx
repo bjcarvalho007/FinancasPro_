@@ -366,7 +366,7 @@ export default function App() {
       inferredMasterId = docId;
     }
 
-    const newTx: Transaction = {
+    const newTx: any = {
       id: docId,
       userId: user.uid,
       name: data.name,
@@ -375,12 +375,15 @@ export default function App() {
       cat: data.cat,
       due: data.due,
       monthKey: editingTransaction ? editingTransaction.monthKey : currentMonthKey,
-      masterId: inferredMasterId || undefined,
       paid_amount: fallbackPaid,
-      paid_at: fallbackPaidAt,
+      paid_at: fallbackPaidAt || '',
       createdAt: editingTransaction?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
+
+    if (inferredMasterId) {
+      newTx.masterId = inferredMasterId;
+    }
 
     try {
       await setDoc(doc(db, 'transactions', docId), newTx);

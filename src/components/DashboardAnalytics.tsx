@@ -355,207 +355,141 @@ export default function DashboardAnalytics({
             Aguardando lançamentos para compor gráfico de colunas
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            {/* Chart Area Component */}
-            <div className="lg:col-span-7 flex flex-col justify-center">
-              {/* Advanced Responsive HTML Column Chart with Guidance Ticks */}
-              <div className="w-full relative py-4">
-                {(() => {
-                  const maxAmountValue = Math.max(...sortedCategories.map(c => c.amountValue), 1);
-                  // Standardize scale to prevent clipping and give 10% breathing room
-                  const scaleMax = maxAmountValue * 1.15;
-                  const yTicks = [1, 0.75, 0.5, 0.25, 0];
+          <div className="w-full flex flex-col justify-center">
+            {/* Advanced Responsive HTML Column Chart with Guidance Ticks */}
+            <div className="w-full relative py-4">
+              {(() => {
+                const maxAmountValue = Math.max(...sortedCategories.map(c => c.amountValue), 1);
+                // Standardize scale to prevent clipping and give 10% breathing room
+                const scaleMax = maxAmountValue * 1.15;
+                const yTicks = [1, 0.75, 0.5, 0.25, 0];
 
-                  return (
-                    <div className="space-y-6">
-                      {/* Dynamic Tooltip Header Bar when a segment is highlighted */}
-                      <div className="h-10 flex items-center justify-between px-2">
-                        {hoveredBar ? (() => {
-                          const item = sortedCategories.find(c => c.key === hoveredBar);
-                          if (!item) return <div />;
-                          const style = getCategoryThemeStyle(item.key);
-                          return (
-                            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                              <span className={`w-3 h-3 rounded-full`} style={{ backgroundColor: style.color1 }} />
-                              <span className="text-lg leading-none">{item.icon}</span>
-                              <div>
-                                <span className={`text-[11px] font-extrabold uppercase tracking-widest ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
-                                  {item.label}
-                                </span>
-                                <span className="text-[10px] text-slate-400 ml-1.5 font-bold">
-                                  {item.pct}% de todas as saídas
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })() : (
-                          <span className="text-[11px] font-bold text-slate-400 tracking-wider flex items-center gap-1">
-                            <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-                            Passe o mouse nas colunas para detalhar os gastos
-                          </span>
-                        )}
-
-                        {hoveredBar && (() => {
-                          const item = sortedCategories.find(c => c.key === hoveredBar);
-                          if (!item) return null;
-                          return (
-                            <span className={`font-mono text-xs font-black px-2.5 py-1 rounded-lg ${
-                              isLight ? 'bg-slate-100 text-slate-900 border border-slate-200' : 'bg-white/5 text-white border border-white/5'
-                            }`}>
-                              {fmt(item.amountValue)}
-                            </span>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Chart Grid Area */}
-                      <div className="relative h-44 w-full flex items-end">
-                        {/* Guideline ticks positioned absolutely behind columns */}
-                        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-7">
-                          {yTicks.map((tick, i) => (
-                            <div key={i} className="flex items-center w-full h-0">
-                              <span className={`text-[9px] font-mono font-extrabold w-16 text-right pr-3 select-none flex-shrink-0 ${
-                                isLight ? 'text-slate-400' : 'text-slate-500'
-                              }`}>
-                                {fmt(tick * scaleMax)}
+                return (
+                  <div className="space-y-6">
+                    {/* Dynamic Tooltip Header Bar when a segment is highlighted */}
+                    <div className="h-10 flex items-center justify-between px-2">
+                      {hoveredBar ? (() => {
+                        const item = sortedCategories.find(c => c.key === hoveredBar);
+                        if (!item) return <div />;
+                        const style = getCategoryThemeStyle(item.key);
+                        return (
+                          <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <span className={`w-3 h-3 rounded-full`} style={{ backgroundColor: style.color1 }} />
+                            <span className="text-lg leading-none">{item.icon}</span>
+                            <div>
+                              <span className={`text-[11px] font-extrabold uppercase tracking-widest ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                                {item.label}
                               </span>
-                              <div className={`flex-1 border-t border-dashed ${
-                                isLight ? 'border-slate-100/85' : 'border-white/5'
-                              }`} />
+                              <span className="text-[10px] text-slate-400 ml-1.5 font-bold">
+                                {item.pct}% de todas as saídas
+                              </span>
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        );
+                      })() : (
+                        <span className="text-[11px] font-bold text-slate-400 tracking-wider flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                          Passe o mouse nas colunas para detalhar os gastos
+                        </span>
+                      )}
 
-                        {/* Bars container overlayed above ticks */}
-                        <div className="absolute inset-y-0 left-16 right-0 flex items-end justify-around pb-7">
-                          {sortedCategories.map((item) => {
-                            const style = getCategoryThemeStyle(item.key);
-                            const precisePctOfMax = (item.amountValue / scaleMax) * 100;
-                            const isHovered = hoveredBar === item.key;
-
-                            return (
-                              <div
-                                key={item.key}
-                                className="flex flex-col items-center group relative h-full justify-end cursor-pointer"
-                                style={{ width: `${100 / sortedCategories.length}%`, maxWidth: '58px' }}
-                                onMouseEnter={() => setHoveredBar(item.key)}
-                                onMouseLeave={() => setHoveredBar(null)}
-                              >
-                                {/* Interactive capture panel */}
-                                <div className="absolute inset-0 bg-transparent z-10" />
-
-                                {/* Main Bar Column */}
-                                <div className="w-6 sm:w-8 h-full flex items-end justify-center relative rounded-t-xl overflow-hidden bg-slate-500/5 group-hover:bg-slate-500/10 transition-all duration-300">
-                                  <motion.div
-                                    initial={{ height: 0 }}
-                                    animate={{ height: `${precisePctOfMax}%` }}
-                                    transition={{ duration: 0.8, ease: "easeOut" }}
-                                    className="w-full rounded-t-xl opacity-90 group-hover:opacity-100 transition-opacity flex flex-col justify-start p-1"
-                                    style={{
-                                      background: `linear-gradient(180deg, ${style.color1}, ${style.color2})`,
-                                      boxShadow: isHovered ? `0 0 15px ${style.color1}40` : 'none',
-                                    }}
-                                  >
-                                    {/* Polish glare highlight inside the column bar top */}
-                                    <div className="w-full h-1 bg-white/30 rounded-full opacity-65" />
-                                  </motion.div>
-                                </div>
-
-                                {/* Emoji marker sits precisely on X-axis */}
-                                <div className={`absolute -bottom-5 flex flex-col items-center transition-transform ${isHovered ? 'scale-110' : ''}`}>
-                                  <span className="text-sm leading-none drop-shadow-sm select-none">
-                                    {item.icon}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Category labels bottom helper row to prevent truncation / clipping */}
-                      <div className="flex justify-around pl-16 pt-1 text-[8.5px] uppercase font-bold tracking-widest text-slate-500 select-none">
-                        {sortedCategories.map((item) => (
-                          <span 
-                            key={item.key} 
-                            className={`truncate text-center transition-colors duration-200 ${
-                              hoveredBar === item.key 
-                                ? (isLight ? 'text-indigo-600' : 'text-indigo-400') 
-                                : 'text-slate-400'
-                            }`} 
-                            style={{ width: `${100 / sortedCategories.length}%`, maxWidth: '58px' }}
-                          >
-                            {item.label.split(' ')[0]}
+                      {hoveredBar && (() => {
+                        const item = sortedCategories.find(c => c.key === hoveredBar);
+                        if (!item) return null;
+                        return (
+                          <span className={`font-mono text-xs font-black px-2.5 py-1 rounded-lg ${
+                            isLight ? 'bg-slate-100 text-slate-950 border border-slate-200' : 'bg-white/5 text-white border border-white/5'
+                          }`}>
+                            {fmt(item.amountValue)}
                           </span>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Chart Grid Area */}
+                    <div className="relative h-44 w-full flex items-end">
+                      {/* Guideline ticks positioned absolutely behind columns */}
+                      <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-7">
+                        {yTicks.map((tick, i) => (
+                          <div key={i} className="flex items-center w-full h-0">
+                            <span className={`text-[9px] font-mono font-extrabold w-16 text-right pr-3 select-none flex-shrink-0 ${
+                              isLight ? 'text-slate-400' : 'text-slate-500'
+                            }`}>
+                              {fmt(tick * scaleMax)}
+                            </span>
+                            <div className={`flex-1 border-t border-dashed ${
+                              isLight ? 'border-slate-100/85' : 'border-white/5'
+                            }`} />
+                          </div>
                         ))}
                       </div>
+
+                      {/* Bars container overlayed above ticks */}
+                      <div className="absolute inset-y-0 left-16 right-0 flex items-end justify-around pb-7">
+                        {sortedCategories.map((item) => {
+                          const style = getCategoryThemeStyle(item.key);
+                          const precisePctOfMax = (item.amountValue / scaleMax) * 100;
+                          const isHovered = hoveredBar === item.key;
+
+                          return (
+                            <div
+                              key={item.key}
+                              className="flex flex-col items-center group relative h-full justify-end cursor-pointer"
+                              style={{ width: `${100 / sortedCategories.length}%`, maxWidth: '58px' }}
+                              onMouseEnter={() => setHoveredBar(item.key)}
+                              onMouseLeave={() => setHoveredBar(null)}
+                            >
+                              {/* Interactive capture panel */}
+                              <div className="absolute inset-0 bg-transparent z-10" />
+
+                              {/* Main Bar Column */}
+                              <div className="w-6 sm:w-8 h-full flex items-end justify-center relative rounded-t-xl overflow-hidden bg-slate-500/5 group-hover:bg-slate-500/10 transition-all duration-300">
+                                <motion.div
+                                  initial={{ height: 0 }}
+                                  animate={{ height: `${precisePctOfMax}%` }}
+                                  transition={{ duration: 0.8, ease: "easeOut" }}
+                                  className="w-full rounded-t-xl opacity-90 group-hover:opacity-100 transition-opacity flex flex-col justify-start p-1"
+                                  style={{
+                                    background: `linear-gradient(180deg, ${style.color1}, ${style.color2})`,
+                                    boxShadow: isHovered ? `0 0 15px ${style.color1}40` : 'none',
+                                  }}
+                                >
+                                  {/* Polish glare highlight inside the column bar top */}
+                                  <div className="w-full h-1 bg-white/30 rounded-full opacity-65" />
+                                </motion.div>
+                              </div>
+
+                              {/* Emoji marker sits precisely on X-axis */}
+                              <div className={`absolute -bottom-5 flex flex-col items-center transition-transform ${isHovered ? 'scale-110' : ''}`}>
+                                <span className="text-sm leading-none drop-shadow-sm select-none">
+                                  {item.icon}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  );
-                })()}
-              </div>
-            </div>
 
-            {/* List detailing expenditure by industry segment */}
-            <div className="lg:col-span-5 space-y-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className={`text-[10px] font-extrabold uppercase tracking-wider ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Detalhamento por Setor
-                </span>
-                <span className="text-[10px] text-slate-500 font-bold font-mono">
-                  {sortedCategories.length} categorias
-                </span>
-              </div>
-              
-              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-                {sortedCategories.map((item) => {
-                  const style = getCategoryThemeStyle(item.key);
-                  const isHovered = hoveredBar === item.key;
-                  const itemQuantity = categoryCount[item.key] || 0;
-
-                  return (
-                    <div 
-                      key={item.key} 
-                      className={`p-3 rounded-2xl border transition-all duration-200 cursor-pointer flex flex-col justify-between ${
-                        isHovered 
-                          ? (isLight ? 'bg-slate-50 border-indigo-200 shadow-md translate-x-1' : 'bg-white/5 border-white/10 shadow-lg translate-x-1')
-                          : (isLight ? 'bg-white border-slate-100' : 'bg-slate-950/40 border-transparent')
-                      }`}
-                      onMouseEnter={() => setHoveredBar(item.key)}
-                      onMouseLeave={() => setHoveredBar(null)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className={`text-md w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                            isLight ? 'bg-slate-100 shadow-sm' : 'bg-white/4'
-                          }`}>
-                            {item.icon}
-                          </span>
-                          <div>
-                            <span className={`text-xs font-bold block ${isLight ? 'text-slate-800' : 'text-white'}`}>{item.label}</span>
-                            <span className={`text-[9.5px] font-semibold leading-none ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
-                              {itemQuantity} {itemQuantity === 1 ? 'lançamento' : 'lançamentos'} · {item.pct}%
-                            </span>
-                          </div>
-                        </div>
-                        <span className={`font-mono text-xs font-black ${isLight ? 'text-slate-950' : 'text-slate-100'}`}>
-                          {fmt(item.amountValue)}
+                    {/* Category labels bottom helper row to prevent truncation / clipping */}
+                    <div className="flex justify-around pl-16 pt-1 text-[8.5px] uppercase font-bold tracking-widest text-slate-500 select-none">
+                      {sortedCategories.map((item) => (
+                        <span 
+                          key={item.key} 
+                          className={`truncate text-center transition-colors duration-200 ${
+                            hoveredBar === item.key 
+                              ? (isLight ? 'text-indigo-600' : 'text-indigo-400') 
+                              : 'text-slate-400'
+                          }`} 
+                          style={{ width: `${100 / sortedCategories.length}%`, maxWidth: '58px' }}
+                        >
+                          {item.label.split(' ')[0]}
                         </span>
-                      </div>
-                      
-                      {/* Fully responsive horizontal growth meter matching coordinates */}
-                      <div className="h-1.5 w-full bg-slate-500/10 rounded-full mt-2.5 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-1000 ease-out"
-                          style={{
-                            width: `${item.pct}%`,
-                            background: `linear-gradient(90deg, ${style.color1}, ${style.color2})`
-                          }}
-                        />
-                      </div>
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

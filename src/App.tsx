@@ -358,11 +358,16 @@ export default function App() {
         if (parts.length >= 2) {
           inferredMasterId = parts[1]; // Extract the original master ID
         }
-      } else if (editingTransaction.type === 'fixos' || data.type === 'fixos') {
+      } else if (
+        editingTransaction.type === 'fixos' || 
+        data.type === 'fixos' || 
+        editingTransaction.type === 'parcelas' || 
+        data.type === 'parcelas'
+      ) {
         inferredMasterId = editingTransaction.id;
       }
     }
-    if (!inferredMasterId && data.type === 'fixos') {
+    if (!inferredMasterId && (data.type === 'fixos' || data.type === 'parcelas')) {
       inferredMasterId = docId;
     }
 
@@ -676,20 +681,20 @@ export default function App() {
     // 1. Get real transactions for this month
     const realTransactionsThisMonth = transactions.filter(t => t.monthKey === currentMonthKey);
 
-    // 2. Find all unique fixed master transaction definitions in the whole database
-    const fixedTransactions = transactions.filter(t => t.type === 'fixos');
+    // 2. Find all unique master transaction templates (fixed and installments) in database
+    const masterTransactions = transactions.filter(t => t.type === 'fixos' || t.type === 'parcelas');
     
     // Group them uniquely by recurring identity to avoid duplicates.
     const mastersMap = new Map<string, Transaction>();
     
     // Sort so the latest updated templates come first
-    const sortedFixed = [...fixedTransactions].sort((a, b) => {
+    const sortedMasters = [...masterTransactions].sort((a, b) => {
       const dateA = a.updatedAt || a.createdAt || '';
       const dateB = b.updatedAt || b.createdAt || '';
       return dateB.localeCompare(dateA);
     });
 
-    for (const tx of sortedFixed) {
+    for (const tx of sortedMasters) {
       const matchKey = tx.masterId || `name_${tx.name.trim().toLowerCase()}`;
       if (!mastersMap.has(matchKey)) {
         mastersMap.set(matchKey, tx);
@@ -716,7 +721,7 @@ export default function App() {
           userId: masterTx.userId,
           name: masterTx.name,
           amount: masterTx.amount,
-          type: 'fixos',
+          type: masterTx.type, // Keeps original type: 'fixos' or 'parcelas'
           cat: masterTx.cat,
           due: masterTx.due,
           paid_amount: 0,
@@ -750,7 +755,10 @@ export default function App() {
 
   const totalSpentInMonth = activeMonthTransactions.reduce((sum, t) => sum + t.amount, 0);
   const totalPaidInMonth = activeMonthTransactions.reduce((sum, t) => sum + (t?.paid_amount || 0), 0);
-  const leftoverCash = totalInflowsSum - totalSpentInMonth;
+  const totalSpentFixoAndVariavel = activeMonthTransactions
+    .filter(t => t.type === 'fixos' || t.type === 'variaveis')
+    .reduce((sum, t) => sum + t.amount, 0);
+  const leftoverCash = totalInflowsSum - totalSpentFixoAndVariavel;
 
   // Unpaid total estimate
   const pendingTotalDebt = Math.max(0, totalSpentInMonth - totalPaidInMonth);

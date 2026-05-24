@@ -82,7 +82,7 @@ export default function App() {
   const currentMonthKey = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, '0')}`;
 
   // Tabs context
-  const [activeTab, setActiveTab] = useState<'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings'>('fixos');
+  const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings'>('contas');
   
   // Custom Toasts and Alerts
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -730,7 +730,12 @@ export default function App() {
     return enrichedTransactions;
   }, [transactions, currentMonthKey]);
 
-  const activeTabTransactions = activeMonthTransactions.filter(t => t.type === activeTab);
+  const activeTabTransactions = useMemo(() => {
+    if (activeTab === 'contas') {
+      return activeMonthTransactions.filter(t => t.type === 'fixos' || t.type === 'variaveis');
+    }
+    return activeMonthTransactions.filter(t => t.type === activeTab);
+  }, [activeMonthTransactions, activeTab]);
 
   // Summaries Calculations
   const inc = settings?.income || 0;
@@ -901,9 +906,8 @@ export default function App() {
           {/* Navigation Items (Vertical menu for PC) */}
           <nav className="space-y-1.5" aria-label="Desktop menu">
             {[
-              { id: 'fixos', val: '📌 Gasto Fixo' },
-              { id: 'variaveis', val: '📊 Gasto Variável' },
-              { id: 'parcelas', val: '💳 Parcelas' },
+              { id: 'contas', val: '🧾 Contas do Mês' },
+              { id: 'parcelas', val: '💳 Parcelados' },
               { id: 'dashboard', val: '📉 Dashboard' },
               { id: 'goals', val: '🎯 Metas Poupança' },
               { id: 'settings', val: '⚙️ Configurações' }
@@ -1178,9 +1182,8 @@ export default function App() {
           {/* Navigational Segment Tabs (MOBILE ONLY) */}
           <div className="flex lg:hidden gap-1 bg-slate-950/60 p-1 rounded-2xl border border-white/5 overflow-x-auto pr-2">
             {[
-              { id: 'fixos', val: '📌 FIXOS' },
-              { id: 'variaveis', val: '📊 VARIÁVEIS' },
-              { id: 'parcelas', val: '💳 PARCELAS' },
+              { id: 'contas', val: '🧾 CONTAS DO MÊS' },
+              { id: 'parcelas', val: '💳 PARCELADOS' },
               { id: 'dashboard', val: '📉 DASHBOARD' },
               { id: 'goals', val: '🎯 METAS' },
               { id: 'settings', val: '⚙️ CONFIGS' }
@@ -1215,68 +1218,120 @@ export default function App() {
                     ) : (
                       <div className="space-y-3">
                         {activeTabTransactions.map((tx) => {
-                          const categoryObj = activeMonthCategoryList.find(c => c.value === tx.cat) || { icon: '📦' };
+                          const categoryObj = activeMonthCategoryList.find(c => c.value === tx.cat) || { icon: '📦', label: tx.cat || 'Outros' };
                           const remDue = tx.amount - (tx.paid_amount || 0);
                           const isPaid = remDue <= 0;
 
                           return (
                             <div
                               key={tx.id}
-                              className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-colors ${
+                              className={`p-4 rounded-3xl border flex flex-col gap-3.5 transition-all ${
                                 theme === 'light' 
-                                  ? 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-sm' 
+                                  ? 'bg-white border-slate-200/80 hover:border-indigo-100 hover:shadow-sm' 
                                   : 'bg-white/2 border border-white/5 hover:border-white/10'
                               }`}
                             >
-                              <div className="flex items-center gap-3.5 min-w-0 cursor-pointer" onClick={() => handleOpenEdit(tx)}>
-                                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-lg shadow-sm ${
-                                  theme === 'light' ? 'bg-slate-50 border-slate-100' : 'bg-slate-900 border border-white/5'
-                                }`}>
-                                  {categoryObj.icon}
-                                </div>
-                                <div className="min-w-0">
-                                  <h4 className={`font-display font-bold text-xs truncate flex items-center gap-1.5 leading-tight ${
-                                    theme === 'light' ? 'text-slate-800' : 'text-white'
+                              <div className="flex items-center justify-between gap-4 w-full">
+                                <div className="flex items-center gap-3.5 min-w-0 cursor-pointer" onClick={() => handleOpenEdit(tx)}>
+                                  <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-lg shadow-sm shrink-0 ${
+                                    theme === 'light' ? 'bg-slate-50 border-slate-100' : 'bg-slate-900 border border-white/5'
                                   }`}>
-                                    {tx.name} {isPaid && <span className="text-emerald-450">✓</span>}
-                                  </h4>
-                                  <p className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">
-                                    {tx.due || 'Sem vencimento'} • {tx.cat} 
-                                    {tx.paid_amount > 0 && !isPaid && ` • Parcial: ${formatCurrency(tx.paid_amount)}`}
-                                  </p>
+                                    {categoryObj.icon}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h4 className={`font-display font-bold text-xs truncate flex items-center gap-1.5 leading-tight ${
+                                      theme === 'light' ? 'text-slate-800' : 'text-white'
+                                    }`}>
+                                      {tx.name} {isPaid && <span className="text-emerald-450 font-sans">✓</span>}
+                                      {tx.type === 'fixos' && (
+                                        <span className="text-[8px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Fixo</span>
+                                      )}
+                                      {tx.type === 'variaveis' && (
+                                        <span className="text-[8px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">Variável</span>
+                                      )}
+                                    </h4>
+                                    <p className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">
+                                      {tx.due || 'Sem vencimento'} • {categoryObj.label} 
+                                      {tx.paid_amount > 0 && !isPaid && ` • Parcial: ${formatCurrency(tx.paid_amount)}`}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  <span className={`font-mono text-xs font-extrabold ${
+                                    theme === 'light' ? 'text-slate-900' : 'text-white'
+                                  }`}>
+                                    {formatCurrency(tx.amount)}
+                                  </span>
+                                  
+                                  <div className="flex gap-1.5">
+                                    <button
+                                      onClick={() => handleOpenPay(tx.id)}
+                                      className={`px-3 py-1.5 rounded-lg text-[9px] font-bold tracking-wider uppercase cursor-pointer transition-all ${
+                                        isPaid 
+                                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                          : theme === 'light'
+                                            ? 'bg-slate-100 hover:bg-slate-205 border border-slate-200 text-slate-700'
+                                            : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/5'
+                                      }`}
+                                    >
+                                      {isPaid ? 'PAGO' : 'PAGAR'}
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleDeleteTransaction(tx.id)}
+                                      className="w-8 h-8 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/5 text-rose-400 flex items-center justify-center cursor-pointer transition-colors"
+                                      title="Deletar lançamento"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-3">
-                                <span className={`font-mono text-xs font-extrabold ${
-                                  theme === 'light' ? 'text-slate-900' : 'text-white'
-                                }`}>
-                                  {formatCurrency(tx.amount)}
-                                </span>
-                                
-                                <div className="flex gap-1.5">
-                                  <button
-                                    onClick={() => handleOpenPay(tx.id)}
-                                    className={`px-3 py-1.5 rounded-lg text-[9px] font-bold tracking-wider uppercase cursor-pointer transition-colors ${
-                                      isPaid 
-                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                                        : theme === 'light'
-                                          ? 'bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700'
-                                          : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/5'
-                                    }`}
-                                  >
-                                    {isPaid ? 'PAGO' : 'PAGAR'}
-                                  </button>
-
-                                  <button
-                                    onClick={() => handleDeleteTransaction(tx.id)}
-                                    className="w-8 h-8 rounded-lg bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/5 text-rose-400 flex items-center justify-center cursor-pointer transition-colors"
-                                    title="Deletar lançamento"
-                                  >
-                                    ✕
-                                  </button>
+                              {/* Interactive installment planner p/ user escolher valor no mês */}
+                              {tx.type === 'parcelas' && (
+                                <div className={`pt-3 border-t border-dashed ${theme === 'light' ? 'border-slate-150' : 'border-white/5'} flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3`}>
+                                  <div className="space-y-0.5">
+                                    <span className={`text-[10px] font-extrabold uppercase tracking-wider block ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>Definir quanto pagar este mês</span>
+                                    <span className="text-[9px] text-slate-500 font-normal leading-tight block">Modifica o valor a liquidar neste período</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <div className={`relative rounded-xl border ${
+                                      theme === 'light' ? 'bg-slate-50 border-slate-200 focus-within:border-indigo-400' : 'bg-slate-950/40 border-white/5 focus-within:border-indigo-500'
+                                    } transition-all px-3 py-1.5 flex items-center`}>
+                                      <span className="text-[10px] text-slate-500 font-bold font-mono mr-1">R$</span>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="0,00"
+                                        defaultValue={tx.amount}
+                                        onBlur={async (e) => {
+                                          const newVal = parseFloat(e.target.value);
+                                          if (!isNaN(newVal) && newVal >= 0 && newVal !== tx.amount) {
+                                            const path = `transactions/${tx.id}`;
+                                            const updatedTx = { ...tx, amount: newVal, updatedAt: new Date().toISOString() };
+                                            try {
+                                              await setDoc(doc(db, 'transactions', tx.id), updatedTx);
+                                              triggerToast(`Valor a pagar alterado para R$ ${newVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'success');
+                                            } catch (err) {
+                                              handleFirestoreError(err, OperationType.UPDATE, path);
+                                            }
+                                          }
+                                        }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            (e.currentTarget as HTMLInputElement).blur();
+                                          }
+                                        }}
+                                        className={`w-20 bg-transparent text-right font-mono font-bold text-xs focus:outline-none p-0 leading-none ${
+                                          theme === 'light' ? 'text-slate-800' : 'text-slate-100'
+                                        }`}
+                                      />
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
+                              )}
                             </div>
                           );
                         })}

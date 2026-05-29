@@ -21,6 +21,7 @@ import TransactionFormModal from './components/TransactionFormModal';
 import DashboardAnalytics from './components/DashboardAnalytics';
 import GoalsPanel from './components/GoalsPanel';
 import SettingsPanel from './components/SettingsPanel';
+import OnboardingTutorial from './components/OnboardingTutorial';
 import { 
   TrendingUp, 
   Plus, 
@@ -123,6 +124,7 @@ export default function App() {
   const [tempIncomeStr, setTempIncomeStr] = useState<string>('');
   const [tempBalanceStr, setTempBalanceStr] = useState<string>('');
   const [tempExtraStr, setTempExtraStr] = useState<string>('');
+  const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
 
   // Pull to refresh support variables
   const [startY, setStartY] = useState<number>(0);
@@ -1719,6 +1721,12 @@ export default function App() {
             );
           })}
         </div>
+        <OnboardingTutorial 
+          theme={theme} 
+          isOpen={isTutorialOpen} 
+          onClose={() => setIsTutorialOpen(false)} 
+          onOpen={() => setIsTutorialOpen(true)} 
+        />
       </div>
     </div>
   );

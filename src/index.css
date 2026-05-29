@@ -27,6 +27,17 @@
 }
 
 /* Dark default backdrop styling */
+html {
+  font-size: 106.25%; /* 17px default base for better mobile phone readability */
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 109.375%; /* 17.5px comfortable base font size for easier PC screen readability */
+  }
+}
+
 body {
   background: #090e1a;
   color: #f8fafc;

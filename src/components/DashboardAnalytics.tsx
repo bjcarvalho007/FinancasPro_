@@ -169,7 +169,7 @@ export default function DashboardAnalytics({
   const totalVariaveisMonth = listActive.filter(t => t.type === 'variaveis').reduce((sum, t) => sum + t.amount, 0);
   const totalParcelasMonth = listActive.filter(t => t.type === 'parcelas').reduce((sum, t) => sum + t.amount, 0);
 
-  // Math indicators
+  // Indicadores de Equilíbrio
   const liquidezScoreMonth = totalAvailable > 0 
     ? Math.max(10, Math.min(100, Math.round(100 - (totalSpentMonth / totalAvailable) * 100))) 
     : 45;
@@ -178,35 +178,35 @@ export default function DashboardAnalytics({
   const overdueMonthTransactions = listActive.filter(t => (t.paid_amount || 0) < t.amount && t.due < todayStr);
   const pontualidadeScoreMonth = Math.max(15, Math.min(100, 100 - overdueMonthTransactions.length * 25));
 
-  // Balanced weighted score
+  // Nota de controle do mês
   const activeMonthHealthScore = Math.round(
     liquidezScoreMonth * 0.40 + 
     adimplenciaScoreMonth * 0.40 + 
     pontualidadeScoreMonth * 0.20
   );
 
-  let activeMonthLabel = 'Saúde Saudável';
+  let activeMonthLabel = 'Organização Excelente';
   let activeMonthColor = 'text-emerald-400';
   let activeStrokeColor = '#10b981';
   if (activeMonthHealthScore < 50) {
-    activeMonthLabel = 'Crítico / Alerta';
+    activeMonthLabel = 'Atenção Necessária';
     activeMonthColor = 'text-rose-400';
     activeStrokeColor = '#f43f5e';
   } else if (activeMonthHealthScore < 75) {
-    activeMonthLabel = 'Razoável / Vigilância';
+    activeMonthLabel = 'Equilibrado';
     activeMonthColor = 'text-amber-400';
     activeStrokeColor = '#f59e0b';
   }
 
-  // Active Month Specific Alerts
+  // Notificações do Mês Focado
   const monthAlerts: { id: string; type: 'error' | 'warning' | 'success'; text: string; details?: string }[] = [];
   
   if (overdueMonthTransactions.length > 0) {
     monthAlerts.push({
       id: 'month-overdue',
       type: 'error',
-      text: `${overdueMonthTransactions.length} contas vencidas e não quitadas neste mês`,
-      details: `Vencimentos expirados geram multas e juros. regularize imediatamente: ${overdueMonthTransactions.map(t => `'${t.name}'`).join(', ')}.`
+      text: `${overdueMonthTransactions.length} contas aguardando pagamento neste mês`,
+      details: `Lembre-se de verificar suas contas agendadas e marcar como pagas para manter seu controle perfeito: ${overdueMonthTransactions.map(t => `'${t.name}'`).join(', ')}.`
     });
   }
 
@@ -215,15 +215,15 @@ export default function DashboardAnalytics({
     monthAlerts.push({
       id: 'month-overspending',
       type: 'error',
-      text: 'Orçamento do mês quase esgotado (comprometimento > 85%)',
-      details: `Você já utilizou ${Math.round(activeMonthSpentRatio)}% de toda a sua renda disponível para despesas.`
+      text: 'Limite de gastos quase atingido (mais de 85% do planejado)',
+      details: `Você já comprometeu ${Math.round(activeMonthSpentRatio)}% do seu saldo total planejado para despesas.`
     });
   } else if (activeMonthSpentRatio > 65) {
     monthAlerts.push({
       id: 'month-warning-limit',
       type: 'warning',
-      text: 'Comprometimento elevado de recursos disponíveis',
-      details: `Consumo estável porém restrito em ${Math.round(activeMonthSpentRatio)}%. Resta apenas R$ ${leftover.toFixed(2)} de margem.`
+      text: 'Seus gastos estão tomando uma boa parte do orçamento',
+      details: `Consumo estável, representando ${Math.round(activeMonthSpentRatio)}% do seu limite. Resta apenas R$ ${leftover.toFixed(2)} disponíveis.`
     });
   }
 
@@ -235,8 +235,8 @@ export default function DashboardAnalytics({
       monthAlerts.push({
         id: `month-leak-${c.value}`,
         type: 'warning',
-        text: `Concentração alta na categoria: ${c.label}`,
-        details: `${c.icon} ${c.label} representa sozinho ${Math.round(catRatio)}% dos seus gastos totais ativos.`
+        text: `Concentração de gastos em: ${c.label}`,
+        details: `A categoria ${c.icon} ${c.label} representa ${Math.round(catRatio)}% do seu consumo total deste mês.`
       });
     }
   });
@@ -245,8 +245,8 @@ export default function DashboardAnalytics({
     monthAlerts.push({
       id: 'month-success',
       type: 'success',
-      text: 'Monitor premium ativo: Sem desvios orçamentários neste mês!',
-      details: 'Disponibilidade de caixa garantida, sem transações atrasadas e sem extrapolamento de cotas reguladas.'
+      text: 'Tudo perfeito! Suas contas estão em total conformidade e organizadas',
+      details: 'Disponibilidade financeira ideal, sem transações com data pendente e com consumo planejado sob controle!'
     });
   }
 
@@ -279,20 +279,20 @@ export default function DashboardAnalytics({
     alavancagemScoreAll * 0.20
   );
 
-  let globalLabel = 'Excelente Responsabilidade';
+  let globalLabel = 'Organização Perfeita';
   let globalColor = 'text-emerald-400';
   let globalStrokeColor = '#10b981';
   if (globalHealthScore < 50) {
-    globalLabel = 'Crituração Sob Alto Risco';
+    globalLabel = 'Ajustes no Histórico Requeridos';
     globalColor = 'text-rose-400';
     globalStrokeColor = '#f43f5e';
   } else if (globalHealthScore < 75) {
-    globalLabel = 'Moderado / Reconciliação Pendente';
+    globalLabel = 'Bons Resultados Gerais';
     globalColor = 'text-amber-400';
     globalStrokeColor = '#f59e0b';
   }
 
-  // Lifetime Historical Alerts
+  // Histórico de Inteligência Consolidada
   const historyAlerts: { id: string; type: 'error' | 'warning' | 'success'; text: string; details?: string }[] = [];
 
   const legacyPending = pastUnreconciledTx.filter(t => t.monthKey !== currentMonthKey);
@@ -300,8 +300,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-legacy-unpaid',
       type: 'error',
-      text: `${legacyPending.length} contas esquecidas pendentes de pagamento em meses passados`,
-      details: `Isso gera passivos acumulados não fechados. Regularize as contas no menu das abas passadas.`
+      text: `${legacyPending.length} contas pendentes em meses anteriores`,
+      details: `Dica amigável: Navegue para os meses passados no topo do painel e marque-as como pagas se já foram concluídas.`
     });
   }
 
@@ -309,8 +309,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-excessive-card',
       type: 'warning',
-      text: `Alta dependência de faturas parceladas/cartão (${Math.round(installmentRatio)}% do histórico)`,
-      details: `Seus parcelados somam ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalParcelasAll)}. evite acumular faturas de longo prazo.`
+      text: `Uso considerável de compras parceladas (${Math.round(installmentRatio)}% do histórico)`,
+      details: `Suas parcelas pendentes somam ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalParcelasAll)}. Controlar novas parcelizações ajuda a manter as sobras sempre altas.`
     });
   }
 
@@ -329,8 +329,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-deficit-warning',
       type: 'warning',
-      text: `Meses em déficit financeiro: ${deficitMonthsCount} ocorrência(s) detectada(s)`,
-      details: `Seu teto de gastos fixos superou seu ganho base declarado na configuração em alguns ciclos históricos.`
+      text: `Meses em que seus gastos superaram sua renda base: ${deficitMonthsCount} ocorrência(s)`,
+      details: `Em alguns meses anteriores, seu consumo superou a renda padrão cadastrada nas configurações.`
     });
   }
 
@@ -338,8 +338,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-clean-success',
       type: 'success',
-      text: 'Corporativo Impecável: Sem débitos legados em meses anteriores!',
-      details: 'Auditamos 100% dos seus registros de meses passados e todas as contas foram devidamente baixadas com quitação integral.'
+      text: 'Histórico impecável: Tudo em dia nos meses anteriores!',
+      details: 'Parabéns pela persistência e organização! Todos os seus meses passados estão fechados e concluídos.'
     });
   }
 
@@ -351,9 +351,9 @@ export default function DashboardAnalytics({
         colorClass: activeMonthColor,
         stroke: activeStrokeColor,
         metrics: [
-          { name: 'Índice de Liquidez', val: liquidezScoreMonth, desc: 'Balanço entrada vs saída no mês' },
-          { name: 'Taxa de Quitação', val: adimplenciaScoreMonth, desc: 'Percentual de contas pagas' },
-          { name: 'Pontualidade de Vencimento', val: pontualidadeScoreMonth, desc: 'Multas por atraso' }
+          { name: 'Sobras Financeiras', val: liquidezScoreMonth, desc: 'Dinheiro livre em relação aos ganhos' },
+          { name: 'Contas Pagas', val: adimplenciaScoreMonth, desc: 'Porcentagem do que já foi quitado' },
+          { name: 'Organização de Prazos', val: pontualidadeScoreMonth, desc: 'Verifica se restam pendências para hoje' }
         ],
         alerts: monthAlerts,
         totalSpent: totalSpentMonth,
@@ -367,9 +367,9 @@ export default function DashboardAnalytics({
         colorClass: globalColor,
         stroke: globalStrokeColor,
         metrics: [
-          { name: 'Índice de Adimplência Geral', val: quitacaoScoreAll, desc: 'Contas quitadas em todo histórico' },
-          { name: 'Saúde de Conciliação', val: conciliacaoScoreAll, desc: 'Pendências legadas penduradas' },
-          { name: 'Alavancagem de Cartão', val: alavancagemScoreAll, desc: 'Ocupação por parcelamentos longos' }
+          { name: 'Consistência de Pagamento', val: quitacaoScoreAll, desc: 'Porcentagem consolidada de contas pagas' },
+          { name: 'Acompanhamento', val: conciliacaoScoreAll, desc: 'Controle de fechamento de meses antigos' },
+          { name: 'Uso de Parcelas', val: alavancagemScoreAll, desc: 'Porcentagem de custos em formato parcelado' }
         ],
         alerts: historyAlerts,
         totalSpent: totalSpentAll,
@@ -493,10 +493,10 @@ export default function DashboardAnalytics({
               </span>
             </div>
             <h3 className="font-display font-black text-sm text-slate-100 tracking-tight leading-tight">
-              Saúde do Mês Atual
+              Desempenho do Mês
             </h3>
             <p className="text-[11.5px] text-slate-400 leading-normal font-light">
-              Calculada com base na liquidez de fluxo de caixa, pagamentos ativos de {formatMonthKey(currentMonthKey)} e multas por atraso imediatas.
+              Mede o quanto sobrou no seu bolso e o progresso dos pagamentos registrados para o mês de {formatMonthKey(currentMonthKey)}.
             </p>
 
             {/* Sub-metrics progress tracks */}
@@ -547,7 +547,7 @@ export default function DashboardAnalytics({
               <span className="font-mono text-2xl font-extrabold text-white leading-none">
                 {globalHealthScore}
               </span>
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Rating</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Nível</span>
             </div>
           </div>
 
@@ -562,10 +562,10 @@ export default function DashboardAnalytics({
               </span>
             </div>
             <h3 className="font-display font-black text-sm text-slate-100 tracking-tight leading-tight">
-              Auditoria de Contas Geral
+              Planejamento Geral
             </h3>
             <p className="text-[11.5px] text-slate-400 leading-normal font-light">
-              Mede a disciplina geral em liquidar contas sem esquecimentos passados, alavancagem por parcelamentos de longo prazo e estabilidade fiscal.
+              Mede seu controle geral de contas ao longo do tempo, o fechamento correto dos meses anteriores e o peso de parcelas futuras.
             </p>
 
             {/* Sub-metrics progress tracks */}
@@ -597,24 +597,24 @@ export default function DashboardAnalytics({
             {activeDashboardMode === 'current' ? (
               // Active Month Advice
               transactions.length === 0 ? (
-                <span><strong>Pronto Para Monitorar:</strong> Adicione despesas ou contas recorrentes para analisar furos de caixa neste mês ativo de {formatMonthKey(currentMonthKey)}.</span>
+                <span><strong>Pronto para monitorar:</strong> Adicione suas contas e despesas para acompanhar seu planejamento financeiro de {formatMonthKey(currentMonthKey)}.</span>
               ) : activeMonthSpentRatio > 85 ? (
-                <span>🚨 <strong>Alerta Máximo de Caixa:</strong> Suas despesas consumiram <strong>{Math.round(activeMonthSpentRatio)}%</strong> do caixa programado. O maior dreno é <strong>&quot;{highestExpenseItem.name}&quot;</strong> ({fmt(highestExpenseItem.amount)}). Próximas receitas devem ser segregadas rigorosamente para cobrir as contas fixas restantes ou faturas de parcelamento de maior vencimento.</span>
+                <span>🚨 <strong>Atenção ao saldo disponível:</strong> Seus gastos cadastrados representam <strong>{Math.round(activeMonthSpentRatio)}%</strong> do seu limite mensal. O maior valor registrado é de <strong>&quot;{highestExpenseItem.name}&quot;</strong> ({fmt(highestExpenseItem.amount)}). Procure focar em manter as contas prioritárias pagas antes de fazer novas despesas variáveis.</span>
               ) : activeMonthSpentRatio > 60 ? (
-                <span>⚠️ <strong>Margem de Manobra Estreita:</strong> Você usou <strong>{Math.round(activeMonthSpentRatio)}%</strong> dos ingressos monetários. A sobra orçamentária é pequena ({fmt(leftover)}). Evite desviar qualquer valor para gastos variáveis do cotidiano ou diversão supérflua até o fechamento real.</span>
+                <span>⚠️ <strong>Saldo próximo ao limite:</strong> Você comprometeu <strong>{Math.round(activeMonthSpentRatio)}%</strong> da sua renda total do mês. Restam {fmt(leftover)} livres. É um excelente momento para conter despesas extras e assegurar esse saldo positivo.</span>
               ) : (
-                <span>💎 <strong>Excelente Alocação Financeira:</strong> Você comprometeu apenas <strong>{Math.round(activeMonthSpentRatio)}%</strong> de seus aportes públicos neste mês. Possui uma reserva líquida projetada excelente de <strong>{fmt(leftover)}</strong>. Considere automatizar a reserva para metas de poupança com rendimento CDI.</span>
+                <span>💎 <strong>Excelente controle mensal!</strong> Você utilizou apenas <strong>{Math.round(activeMonthSpentRatio)}%</strong> do seu orçamento disponível. Com uma ótima folga de <strong>{fmt(leftover)}</strong>, você está em uma ótima posição para guardar o excedente em suas metas ou cofrinhos!</span>
               )
             ) : (
               // Historical Long-Term Advice
               allTransactions.length === 0 ? (
-                <span><strong>Sem Base Histórica Suficiente:</strong> Conforme você alimentar a ferramenta continuamente faturas novas, as tendências e riscos de inadimplência corporativa serão identificados automaticamente aqui.</span>
+                <span><strong>Sem histórico suficiente:</strong> Ao cadastrar suas transações ao longo do tempo, você verá insights completos de evolução e controle de gastos históricos aqui.</span>
               ) : pastUnreconciledTx.length > 0 ? (
-                <span>🔴 <strong>Segurança Reconciliatória Prejudicada:</strong> Identificamos <strong>{pastUnreconciledTx.length} contas não pagas vencendo em datas passadas</strong>. Deixar contas em aberto falsifica seus relatórios de caixa e compromete o score de rating. Baixe os pagamentos nas abas antigas para reabilitar sua nota de conciliação.</span>
+                <span>🔴 <strong>Contas anteriores aguardando pagamento:</strong> Foram encontradas <strong>{pastUnreconciledTx.length} contas de meses anteriores</strong> ainda pendentes de fechamento. Para manter seu histórico correto, acesse as abas dos meses passados e registre o pagamento se já tiverem sido pagas.</span>
               ) : installmentRatio > 40 ? (
-                <span>⚠️ <strong>Alavancagem de Cartão Elevada:</strong> Seus parcelamentos arrastados somam <strong>{Math.round(installmentRatio)}%</strong> de toda a sua história de transações. Use o cartão com mais parcimônia e evite contrair novas parcelas antes que faturas antigas expirem nos próximos ciclos.</span>
+                <span>⚠️ <strong>Foco nos parcelamentos:</strong> Suas parcelas futuras representam <strong>{Math.round(installmentRatio)}%</strong> do seu histórico geral de gastos ({fmt(totalParcelasAll)}). Acompanhar as parcelas ativamente ajuda você a não sobrecarregar sua renda futura.</span>
               ) : (
-                <span>💎 <strong>Governança de Caixa Impecável:</strong> Seu rating geral de <strong>{globalHealthScore} canais</strong> indica controle excepcional! Você mantém um fluxo limpo sem faturas de tempos anteriores abertas, com baixíssimo nível de parcelados sem cobertura. Seu planejamento preventivo é referência profissional.</span>
+                <span>💎 <strong>Organização Fantástica!</strong> Sua pontuação consolidada de <strong>{globalHealthScore} pontos</strong> indica controle excepcional! Você mantém seu histórico limpo sem pendências de meses passados abertas, e suas parcelas futuras estão perfeitamente equilibradas.</span>
               )
             )}
           </p>
@@ -629,7 +629,7 @@ export default function DashboardAnalytics({
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-4.5 h-4.5 text-rose-400 animate-pulse" />
             <h4 className="font-display font-black text-sm text-slate-100 uppercase tracking-wider">
-              Painel Avançado de Auditoria & Alertas ({activeDashboardMode === 'current' ? 'Mês Atual' : 'Histórico Geral'})
+              Avisos & Alertas Importantes ({activeDashboardMode === 'current' ? 'Mês Atual' : 'Histórico Geral'})
             </h4>
           </div>
           <span className="text-[9px] font-black uppercase text-slate-500 bg-white/5 px-2.5 py-1 rounded-md tracking-wider">

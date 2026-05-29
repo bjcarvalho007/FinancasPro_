@@ -1,0 +1,17 @@
+{
+  "short_name": "FinançasPro",
+  "name": "FinançasPro - Gestão de Caixa Premium",
+  "icons": [
+    {
+      "src": "/app_icon.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#070a13",
+  "theme_color": "#070a13",
+  "display": "standalone",
+  "orientation": "portrait"
+}

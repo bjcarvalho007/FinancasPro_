@@ -1301,6 +1301,8 @@ export default function App() {
                 {activeTab === 'dashboard' ? (
                   <DashboardAnalytics
                     transactions={activeMonthTransactions}
+                    allTransactions={transactions}
+                    currentMonthKey={currentMonthKey}
                     categoriesList={activeMonthCategoryList}
                     totalAvailable={totalInflowsSum}
                     leftover={leftoverCash}

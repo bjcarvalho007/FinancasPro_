@@ -909,109 +909,9 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen w-full flex flex-col lg:flex-row transition-colors duration-300 ${
+    <div className={`min-h-screen w-full flex flex-col transition-colors duration-300 ${
       theme === 'light' ? 'bg-[#f4f7fa] text-slate-900 font-sans' : 'bg-[#070a13] text-slate-100 font-sans'
     }`}>
-      {/* PERSISTENT ELEGANT DESKTOP SIDEBAR */}
-      <aside className={`hidden lg:flex w-64 shrink-0 flex-col justify-between p-6 sticky top-0 h-screen border-r transition-colors duration-300 ${
-        theme === 'light' 
-          ? 'bg-white border-slate-200/80 text-slate-900 shadow-sm' 
-          : 'bg-[#090d1a] border-white/5 text-slate-100'
-      }`}>
-        <div className="space-y-8">
-          {/* Logo Section */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center glow-emerald">
-              <TrendingUp className="w-5 h-5 text-emerald-400" />
-            </div>
-            <div>
-              <h2 className="font-display font-black text-[15.5px] tracking-tight leading-none">
-                FINANÇAS<span className="text-emerald-400">PRO</span>
-              </h2>
-              <span className="text-[9.5px] text-slate-500 font-extrabold uppercase tracking-widest block mt-1">SaaS de Gestão Segura</span>
-            </div>
-          </div>
-
-          {/* Navigation Items (Vertical menu for PC) */}
-          <nav className="space-y-1.5" aria-label="Desktop menu">
-            {[
-              { id: 'contas', val: '📌 Contas Fixas' },
-              { id: 'variaveis', val: '📊 Gastos Variados' },
-              { id: 'parcelas', val: '💳 Parcelados' },
-              { id: 'dashboard', val: '📉 Dashboard' },
-              { id: 'goals', val: '🎯 Metas Poupança' },
-              { id: 'settings', val: '⚙️ Configurações' }
-            ].map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full text-left py-3 px-4 rounded-xl text-[13.5px] font-semibold tracking-wide transition-all duration-200 cursor-pointer flex items-center justify-between group ${
-                    isActive 
-                      ? theme === 'light'
-                        ? 'bg-indigo-50 border border-indigo-200 text-indigo-700 shadow-sm'
-                        : 'bg-indigo-600/15 border border-indigo-500/30 text-indigo-400'
-                      : theme === 'light'
-                        ? 'text-slate-600 hover:text-slate-900 border border-transparent hover:bg-slate-50'
-                        : 'text-slate-400 hover:text-white border border-transparent hover:bg-white/3'
-                  }`}
-                >
-                  <span>{tab.val}</span>
-                  <div className={`w-1.5 h-1.5 rounded-full transition-all ${
-                    isActive 
-                      ? theme === 'light' ? 'bg-indigo-600' : 'bg-indigo-400' 
-                      : 'bg-transparent group-hover:bg-slate-400'
-                  }`} />
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* User profile & controls */}
-        <div className={`pt-4 border-t ${theme === 'light' ? 'border-slate-100' : 'border-white/5'} space-y-4`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-[13px] shrink-0 select-none ${
-              theme === 'light' ? 'bg-slate-100 text-slate-700' : 'bg-slate-900 text-slate-300 border border-white/5'
-            }`}>
-              {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
-            </div>
-            <div className="min-w-0 flex-1">
-              <span className={`text-[10px] uppercase font-semibold tracking-wider block ${
-                theme === 'light' ? 'text-slate-400' : 'text-slate-500'
-              }`}>Empresa / Usuário</span>
-              <p className="text-[13px] font-medium truncate leading-tight" title={user.email || ''}>
-                {user.email || 'Conectado'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleOpenIncome}
-              className={`flex-1 py-2.5 rounded-xl text-[10px] font-semibold tracking-wider uppercase transition-all flex items-center justify-center gap-1 cursor-pointer border ${
-                theme === 'light' 
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/70' 
-                  : 'bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-400 border-emerald-500/10'
-              }`}
-            >
-              <DollarSign className="w-3.5 h-3.5" /> Ganhos
-            </button>
-            <button
-              onClick={handleUserLogout}
-              className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-all cursor-pointer border ${
-                theme === 'light'
-                  ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-705'
-                  : 'bg-rose-500/5 hover:bg-rose-500/10 text-rose-450 border-rose-500/10'
-              }`}
-              title="Sair da plataforma"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </aside>
 
       {/* Dynamic Animated Toast */}
       {showToast && (
@@ -1077,7 +977,7 @@ export default function App() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto h-screen pb-24 lg:pb-0"
+        className="flex-1 overflow-y-auto h-screen pb-28 lg:pb-28"
       >
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 md:py-8 space-y-6">
           {isFirebaseOffline && (
@@ -1122,31 +1022,48 @@ export default function App() {
             </div>
           )}
 
-          {/* Main Top Header Block (MOBILE ONLY) */}
-          <header className={`flex lg:hidden items-center justify-between pb-4 border-b ${
-            theme === 'light' ? 'border-slate-200' : 'border-white/5'
+          {/* Unified High-Converting Top Header Block (Both PC & Mobile) */}
+          <header className={`flex items-center justify-between pb-4 border-b transition-colors duration-300 ${
+            theme === 'light' ? 'border-slate-200/80' : 'border-white/5'
           }`}>
             <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center glow-emerald">
-                <TrendingUp className="w-5 h-5 text-emerald-400" />
+              <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center glow-emerald shrink-0">
+                <TrendingUp className="w-5.5 h-5.5 text-emerald-400" />
               </div>
               <div>
-                <h2 className={`font-display font-black text-base tracking-tight leading-none ${
+                <h2 className={`font-display font-black text-[17px] sm:text-lg tracking-tight leading-none ${
                   theme === 'light' ? 'text-slate-900' : 'text-white'
                 }`}>
-                  FINANÇAS<span className="text-emerald-400">PRO</span>
+                  FINANÇAS<span className="text-emerald-400 font-extrabold ml-0.5">PRO</span>
                 </h2>
-                <span className="text-[9px] text-slate-500 font-extrabold uppercase tracking-widest block mt-1">SaaS de Gestão Segura</span>
+                <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest block mt-1">SaaS de Gestão Segura</span>
               </div>
             </div>
 
-            {/* Quick Profile / Action Menu */}
+            {/* Top Right Controls - Pro visual layout */}
             <div className="flex items-center gap-3">
+              {/* User profile details (hidden on mobile, ultra elegant on desktop) */}
+              <div className={`hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-2xl border ${
+                theme === 'light' ? 'bg-slate-50 border-slate-200/60 text-slate-705' : 'bg-white/3 border-white/5 text-slate-300'
+              }`}>
+                <div className={`w-7.5 h-7.5 rounded-xl flex items-center justify-center font-bold text-[11px] shrink-0 select-none ${
+                  theme === 'light' ? 'bg-indigo-50 text-indigo-700' : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/10'
+                }`}>
+                  {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
+                </div>
+                <div className="min-w-0 pr-1 text-left">
+                  <span className="text-[8.5px] uppercase font-bold tracking-wider text-slate-500 block leading-tight">Membro Premium</span>
+                  <p className="text-xs font-semibold truncate leading-tight max-w-[150px]" title={user.email || ''}>
+                    {user.email || 'Conectado'}
+                  </p>
+                </div>
+              </div>
+
               <button
                 onClick={handleOpenIncome}
                 className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
                   theme === 'light' 
-                    ? 'bg-white border-slate-200 text-slate-700 shadow-sm' 
+                    ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm' 
                     : 'bg-white/3 hover:bg-white/6 text-slate-200 border border-white/5'
                 }`}
               >
@@ -1155,7 +1072,11 @@ export default function App() {
               
               <button
                 onClick={handleUserLogout}
-                className="w-10 h-10 rounded-xl bg-rose-500/5 hover:bg-rose-500/15 border border-rose-500/10 flex items-center justify-center text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
+                  theme === 'light'
+                    ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-700'
+                    : 'bg-rose-500/5 hover:bg-rose-500/15 border border-rose-500/10 text-rose-450'
+                }`}
                 title="Sair da plataforma"
               >
                 <LogOut className="w-4 h-4" />
@@ -1412,13 +1333,10 @@ export default function App() {
             </div>
           )}
 
-          {/* Standard Page Footer credits/helpline */}
-          <footer className="pt-10 border-t border-white/5 text-center space-y-2">
-            <span className="text-[9px] text-slate-500 uppercase tracking-widest font-extrabold block">BJC DESENVOLVIMENTOS SAAS</span>
-            <p className="text-[11px] text-slate-400 font-light max-w-sm mx-auto leading-relaxed">
-              Dúvidas ou suporte na integração? <a href="https://wa.me/5563992092699?text=Olá,%20gostaria%20de%20suporte%20no%20FinançasPro" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline">Fale diretamente com nossa engenharia</a>.
-            </p>
-          </footer>
+          {/* Minimalist Visual Balance Spacing */}
+          <div className="pt-8 pb-4 text-center text-[10px] text-slate-500 tracking-wide font-medium uppercase opacity-40 select-none">
+            FinançasPro • BJC Desenvolvimentos
+          </div>
         </div>
       </div>
 
@@ -1710,49 +1628,95 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* MOBILE BOTTOM NAVIGATION BAR */}
-      <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl transition-all duration-300 ${
+      {/* UNIFIED FLOATING CHAT / SUPPORT SYSTEM */}
+      <div className="fixed bottom-20 right-6 z-45 group">
+        <div className="flex flex-col items-end gap-3">
+          {/* High-Converting Support Popover Widget */}
+          <div className="bg-[#090e1b]/95 border border-white/10 backdrop-blur-xl rounded-2xl p-4 shadow-2xl transition-all duration-300 translate-y-3 opacity-0 pointer-events-none group-focus-within:opacity-100 group-focus-within:translate-y-0 group-hover:opacity-100 group-hover:translate-y-0 w-64 text-slate-100 select-none group-focus-within:pointer-events-auto group-hover:pointer-events-auto">
+            <span className="text-[9.5px] uppercase font-black text-emerald-400 tracking-widest block mb-1">🚀 INFRAESTRUTURA SAAS</span>
+            <h4 className="text-[13px] font-bold text-white leading-tight">Dúvidas na Integração?</h4>
+            <p className="text-[11.5px] text-slate-400 font-light leading-relaxed mt-1 mb-3">
+              Fale diretamente com nossa engenharia de software para suporte customizado ou renovações.
+            </p>
+            <a
+              href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-3 py-2.5 rounded-xl text-[10px] uppercase tracking-wider transition-all duration-200 block text-center shadow-lg shadow-emerald-500/15 cursor-pointer leading-none"
+            >
+              Falar com nossa Engenharia
+            </a>
+            <div className="mt-3 pt-2 border-t border-white/5 text-[8.5px] text-slate-500 uppercase tracking-widest font-black text-center">
+              © BJC DESENVOLVIMENTOS SAAS
+            </div>
+          </div>
+
+          {/* Pulse Launcher Support Icon Element */}
+          <a
+            href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-2xl cursor-pointer transition-all duration-300 hover:scale-110 active:scale-95 relative border border-emerald-400/20"
+            title="Dúvidas ou suporte na integração? Fale diretamente com nossa engenharia"
+          >
+            <span className="absolute inset-0 rounded-full bg-emerald-500/25 animate-ping opacity-75 scale-105" />
+            <svg 
+              className="w-6.5 h-6.5 text-white relative z-10" 
+              fill="currentColor" 
+              viewBox="0 0 24 24" 
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.625 1.45 5.4 0 9.794-4.394 9.797-9.797.002-2.618-1.015-5.08-2.87-6.935C16.3 2.016 13.834 1 11.207 1 5.801 1 1.405 5.395 1.4 10.799c-.001 1.517.41 3.003 1.192 4.316l-.1.365-.79 2.883 2.95-.773.355-.109zM17.51 14.1c-.322-.162-1.92-.95-2.217-1.058-.297-.107-.514-.162-.73.162-.217.324-.838 1.056-1.027 1.274-.19.216-.378.243-.7.08-.322-.162-1.36-.5-2.593-1.6-.957-.852-1.6-1.9-1.79-2.222-.19-.324-.02-.5-.18-.66-.145-.145-.323-.377-.485-.566-.16-.19-.214-.323-.32-.54-.108-.217-.054-.405-.027-.567.027-.162.217-.514.324-.73.108-.216.162-.351.243-.513.08-.162.04-.324.02-.486-.02-.162-.217-.514-.297-.7-.08-.194-.163-.167-.225-.17a6.3 6.3 0 0 0-.42-.01c-.135 0-.352.05-.536.25-.184.2-.705.69-.705 1.68 0 .99.72 1.94.82 2.072.1.13 1.414 2.16 3.428 3.03.48.207.854.33 1.145.424.482.153.92.13 1.267.08.386-.056 1.18-.48 1.346-.943.165-.46.165-.856.115-.94-.05-.08-.18-.135-.5-.297z"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      {/* UNIFIED FULLY-RESPONSIVE DOCKED BOTTOM BAR (BOTH PC & MOBILE) */}
+      <div className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl transition-all duration-300 ${
         theme === 'light' 
           ? 'bg-white/95 border-slate-200/80 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] text-slate-850' 
           : 'bg-[#090d1af5] border-white/5 shadow-[0_-8px_30px_rgb(0,0,0,0.4)] text-slate-100'
       } px-1.5 pb-safe pt-2 flex items-center justify-around h-16`}>
-        {[
-          { id: 'dashboard', val: 'Dashboard', icon: LayoutDashboard },
-          { id: 'contas', val: 'Fixas', icon: Receipt },
-          { id: 'variaveis', val: 'Variados', icon: Coins },
-          { id: 'parcelas', val: 'Parcelados', icon: CreditCard },
-          { id: 'goals', val: 'Metas', icon: Target },
-          { id: 'settings', val: 'Ajustes', icon: Settings }
-        ].map((tab) => {
-          const isSelected = activeTab === tab.id;
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className="flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer relative group transition-all"
-            >
-              <div className={`p-1.5 rounded-xl transition-all duration-200 ${
-                isSelected 
-                  ? theme === 'light'
-                    ? 'bg-indigo-50 text-indigo-600 scale-110 font-bold' 
-                    : 'bg-indigo-500/15 text-indigo-400 scale-110 font-bold'
-                  : theme === 'light'
-                    ? 'text-slate-500 group-hover:text-slate-800'
-                    : 'text-slate-400 group-hover:text-white'
-              }`}>
-                <Icon className="w-5 h-5" />
-              </div>
-              <span className={`text-[9.5px] font-black tracking-tight mt-0.5 transition-all ${
-                isSelected 
-                  ? theme === 'light' ? 'text-indigo-600 font-extrabold' : 'text-indigo-400 font-extrabold'
-                  : theme === 'light' ? 'text-slate-500 font-medium' : 'text-slate-400 font-medium'
-              }`}>
-                {tab.val}
-              </span>
-            </button>
-          );
-        })}
+        <div className="max-w-4xl w-full mx-auto flex items-center justify-around h-full">
+          {[
+            { id: 'dashboard', val: 'Dashboard', icon: LayoutDashboard },
+            { id: 'contas', val: 'Fixas', icon: Receipt },
+            { id: 'variaveis', val: 'Variados', icon: Coins },
+            { id: 'parcelas', val: 'Parcelados', icon: CreditCard },
+            { id: 'goals', val: 'Metas', icon: Target },
+            { id: 'settings', val: 'Ajustes', icon: Settings }
+          ].map((tab) => {
+            const isSelected = activeTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className="flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer relative group transition-all"
+              >
+                <div className={`p-1.5 rounded-xl transition-all duration-200 ${
+                  isSelected 
+                    ? theme === 'light'
+                      ? 'bg-indigo-50 text-indigo-600 scale-110 font-bold' 
+                      : 'bg-indigo-500/15 text-indigo-400 scale-110 font-bold'
+                    : theme === 'light'
+                      ? 'text-slate-500 group-hover:text-slate-800'
+                      : 'text-slate-400 group-hover:text-white'
+                }`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <span className={`text-[9.5px] font-black tracking-tight mt-0.5 transition-all ${
+                  isSelected 
+                    ? theme === 'light' ? 'text-indigo-600 font-extrabold' : 'text-indigo-400 font-extrabold'
+                    : theme === 'light' ? 'text-slate-500 font-semibold' : 'text-slate-400 font-semibold'
+                }`}>
+                  {tab.val}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -257,7 +257,7 @@ export default function DashboardAnalytics({
             <span className="font-mono text-2xl font-extrabold text-white leading-none">
               {healthScore}
             </span>
-            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
               Pontos
             </span>
           </div>
@@ -265,17 +265,17 @@ export default function DashboardAnalytics({
 
         <div className="space-y-2 text-center md:text-left">
           <div className="flex items-center justify-center md:justify-start gap-2">
-            <span className={`text-xs font-extrabold px-3 py-1 bg-white/5 border border-white/5 rounded-full uppercase tracking-wider ${scoreClass}`}>
+            <span className={`text-sm font-extrabold px-3 py-1 bg-white/5 border border-white/5 rounded-full uppercase tracking-wider ${scoreClass}`}>
               ● {scoreLabel}
             </span>
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
+            <span className="text-xs text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-emerald-400" /> IA Score
             </span>
           </div>
-          <h3 className="font-display font-extrabold text-base text-slate-200">
+          <h3 className="font-display font-extrabold text-lg text-slate-200">
             Diagnóstico Orçamentário
           </h3>
-          <p className="text-xs text-slate-400 font-light leading-relaxed max-w-sm">
+          <p className="text-sm text-slate-400 font-light leading-relaxed max-w-sm">
             Seu caixa corporativo ou pessoal é medido pelas margens de sobrevivência, índice de endividamento parcelado e velocidade de quitação de contas vencendo.
           </p>
         </div>
@@ -288,50 +288,50 @@ export default function DashboardAnalytics({
         className="p-5 rounded-r-3xl border-l-[4px] border-indigo-500 bg-indigo-500/5 flex items-start gap-4"
       >
         <Lightbulb className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Recomendações financeiras automáticas</h4>
-          <p className="text-xs text-slate-300 font-normal leading-relaxed" dangerouslySetInnerHTML={{ __html: financialAnalysis }} />
+        <div className="space-y-1.5">
+          <h4 className="text-sm font-bold text-indigo-400 uppercase tracking-widest">Recomendações financeiras automáticas</h4>
+          <p className="text-sm text-slate-350 font-normal leading-relaxed" dangerouslySetInnerHTML={{ __html: financialAnalysis }} />
         </div>
       </motion.div>
 
       {/* Dynamic Key Performance Metrics List */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-white/2 border border-white/5">
-          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Maior Custo</span>
-          <span className="text-sm font-mono font-extrabold text-rose-400 truncate block mb-1" title={highestExpense.name}>
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Maior Custo</span>
+          <span className="text-base font-mono font-extrabold text-rose-400 truncate block mb-1" title={highestExpense.name}>
             {fmt(highestExpense.amount)}
           </span>
-          <span className="text-[10px] text-slate-500 truncate block">
+          <span className="text-xs text-slate-500 truncate block">
             {highestExpense.name}
           </span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white/2 border border-white/5">
-          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Custo Médio / Item</span>
-          <span className="text-sm font-mono font-extrabold text-slate-200 block mb-1">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Custo Médio / Item</span>
+          <span className="text-base font-mono font-extrabold text-slate-200 block mb-1">
             {fmt(transactions.length ? (totalSpent / transactions.length) : 0)}
           </span>
-          <span className="text-[10px] text-slate-500 block">
+          <span className="text-xs text-slate-500 block">
             Sobre {transactions.length} registros
           </span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white/2 border border-white/5">
-          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Comprometimento Recorrente</span>
-          <span className="text-sm font-mono font-extrabold text-amber-400 block mb-1">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Comprometimento Recorrente</span>
+          <span className="text-base font-mono font-extrabold text-amber-400 block mb-1">
             {totalAvailable > 0 ? Math.round((totalFixos / totalAvailable) * 100) : 0}%
           </span>
-          <span className="text-[10px] text-slate-500 block">
+          <span className="text-xs text-slate-500 block">
             Despesas Fixas
           </span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white/2 border border-white/5">
-          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Projeção Próx. Mês</span>
-          <span className="text-sm font-mono font-extrabold text-indigo-400 block mb-1">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Projeção Próx. Mês</span>
+          <span className="text-base font-mono font-extrabold text-indigo-400 block mb-1">
             {fmt(nextMonthForecast)}
           </span>
-          <span className="text-[10px] text-slate-500 block">
+          <span className="text-xs text-slate-500 block">
             Mantenha fixas e faturas
           </span>
         </div>

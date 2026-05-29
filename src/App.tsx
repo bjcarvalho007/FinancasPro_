@@ -37,7 +37,11 @@ import {
   Bell, 
   FolderLock,
   Layers,
-  ArrowRightLeft
+  ArrowRightLeft,
+  LayoutDashboard,
+  Receipt,
+  Coins,
+  CreditCard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -751,7 +755,7 @@ export default function App() {
 
   const activeTabTransactions = useMemo(() => {
     if (activeTab === 'contas') {
-      return activeMonthTransactions.filter(t => t.type === 'fixos' || t.type === 'variaveis');
+      return activeMonthTransactions.filter(t => t.type === 'fixos');
     }
     return activeMonthTransactions.filter(t => t.type === activeTab);
   }, [activeMonthTransactions, activeTab]);
@@ -771,8 +775,11 @@ export default function App() {
     .reduce((sum, t) => sum + t.amount, 0);
   const leftoverCash = totalInflowsSum - totalSpentFixoAndVariavel;
 
-  // Unpaid total estimate
-  const pendingTotalDebt = Math.max(0, totalSpentInMonth - totalPaidInMonth);
+  // Unpaid total estimate for fixed and variables of the month only
+  const activeMonthFixAndVar = activeMonthTransactions.filter(t => t.type === 'fixos' || t.type === 'variaveis');
+  const spentFixAndVar = activeMonthFixAndVar.reduce((sum, t) => sum + t.amount, 0);
+  const paidFixAndVar = activeMonthFixAndVar.reduce((sum, t) => sum + (t?.paid_amount || 0), 0);
+  const pendingTotalDebt = Math.max(0, spentFixAndVar - paidFixAndVar);
 
   // Categorical summaries for quick widgets
   const fixosSum = activeMonthTransactions.filter(t => t.type === 'fixos').reduce((sum, t) => sum + t.amount, 0);
@@ -918,17 +925,18 @@ export default function App() {
               <TrendingUp className="w-5 h-5 text-emerald-400" />
             </div>
             <div>
-              <h2 className="font-display font-black text-sm tracking-tight leading-none">
+              <h2 className="font-display font-black text-[15.5px] tracking-tight leading-none">
                 FINANÇAS<span className="text-emerald-400">PRO</span>
               </h2>
-              <span className="text-[8px] text-slate-500 font-extrabold uppercase tracking-widest block mt-0.5">SaaS de Gestão Segura</span>
+              <span className="text-[9.5px] text-slate-500 font-extrabold uppercase tracking-widest block mt-1">SaaS de Gestão Segura</span>
             </div>
           </div>
 
           {/* Navigation Items (Vertical menu for PC) */}
           <nav className="space-y-1.5" aria-label="Desktop menu">
             {[
-              { id: 'contas', val: '🧾 Contas do Mês' },
+              { id: 'contas', val: '📌 Contas Fixas' },
+              { id: 'variaveis', val: '📊 Gastos Variados' },
               { id: 'parcelas', val: '💳 Parcelados' },
               { id: 'dashboard', val: '📉 Dashboard' },
               { id: 'goals', val: '🎯 Metas Poupança' },
@@ -939,7 +947,7 @@ export default function App() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full text-left py-3 px-4 rounded-xl text-xs font-bold tracking-wide transition-all duration-200 cursor-pointer flex items-center justify-between group ${
+                  className={`w-full text-left py-3 px-4 rounded-xl text-[13.5px] font-semibold tracking-wide transition-all duration-200 cursor-pointer flex items-center justify-between group ${
                     isActive 
                       ? theme === 'light'
                         ? 'bg-indigo-50 border border-indigo-200 text-indigo-700 shadow-sm'
@@ -964,16 +972,16 @@ export default function App() {
         {/* User profile & controls */}
         <div className={`pt-4 border-t ${theme === 'light' ? 'border-slate-100' : 'border-white/5'} space-y-4`}>
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 select-none ${
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-[13px] shrink-0 select-none ${
               theme === 'light' ? 'bg-slate-100 text-slate-700' : 'bg-slate-900 text-slate-300 border border-white/5'
             }`}>
               {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
             </div>
             <div className="min-w-0 flex-1">
-              <span className={`text-[9px] uppercase font-bold tracking-wider block ${
+              <span className={`text-[10px] uppercase font-semibold tracking-wider block ${
                 theme === 'light' ? 'text-slate-400' : 'text-slate-500'
               }`}>Empresa / Usuário</span>
-              <p className="text-xs font-semibold truncate leading-tight" title={user.email || ''}>
+              <p className="text-[13px] font-medium truncate leading-tight" title={user.email || ''}>
                 {user.email || 'Conectado'}
               </p>
             </div>
@@ -1069,7 +1077,7 @@ export default function App() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto h-screen"
+        className="flex-1 overflow-y-auto h-screen pb-24 lg:pb-0"
       >
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 md:py-8 space-y-6">
           {isFirebaseOffline && (
@@ -1201,28 +1209,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* Navigational Segment Tabs (MOBILE ONLY) */}
-          <div className="flex lg:hidden gap-1 bg-slate-950/60 p-1 rounded-2xl border border-white/5 overflow-x-auto pr-2">
-            {[
-              { id: 'contas', val: '🧾 CONTAS DO MÊS' },
-              { id: 'parcelas', val: '💳 PARCELADOS' },
-              { id: 'dashboard', val: '📉 DASHBOARD' },
-              { id: 'goals', val: '🎯 METAS' },
-              { id: 'settings', val: '⚙️ CONFIGS' }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`py-2 px-3 rounded-xl text-[10px] font-bold tracking-wider uppercase transition-all select-none cursor-pointer flex-shrink-0 ${
-                  activeTab === tab.id 
-                    ? 'bg-indigo-600/15 border border-indigo-500/30 text-indigo-400' 
-                    : 'text-slate-400 hover:text-white border border-transparent'
-                }`}
-              >
-                {tab.val}
-              </button>
-            ))}
-          </div>
 
           {/* Grid Layout that splits screen on PC, but rolls standard single col on Mobile */}
           {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' ? (
@@ -1261,18 +1247,18 @@ export default function App() {
                                     {categoryObj.icon}
                                   </div>
                                   <div className="min-w-0">
-                                    <h4 className={`font-display font-bold text-xs truncate flex items-center gap-1.5 leading-tight ${
+                                    <h4 className={`font-display font-bold text-[14.5px] truncate flex items-center gap-1.5 leading-tight ${
                                       theme === 'light' ? 'text-slate-800' : 'text-white'
                                     }`}>
                                       {tx.name} {isPaid && <span className="text-emerald-450 font-sans">✓</span>}
                                       {tx.type === 'fixos' && (
-                                        <span className="text-[8px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Fixo</span>
+                                        <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Fixo</span>
                                       )}
                                       {tx.type === 'variaveis' && (
-                                        <span className="text-[8px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">Variável</span>
+                                        <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">Variável</span>
                                       )}
                                     </h4>
-                                    <p className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-wider">
+                                    <p className="text-[11.5px] text-slate-500 mt-1 uppercase font-semibold tracking-wider">
                                       {tx.due || 'Sem vencimento'} • {categoryObj.label} 
                                       {tx.paid_amount > 0 && !isPaid && ` • Parcial: ${formatCurrency(tx.paid_amount)}`}
                                     </p>
@@ -1280,7 +1266,7 @@ export default function App() {
                                 </div>
 
                                 <div className="flex items-center gap-3">
-                                  <span className={`font-mono text-xs font-extrabold ${
+                                  <span className={`font-mono text-[14.5px] font-black shrink-0 ${
                                     theme === 'light' ? 'text-slate-900' : 'text-white'
                                   }`}>
                                     {formatCurrency(tx.amount)}
@@ -1289,7 +1275,7 @@ export default function App() {
                                   <div className="flex gap-1.5">
                                     <button
                                       onClick={() => handleOpenPay(tx.id)}
-                                      className={`px-3 py-1.5 rounded-lg text-[9px] font-bold tracking-wider uppercase cursor-pointer transition-all ${
+                                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase cursor-pointer transition-all ${
                                         isPaid 
                                           ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                                           : theme === 'light'
@@ -1723,6 +1709,51 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* MOBILE BOTTOM NAVIGATION BAR */}
+      <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl transition-all duration-300 ${
+        theme === 'light' 
+          ? 'bg-white/95 border-slate-200/80 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] text-slate-850' 
+          : 'bg-[#090d1af5] border-white/5 shadow-[0_-8px_30px_rgb(0,0,0,0.4)] text-slate-100'
+      } px-1.5 pb-safe pt-2 flex items-center justify-around h-16`}>
+        {[
+          { id: 'dashboard', val: 'Dashboard', icon: LayoutDashboard },
+          { id: 'contas', val: 'Fixas', icon: Receipt },
+          { id: 'variaveis', val: 'Variados', icon: Coins },
+          { id: 'parcelas', val: 'Parcelados', icon: CreditCard },
+          { id: 'goals', val: 'Metas', icon: Target },
+          { id: 'settings', val: 'Ajustes', icon: Settings }
+        ].map((tab) => {
+          const isSelected = activeTab === tab.id;
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className="flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer relative group transition-all"
+            >
+              <div className={`p-1.5 rounded-xl transition-all duration-200 ${
+                isSelected 
+                  ? theme === 'light'
+                    ? 'bg-indigo-50 text-indigo-600 scale-110 font-bold' 
+                    : 'bg-indigo-500/15 text-indigo-400 scale-110 font-bold'
+                  : theme === 'light'
+                    ? 'text-slate-500 group-hover:text-slate-800'
+                    : 'text-slate-400 group-hover:text-white'
+              }`}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <span className={`text-[9.5px] font-black tracking-tight mt-0.5 transition-all ${
+                isSelected 
+                  ? theme === 'light' ? 'text-indigo-600 font-extrabold' : 'text-indigo-400 font-extrabold'
+                  : theme === 'light' ? 'text-slate-500 font-medium' : 'text-slate-400 font-medium'
+              }`}>
+                {tab.val}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -897,20 +897,51 @@ export default function DashboardAnalytics({
                       </div>
                     </div>
 
-                    <div className="flex justify-around pl-16 pt-1 text-[8.5px] uppercase font-bold tracking-widest text-slate-500 select-none">
+                    <div className="flex justify-around pl-16 pt-1 text-slate-500 select-none">
                       {modeSortedCategories.map((item) => (
                         <span 
                           key={item.key} 
-                          className={`truncate text-center transition-colors duration-200 ${
+                          className={`truncate text-center transition-colors duration-200 uppercase font-black tracking-widest ${
                             hoveredBar === item.key 
-                              ? (isLight ? 'text-indigo-600' : 'text-indigo-400') 
-                              : 'text-slate-400'
-                          }`} 
+                              ? (isLight ? 'text-indigo-600' : 'text-indigo-450') 
+                              : 'text-slate-450 text-slate-400'
+                          } xs:text-[9.5px] text-[7.5px]`} 
                           style={{ width: `${100 / modeSortedCategories.length}%`, maxWidth: '58px' }}
+                          title={item.label}
                         >
-                          {item.label.split(' ')[0]}
+                          <span className="sm:inline hidden">{item.label.split(' ')[0]}</span>
+                          <span className="sm:hidden inline">{item.label.substring(0, 3).toUpperCase()}</span>
                         </span>
                       ))}
+                    </div>
+
+                    {/* Interactive legend list especially designed for optimized mobile devices, wrapping cleanly */}
+                    <div className="sm:hidden flex flex-wrap gap-x-2 gap-y-1.5 justify-center pt-4 border-t border-white/5 px-2 select-none">
+                      {modeSortedCategories.map((item) => {
+                        const style = getCategoryThemeStyle(item.key);
+                        const isHovered = hoveredBar === item.key;
+                        return (
+                          <div 
+                            key={item.key}
+                            onClick={() => setHoveredBar(hoveredBar === item.key ? null : item.key)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl transition-all duration-200 border cursor-pointer ${
+                              isHovered
+                                ? 'bg-indigo-500/10 border-indigo-500/30 scale-105'
+                                : isLight 
+                                  ? 'bg-slate-50 border-slate-200' 
+                                  : 'bg-white/3 border-white/5'
+                            }`}
+                          >
+                            <span className="text-[12px]">{item.icon}</span>
+                            <span className={`text-[8.5px] font-black uppercase tracking-wider ${isLight ? 'text-slate-500 font-bold' : 'text-slate-450'}`}>
+                              {item.label.substring(0, 3).toUpperCase()}:
+                            </span>
+                            <span className={`text-[9.5px] font-extrabold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                              {item.label}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );

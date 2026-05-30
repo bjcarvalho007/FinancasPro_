@@ -645,23 +645,25 @@ export default function DashboardAnalytics({
               // Active Month Advice
               transactions.length === 0 ? (
                 <span><strong>Pronto para monitorar:</strong> Adicione suas contas e despesas para acompanhar seu planejamento financeiro de {formatMonthKey(currentMonthKey)}.</span>
-              ) : activeMonthSpentRatio > 85 ? (
-                <span>🚨 <strong>Atenção ao saldo disponível:</strong> Seus gastos cadastrados representam <strong>{Math.round(activeMonthSpentRatio)}%</strong> do seu limite mensal. O maior valor registrado é de <strong>&quot;{highestExpenseItem.name}&quot;</strong> ({fmt(highestExpenseItem.amount)}). Procure focar em manter as contas prioritárias pagas antes de fazer novas despesas variáveis.</span>
-              ) : activeMonthSpentRatio > 60 ? (
-                <span>⚠️ <strong>Saldo próximo ao limite:</strong> Você comprometeu <strong>{Math.round(activeMonthSpentRatio)}%</strong> da sua renda total do mês. Restam {fmt(leftover)} livres. É um excelente momento para conter despesas extras e assegurar esse saldo positivo.</span>
+              ) : leftover > 0 ? (
+                <span>💎 <strong>Excelente Gestão Mensal!</strong> Sobrou <strong>{fmt(leftover)}</strong> livre no seu bolso após o abatimento de suas despesas fixas e variáveis deste mês. Você realizou um controle eficaz dos recursos de {formatMonthKey(currentMonthKey)}! Esse saldo positivo é perfeito para acelerar suas metas financeiras ou aplicar em investimentos seguros.</span>
+              ) : leftover < 0 ? (
+                <span>🚨 <strong>Gestão em Alerta (Déficit Mensal):</strong> Suas despesas fixas e variáveis superaram a renda disponível deste mês em <strong>{fmt(Math.abs(leftover))}</strong>. Suas saídas estão acima do planejado. Recomendamos priorizar a quitação dos fixos e cortar gastos cotidianos extras para reequilibrar as contas.</span>
               ) : (
-                <span>💎 <strong>Excelente controle mensal!</strong> Você utilizou apenas <strong>{Math.round(activeMonthSpentRatio)}%</strong> do seu orçamento disponível. Com uma ótima folga de <strong>{fmt(leftover)}</strong>, você está em uma ótima posição para guardar o excedente em suas metas ou cofrinhos!</span>
+                <span>⚠️ <strong>Saldo no Limite Perfeito:</strong> Você fechou o mês de {formatMonthKey(currentMonthKey)} equilibrado em <strong>R$ 0,00</strong>. Não há endividamento imediato, mas você não obteve sobras livres para poupar. Tente rastrear pequenos custos supérfluos para gerar margem de segurança.</span>
               )
             ) : (
-              // Historical Long-Term Advice
+              // Historical Long-Term Advice / Planejamento Geral
               allTransactions.length === 0 ? (
                 <span><strong>Sem histórico suficiente:</strong> Ao cadastrar suas transações ao longo do tempo, você verá insights completos de evolução e controle de gastos históricos aqui.</span>
               ) : pastUnreconciledTx.length > 0 ? (
-                <span>🔴 <strong>Contas anteriores aguardando pagamento:</strong> Foram encontradas <strong>{pastUnreconciledTx.length} contas de meses anteriores</strong> ainda pendentes de fechamento. Para manter seu histórico correto, acesse as abas dos meses passados e registre o pagamento se já tiverem sido pagas.</span>
+                <span>🔴 <strong>Aviso de Contas Anteriores Pendentes:</strong> Foram encontradas <strong>{pastUnreconciledTx.length} contas de meses anteriores</strong> que ainda não constam como pagas. Para garantir um bom planejamento e evitar juros acumulados, navegue pelos meses passados e registre a quitação de todas as pendências.</span>
               ) : installmentRatio > 40 ? (
-                <span>⚠️ <strong>Foco nos parcelamentos:</strong> Suas parcelas futuras representam <strong>{Math.round(installmentRatio)}%</strong> do seu histórico geral de gastos ({fmt(totalParcelasAll)}). Acompanhar as parcelas ativamente ajuda você a não sobrecarregar sua renda futura.</span>
+                <span>⚠️ <strong>Cuidado com o Peso dos Parcelamentos:</strong> Seus parcelamentos contratados comprometem <strong>{Math.round(installmentRatio)}%</strong> do seu histórico financeiro acumulado ({fmt(totalParcelasAll)}). Muitas parcelas reduzem sua liquidez e engessam sua renda futura. Evite novas parcelas até aliviar esse percentual.</span>
+              ) : globalHealthScore >= 75 ? (
+                <span>💎 <strong>Desempenho Geral de Destaque!</strong> Seu planejamento geral obteve nota excelente de <strong>{globalHealthScore} pontos</strong>. Suas faturas antigas estão organizadas e livres de pendências, e seus parcelamentos comprometem apenas <strong>{Math.round(installmentRatio)}%</strong> de seus meses futuros — uma margem perfeitamente saudável de segurança!</span>
               ) : (
-                <span>💎 <strong>Organização Fantástica!</strong> Sua pontuação consolidada de <strong>{globalHealthScore} pontos</strong> indica controle excepcional! Você mantém seu histórico limpo sem pendências de meses passados abertas, e suas parcelas futuras estão perfeitamente equilibradas.</span>
+                <span>📈 <strong>Rumo ao Equilíbrio Global:</strong> Seu nível consolidado de planejamento geral está em <strong>{globalHealthScore} pontos</strong>. Concentre-se em gerar sobras contínuas mês a mês e evite acumular novos parcelados pesados de longo prazo para elevar gradativamente sua nota global.</span>
               )
             )}
           </p>

@@ -48,6 +48,18 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
   const [errorAlert, setErrorAlert] = useState<string | null>(null);
   const [shakeTrigger, setShakeTrigger] = useState<number>(0);
 
+  const [isGmailPromptOpen, setIsGmailPromptOpen] = useState<boolean>(false);
+  const [promptGmailEmail, setPromptGmailEmail] = useState<string>('');
+  const [gmailError, setGmailError] = useState<string | null>(null);
+  const [pendingWhatsappUrl, setPendingWhatsappUrl] = useState<string>('');
+
+  const handleOpenWhatsappVerify = (messageText: string) => {
+    setGmailError(null);
+    setPromptGmailEmail('');
+    setPendingWhatsappUrl(`https://wa.me/5563992092699?text=${encodeURIComponent(messageText)}`);
+    setIsGmailPromptOpen(true);
+  };
+
   // Save presentation choice to localStorage to provide bespoke user memory
   useEffect(() => {
     try {
@@ -253,15 +265,16 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         Garantimos privacidade de alto nível. Novos usuários ganham workspaces privativos configurados sob demanda pelo nosso administrador. Adquira instantaneamente pelo WhatsApp!
                       </p>
                     </div>
-                    <a
-                      href={salesPitchWhatsappUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-3.5 rounded-2xl text-[10.5px] uppercase tracking-wider transition-all duration-300 cursor-pointer shadow-lg shadow-emerald-500/15 flex items-center justify-center gap-2 shrink-0"
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleOpenWhatsappVerify("Olá! Gostaria de assinar o FinançasPro e liberar minhas credenciais de acesso.");
+                      }}
+                      className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-3.5 rounded-2xl text-[10.5px] uppercase tracking-wider transition-all duration-300 cursor-pointer shadow-lg shadow-emerald-500/15 flex items-center justify-center gap-2 shrink-0 border-none"
                     >
                       <MessageSquare className="w-4 h-4" />
                       Assinar Premium Novo
-                    </a>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -291,14 +304,15 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                   </button>
 
                   <div className="pt-2">
-                    <a
-                      href={salesPitchWhatsappUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] text-emerald-450 font-bold uppercase tracking-wider hover:underline"
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleOpenWhatsappVerify("Olá! Gostaria de adquirir o login Premium do FinançasPro.");
+                      }}
+                      className="text-[11px] text-emerald-450 font-bold uppercase tracking-wider hover:underline bg-transparent border-none cursor-pointer"
                     >
                       Adquirir login Premium via WhatsApp →
-                    </a>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -448,14 +462,15 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         </button>
                       </div>
 
-                      <a 
-                        href={salesPitchWhatsappUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-emerald-400 font-black hover:text-emerald-300 hover:underline transition-all block uppercase tracking-widest text-[9.5px]"
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleOpenWhatsappVerify("Olá! Quero liberar meu acesso premium no WhatsApp.");
+                        }}
+                        className="text-emerald-400 font-black hover:text-emerald-300 hover:underline transition-all block uppercase tracking-widest text-[9.5px] bg-transparent border-none cursor-pointer mx-auto"
                       >
                         ⚡ Liberar Acesso no WhatsApp →
-                      </a>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -464,6 +479,100 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Interactive Gmail identification prompt modal before WhatsApp redirection */}
+      {isGmailPromptOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+            onClick={() => setIsGmailPromptOpen(false)}
+          />
+          
+          <motion.div
+            initial={{ scale: 0.95, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            className="bg-[#0f1524] border border-white/10 w-full max-w-md rounded-3xl p-6 shadow-2xl relative z-10 flex flex-col space-y-4"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <h4 className="font-display font-black text-sm text-white uppercase tracking-wider mb-1 flex items-center gap-2">
+                  <Mail className="w-4.5 h-4.5 text-emerald-400 animate-pulse" /> Identificar Seu Gmail
+                </h4>
+                <p className="text-xs text-slate-400 font-light leading-relaxed">
+                  Para ser atendido com prioridade máxima, informe o seu e-mail do Gmail cadastrado ou desejado.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsGmailPromptOpen(false)}
+                className="p-1 px-2 rounded-lg bg-slate-900 border border-white/10 text-slate-400 hover:text-white text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+                  Seu e-mail (@gmail.com)
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
+                  <input 
+                    type="email" 
+                    value={promptGmailEmail}
+                    onChange={(e) => {
+                      setPromptGmailEmail(e.target.value);
+                      setGmailError(null);
+                    }}
+                    placeholder="seu.email@gmail.com"
+                    autoFocus
+                    className="w-full bg-slate-950/70 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-100 placeholder-slate-500 text-[13px] pl-11 pr-4 py-3 rounded-xl transition-all font-mono"
+                  />
+                </div>
+              </div>
+
+              {gmailError && (
+                <p className="text-rose-400 text-[11px] font-semibold flex items-center gap-1">
+                  ⚠️ {gmailError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-2 text-center text-xs">
+              <button
+                type="button"
+                onClick={() => setIsGmailPromptOpen(false)}
+                className="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/15 text-slate-450 font-bold text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const clean = promptGmailEmail.trim().toLowerCase();
+                  if (!clean) {
+                    setGmailError('Por favor, digite o seu endereço de e-mail.');
+                    return;
+                  }
+                  if (!clean.endsWith('@gmail.com')) {
+                    setGmailError('É obrigatório que o e-mail informado seja do domínio @gmail.com.');
+                    return;
+                  }
+                  
+                  const finalUrl = `${pendingWhatsappUrl}%20-%20Email:%20${encodeURIComponent(clean)}`;
+                  window.open(finalUrl, '_blank');
+                  setIsGmailPromptOpen(false);
+                }}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3.5 px-4 rounded-xl text-[11px] uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all cursor-pointer"
+              >
+                Prosseguir para o Zap
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Floating high-converting footer credit note */}
       <div className="mt-4 text-center select-none text-[10px] text-slate-500 hover:text-slate-400 uppercase tracking-widest font-black transition-all">

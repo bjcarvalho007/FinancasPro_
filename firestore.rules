@@ -127,5 +127,12 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(notificationId) && isValidNotification(incoming());
       allow update: if isSignedIn() && isValidId(notificationId) && existing().userId == request.auth.uid && isValidNotification(incoming()) && incoming().userId == existing().userId;
     }
+
+    match /push_subscriptions/{subId} {
+      allow get, delete: if isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(subId) && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(subId) && existing().userId == request.auth.uid && incoming().userId == request.auth.uid;
+    }
   }
 }

@@ -961,29 +961,61 @@ export default function App() {
       {/* Dynamic Floating Due alert matching user logic */}
       {floatingAlert && (
         <motion.div
-          initial={{ y: 100, opacity: 0 }}
+          initial={{ y: 50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-96 z-40 p-4 rounded-2xl glass-panel border-rose-500/20 shadow-2xl glow-indigo flex gap-3 items-center justify-between"
+          exit={{ y: 50, opacity: 0 }}
+          className={`fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-96 z-40 p-4 rounded-2xl shadow-3xl flex flex-col gap-3 transition-all border ${
+            theme === 'light'
+              ? 'bg-white border-rose-400 text-slate-800 glow-indigo'
+              : 'bg-slate-900 border-rose-500/40 text-slate-100 glow-indigo'
+          }`}
         >
-          <div className="flex gap-3 items-center">
-            <div className="w-9 h-9 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-400">
-              <AlertCircle className="w-5 h-5 animate-bounce" />
+          <div className="flex items-start justify-between w-full gap-2">
+            <div className="flex gap-3 items-center">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500 shrink-0">
+                <AlertCircle className="w-5 h-5 animate-bounce" />
+              </div>
+              <div>
+                <h5 className={`text-xs font-black uppercase tracking-wider ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                  {floatingAlert.title}
+                </h5>
+                <p className={`text-xs font-semibold leading-snug mt-0.5 ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
+                  {floatingAlert.desc}
+                </p>
+              </div>
             </div>
-            <div>
-              <h5 className="text-[11px] font-bold text-white uppercase tracking-wider">{floatingAlert.title}</h5>
-              <p className="text-xs text-slate-400 font-light max-w-[190px] truncate">{floatingAlert.desc}</p>
-            </div>
+            <button
+              onClick={() => setFloatingAlert(null)}
+              className={`p-1 px-1.5 rounded-lg transition-colors cursor-pointer text-[11px] font-bold ${
+                theme === 'light' ? 'hover:bg-slate-100 text-slate-400 hover:text-slate-700' : 'hover:bg-slate-800 text-slate-500 hover:text-white'
+              }`}
+              title="Dispensar alerta"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            onClick={() => {
-              setActiveTab('fixos');
-              handleOpenPay(floatingAlert.id);
-            }}
-            className="bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl text-[10px] font-bold tracking-wider cursor-pointer font-display"
-          >
-            PAGAR
-          </button>
+          <div className="flex gap-2 w-full pt-1">
+            <button
+              onClick={() => setFloatingAlert(null)}
+              className={`flex-1 py-2 rounded-xl text-[10px] font-bold tracking-wider transition-colors cursor-pointer text-center uppercase ${
+                theme === 'light' 
+                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-600' 
+                  : 'bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              IGNORAR
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('fixos');
+                handleOpenPay(floatingAlert.id);
+                setFloatingAlert(null);
+              }}
+              className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-xl text-[10px] font-black tracking-wider cursor-pointer font-display transition-all text-center uppercase shadow-md shadow-rose-600/15"
+            >
+              PAGAR AGORA
+            </button>
+          </div>
         </motion.div>
       )}
 

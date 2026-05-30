@@ -1721,13 +1721,13 @@ export default function App() {
             );
           })}
         </div>
-        <OnboardingTutorial 
-          theme={theme} 
-          isOpen={isTutorialOpen} 
-          onClose={() => setIsTutorialOpen(false)} 
-          onOpen={() => setIsTutorialOpen(true)} 
-        />
       </div>
+      <OnboardingTutorial 
+        theme={theme} 
+        isOpen={isTutorialOpen} 
+        onClose={() => setIsTutorialOpen(false)} 
+        onOpen={() => setIsTutorialOpen(true)} 
+      />
     </div>
   );
 }

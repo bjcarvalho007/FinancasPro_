@@ -112,15 +112,15 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
   return (
     <>
       {/* Floating Action Button - Always available to user to trigger description review */}
-      <div className="fixed bottom-6 right-6 z-40">
+      <div className="fixed bottom-20 left-6 z-[60]">
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={onOpen}
           className={`flex items-center gap-2 pl-4 pr-5 py-3 rounded-full text-xs font-bold leading-none shadow-2xl transition-all cursor-pointer ${
             theme === 'light'
-              ? 'bg-slate-900 text-white shadow-slate-900/10 border border-slate-800'
-              : 'bg-[#0f1524]/90 hover:bg-[#0f1524] text-slate-100 border border-emerald-500/20 shadow-emerald-500/5 hover:border-emerald-500/40 glow-emerald'
+              ? 'bg-slate-900 text-white shadow-slate-900/20 border border-slate-800'
+              : 'bg-[#0f1524]/95 hover:bg-[#0f1524] text-slate-100 border border-emerald-500/30 shadow-emerald-500/10 hover:border-emerald-500/50'
           }`}
           title="Ver Tutorial do Aplicativo"
         >
@@ -134,7 +134,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
 
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             {/* Backdrop filter */}
             <motion.div
               initial={{ opacity: 0 }}

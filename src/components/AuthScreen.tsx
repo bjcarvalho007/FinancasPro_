@@ -1,8 +1,7 @@
 import { useState, FormEvent, useEffect } from 'react';
 import {
   signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  fetchSignInMethodsForEmail
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { 
@@ -88,32 +87,14 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
     if (isResetMode) {
       setLoading(true);
       try {
-        // Verify registration first using sign-in methods
-        const methods = await fetchSignInMethodsForEmail(auth, email);
-        if (!methods || methods.length === 0) {
-          setErrorAlert('Nenhum cadastro correspondente a este e-mail foi encontrado. Por favor, adquira suas credenciais Premium via WhatsApp.');
-          setShakeTrigger(prev => prev + 1);
-          setLoading(false);
-          return;
-        }
-
         await sendPasswordResetEmail(auth, email);
         showToast('Link de recuperação enviado para o seu e-mail!', 'success');
         setIsResetMode(false);
       } catch (err: any) {
-        // Fallback for environment/protection constraints
-        if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-credential') {
+        if (err?.code === 'auth/user-not-found' || err?.code === 'auth/user-not-found-disabled' || err?.code === 'auth/invalid-credential') {
           setErrorAlert('Nenhum cadastro correspondente a este e-mail foi encontrado. Por favor, adquira suas credenciais Premium via WhatsApp.');
         } else {
-          try {
-            await sendPasswordResetEmail(auth, email);
-            showToast('Link de recuperação enviado para o seu e-mail!', 'success');
-            setIsResetMode(false);
-            setLoading(false);
-            return;
-          } catch (innerErr: any) {
-            setErrorAlert(getAuthErrorMessage(innerErr));
-          }
+          setErrorAlert(getAuthErrorMessage(err));
         }
         setShakeTrigger(prev => prev + 1);
       } finally {
@@ -482,7 +463,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
 
       {/* Floating high-converting footer credit note */}
       <div className="mt-4 text-center select-none text-[10px] text-slate-500 hover:text-slate-400 uppercase tracking-widest font-black transition-all">
-        BJC DESENVOLVIMENTOS SAAS • FINANÇASPRO premium
+        BJC DESENVOLVIMENTOS • FINANÇASPRO premium
       </div>
     </div>
   );

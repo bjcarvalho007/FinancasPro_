@@ -1,6 +1,6 @@
-# 💰 Finanças Pro — Sistema Financeiro Completo SaaS Premium
+# 💰 Finanças Pro — Sistema Financeiro Completo Premium
 
-Um ecossistema web profissional e futurista para controle financeiro pessoal e empresarial. O sistema foi desenvolvido com arquitetura SaaS premium de alta performance, total segurança isolada por usuário, e design polido inspirado em gigantes de tecnologia como Stripe, Linear, Notion, e Vercel.
+Um ecossistema web profissional e futurista para controle financeiro pessoal e empresarial. O sistema foi desenvolvido com arquitetura premium de alta performance, total segurança isolada por usuário, e design polido inspirado em gigantes de tecnologia como Stripe, Linear, Notion, e Vercel.
 
 Hospedagem nativa pronta para produção e deploy contínuo em **Cloud Run** ou **Vercel**, integrado com **Firebase Authentication** e **Firestore Database** em tempo real.
 

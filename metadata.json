@@ -1,6 +1,6 @@
 {
   "name": "Financas Pro",
-  "description": "Sistema financeiro completo SaaS premium integrado com Firebase Auth e Firestore Database.",
+  "description": "Sistema financeiro completo premium integrado com Firebase Auth e Firestore Database.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

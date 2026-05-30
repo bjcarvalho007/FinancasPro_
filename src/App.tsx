@@ -1060,7 +1060,7 @@ export default function App() {
                 }`}>
                   FINANÇAS<span className="text-emerald-400 font-extrabold ml-0.5">PRO</span>
                 </h2>
-                <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest block mt-1">SaaS de Gestão Segura</span>
+                <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest block mt-1">Sistema de Gestão Segura</span>
               </div>
             </div>
 

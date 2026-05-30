@@ -154,7 +154,7 @@ export default function SettingsPanel({
           </div>
           <div>
             <h4 className="font-display font-black text-white text-base">Painel de Preferências</h4>
-            <p className="text-xs text-slate-500">Ajuste os parâmetros visuais, cambiais e operacionais do seu SaaS.</p>
+            <p className="text-xs text-slate-500">Ajuste os parâmetros visuais, cambiais e operacionais do seu aplicativo.</p>
           </div>
         </div>
 
@@ -364,7 +364,7 @@ export default function SettingsPanel({
             <div className="flex items-center gap-3">
               <Trash2 className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
               <div>
-                <span className="text-xs font-bold text-rose-400 block">Excluir Conta SaaS</span>
+                <span className="text-xs font-bold text-rose-400 block">Excluir Conta</span>
                 <span className="text-[9px] text-rose-500">Deleta permanentemente seu cadastro e logs.</span>
               </div>
             </div>

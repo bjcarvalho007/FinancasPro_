@@ -142,7 +142,7 @@ export default function TransactionFormModal({
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-display font-extrabold text-lg text-white">
-              {initialData ? '✏️ Editar Lançamento' : '💸 Novo Lançamento SaaS'}
+              {initialData ? '✏️ Editar Lançamento' : '💸 Novo Lançamento'}
             </h3>
             <button
               onClick={onClose}

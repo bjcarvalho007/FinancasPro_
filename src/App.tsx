@@ -964,7 +964,7 @@ export default function App() {
           initial={{ y: 50, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 50, opacity: 0 }}
-          className={`fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-96 z-40 p-4 rounded-2xl shadow-3xl flex flex-col gap-3 transition-all border ${
+          className={`fixed bottom-20 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[55] p-4 rounded-2xl shadow-3xl flex flex-col gap-3 transition-all border ${
             theme === 'light'
               ? 'bg-white border-rose-400 text-slate-800 glow-indigo'
               : 'bg-slate-900 border-rose-500/40 text-slate-100 glow-indigo'

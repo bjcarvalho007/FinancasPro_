@@ -14,22 +14,38 @@ const PORT = 3000;
 app.use(express.json());
 
 // Generate dynamic VAPID keys on boot if not configured, ensuring immediate zero-config functionality
-let vapidPublic = process.env.VAPID_PUBLIC_KEY;
-let vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+let vapidPublic = (process.env.VAPID_PUBLIC_KEY || "").trim();
+let vapidPrivate = (process.env.VAPID_PRIVATE_KEY || "").trim();
 
-if (!vapidPublic || !vapidPrivate) {
-  console.log("⚠️ Chaves VAPID não encontradas no ambiente. Gerando par de chaves temporário em memória...");
+let needGenerate = false;
+
+if (!vapidPublic || !vapidPrivate || vapidPublic.includes("YOUR") || vapidPublic.includes("MY") || vapidPublic.length < 40) {
+  needGenerate = true;
+} else {
+  try {
+    // Try configuring web-push to validate key format
+    webpush.setVapidDetails(
+      "mailto:suporte@financapro.com",
+      vapidPublic,
+      vapidPrivate
+    );
+  } catch (err) {
+    console.warn("⚠️ Chaves VAPID configuradas no .env são inválidas! Erro:", err);
+    needGenerate = true;
+  }
+}
+
+if (needGenerate) {
+  console.log("⚠️ Chaves VAPID inválidas ou não encontradas. Gerando par de chaves temporário em memória para funcionamento imediato...");
   const tempKeys = webpush.generateVAPIDKeys();
   vapidPublic = tempKeys.publicKey;
   vapidPrivate = tempKeys.privateKey;
+  webpush.setVapidDetails(
+    "mailto:suporte@financapro.com",
+    vapidPublic,
+    vapidPrivate
+  );
 }
-
-// Config web-push payload sign
-webpush.setVapidDetails(
-  "mailto:suporte@financapro.com",
-  vapidPublic,
-  vapidPrivate
-);
 
 // API route 1: Healthcheck
 app.get("/api/health", (req, res) => {

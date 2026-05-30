@@ -12,7 +12,8 @@ import {
   DollarSign, 
   LayoutDashboard, 
   Target, 
-  CheckCircle2 
+  CheckCircle2,
+  Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -59,7 +60,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       icon: <Calendar className="w-10 h-10 text-indigo-400" />,
       description: "Aqui ficam suas contas fixas (aluguel, condomínio, internet, assinaturas). O nosso motor projeta essas contas automaticamente para todos os meses futuros! Basta cadastrá-las uma única vez e elas aparecerão todo mês aguardando seu clique de quitação.",
       color: "from-indigo-500/20 to-indigo-600/5",
-      badge: "Passo 1 de 5"
+      badge: "Passo 1 de 6"
     },
     {
       title: "📊 Gastos do Cotidiano (Variados)",
@@ -67,7 +68,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       icon: <Receipt className="w-10 h-10 text-amber-500" />,
       description: "São as suas despesas variáveis que acontecem apenas no mês atual (restaurantes, transporte, farmácia, lazer). Registre esses gastos rápidos para mapear furos de orçamento e entender seu padrão de consumo mensal sem mistérios.",
       color: "from-amber-500/20 to-orange-500/5",
-      badge: "Passo 2 de 5"
+      badge: "Passo 2 de 6"
     },
     {
       title: "💳 Compras Parceladas (Parcelados)",
@@ -75,7 +76,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       icon: <CreditCard className="w-10 h-10 text-sky-400" />,
       description: "Ideal para quando você parcela uma compra no cartão de crédito. Você insere o valor total e o histórico de parcelados monitora quanto ainda resta pagar nos devedores e o peso acumulado disso no seu saldo disponível de longo prazo.",
       color: "from-sky-500/20 to-blue-500/5",
-      badge: "Passo 3 de 5"
+      badge: "Passo 3 de 6"
     },
     {
       title: "💵 Rendas, Saldo e Sobras",
@@ -83,7 +84,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       icon: <DollarSign className="w-10 h-10 text-emerald-400" />,
       description: "No botão 'Ganhos', configure seu Salário/Renda padrão, as sobras do mês anterior (Saldo Inicial) e eventuais rendimentos Extras. O FinançasPro abate todas as suas contas cadastradas de forma cumulativa, te dando a sobra exata estimada para poupar livremente.",
       color: "from-teal-500/20 to-green-500/5",
-      badge: "Passo 4 de 5"
+      badge: "Passo 4 de 6"
     },
     {
       title: "💎 Dashboard & Metas Reais",
@@ -91,7 +92,15 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       icon: <LayoutDashboard className="w-10 h-10 text-violet-400" />,
       description: "Na aba 'Dashboard', consulte sua nota de controle e ganhe orientações automáticas de como policiar seus limites. Use a aba de 'Metas' para criar objetivos de poupança (metas de investimento, cofrinhos) e adicione fundos conforme economiza para realizar seus sonhos passo a passo.",
       color: "from-violet-500/20 to-fuchsia-500/5",
-      badge: "Passo 5 de 5"
+      badge: "Passo 5 de 6"
+    },
+    {
+      title: "🔔 Lembretes de Vencimento",
+      subtitle: "Controle ativo e configurável",
+      icon: <Bell className="w-10 h-10 text-rose-450 text-rose-400" />,
+      description: "Nunca mais atrase suas faturas! O FinançasPro monitora ativamente as datas de vencimento das suas contas pendentes e cria lembretes automáticos na tela. Você escolhe quantos dias de antecedência para os alertas na aba de 'Configurações' e pode ativar notificações nativas de desktop direto no navegador.",
+      color: "from-rose-500/20 to-rose-600/5",
+      badge: "Passo 6 de 6"
     }
   ];
 
@@ -112,47 +121,46 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
   return (
     <>
       {/* Floating Action Button - Always available to user to trigger description review */}
-      <div className="fixed bottom-20 left-6 z-[60]">
+      <div className="fixed bottom-20 right-19 z-45">
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={onOpen}
-          className={`flex items-center gap-2 pl-4 pr-5 py-3 rounded-full text-xs font-bold leading-none shadow-2xl transition-all cursor-pointer ${
+          className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all cursor-pointer border ${
             theme === 'light'
-              ? 'bg-slate-900 text-white shadow-slate-900/20 border border-slate-800'
-              : 'bg-[#0f1524]/95 hover:bg-[#0f1524] text-slate-100 border border-emerald-500/30 shadow-emerald-500/10 hover:border-emerald-500/50'
+              ? 'bg-slate-900 border-slate-800 text-white shadow-slate-900/10'
+              : 'bg-[#0f1524]/95 border-emerald-500/20 text-emerald-400 shadow-emerald-500/5 hover:border-emerald-500/40 hover:text-emerald-300 font-bold'
           }`}
           title="Ver Tutorial do Aplicativo"
         >
           <div className="relative">
-            <HelpCircle className="w-4 h-4 text-emerald-400" />
+            <HelpCircle className="w-5 h-5 text-emerald-400" />
             <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
           </div>
-          <span>Como Usar</span>
         </motion.button>
       </div>
 
       <AnimatePresence>
         {isOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            {/* Backdrop filter */}
+            {/* Backdrop filter - forced absolute with z-10 underneath card */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={handleFinish}
-              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-10"
             />
 
-            {/* Modal Onboarding container */}
+            {/* Modal Onboarding container - forced z-20 for overlay clarity */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ type: "spring", duration: 0.4 }}
-              className={`w-full max-w-lg rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden z-10 border ${
+              className={`w-full max-w-lg rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden z-20 border ${
                 theme === 'light'
-                  ? 'bg-white border-slate-205 text-slate-900'
+                  ? 'bg-white border-slate-200 text-slate-900'
                   : 'bg-[#0f1524] border-white/10 text-white'
               }`}
             >
@@ -237,6 +245,14 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                       theme === 'light' ? 'bg-emerald-50/50 border-emerald-100 text-emerald-750' : 'bg-emerald-950/15 border-emerald-500/10 text-emerald-300'
                     }`}>
                       💡 <strong>Sobra Líquida:</strong> Sempre reabasteça as sobras acumuladas de meses passados informando o valor em &quot;Saldo Inicial&quot;. Isso assegura a precisão do seu montante!
+                    </div>
+                  )}
+
+                  {currentStep === 6 && (
+                    <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
+                      theme === 'light' ? 'bg-rose-50/50 border-rose-100 text-rose-750' : 'bg-rose-950/15 border-rose-500/10 text-rose-300'
+                    }`}>
+                      💡 <strong>Notificações no Dispositivo:</strong> Ative a autorização de notificações nas Configurações para que o sistema te lembre das datas mesmo se o app estiver fechado ou em segundo plano.
                     </div>
                   )}
 

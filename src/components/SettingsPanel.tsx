@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Transaction } from '../types';
 import { auth } from '../firebase';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
-import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle } from 'lucide-react';
+import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface SettingsPanelProps {
@@ -12,9 +12,10 @@ interface SettingsPanelProps {
   onChangeCurrency: (currency: 'BRL' | 'USD' | 'EUR') => void;
   baseIncome: number;
   baseBalance: number;
-  onSavePreferences: (income: number, balance: number) => void;
+  onSavePreferences: (income: number, balance: number, alertDays?: number) => void;
   transactions: Transaction[];
   showToast: (msg: string, type?: 'success' | 'error' | 'warning') => void;
+  alertThresholdDays?: number;
 }
 
 export default function SettingsPanel({
@@ -26,13 +27,18 @@ export default function SettingsPanel({
   baseBalance,
   onSavePreferences,
   transactions,
-  showToast
+  showToast,
+  alertThresholdDays = 3
 }: SettingsPanelProps) {
   const [incStr, setIncStr] = useState<string>(
     baseIncome > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseIncome) : ''
   );
   const [balStr, setBalStr] = useState<string>(
     baseBalance > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseBalance) : ''
+  );
+  const [alertDays, setAlertDays] = useState<number>(alertThresholdDays);
+  const [notificationPermission, setNotificationPermission] = useState<string>(
+    'Notification' in window ? Notification.permission : 'unsupported'
   );
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState<boolean>(false);
 
@@ -58,8 +64,30 @@ export default function SettingsPanel({
   const handleSaveConfigs = () => {
     const inc = parseMoney(incStr);
     const bal = parseMoney(balStr);
-    onSavePreferences(inc, bal);
+    onSavePreferences(inc, bal, alertDays);
     showToast('Preferências base salvas com sucesso!', 'success');
+  };
+
+  const handleEnableLocalNotifications = async () => {
+    if (!('Notification' in window)) {
+      showToast('Este navegador não suporta notificações de área de trabalho.', 'warning');
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        showToast('Notificações autorizadas com sucesso!', 'success');
+        new Notification('FinançasPro Alertas', {
+          body: 'Notificações ativadas! Você receberá alertas dos vencimentos de suas frentes financeiras.',
+          icon: '/favicon.ico'
+        });
+      } else if (permission === 'denied') {
+        showToast('Permissão negada. Ative manualmente no navegador.', 'warning');
+      }
+    } catch (e) {
+      showToast('Limite do navegador ou sandbox de segurança impediu solicitação direta.', 'warning');
+    }
   };
 
   const handlePasswordReset = async () => {
@@ -222,6 +250,70 @@ export default function SettingsPanel({
           >
             Salvar Padrões de Caixa
           </button>
+        </div>
+      </div>
+
+      {/* Notifications and Alerts System */}
+      <div className="p-6 rounded-3xl glass-panel border-white/5 space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-450 text-emerald-400">
+            <Bell className="w-5 h-5 animate-pulse" />
+          </div>
+          <div>
+            <h5 className="font-display font-black text-white text-sm leading-none">Notificações & Alertas</h5>
+            <p className="text-[10px] text-slate-500">Ajuste os lembretes automáticos de vencimento.</p>
+          </div>
+        </div>
+
+        <div className="space-y-4 pt-4 border-t border-white/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold text-slate-300 block">Alerta de Antecedência</span>
+              <span className="text-[10px] text-slate-500">Notificar-me quantos dias antes de vencer.</span>
+            </div>
+            <select
+              value={alertDays}
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                setAlertDays(val);
+                onSavePreferences(parseMoney(incStr), parseMoney(balStr), val);
+                showToast(`Alerta configurado para ${val} dias de antecedência!`, 'success');
+              }}
+              className="bg-slate-900 border border-white/5 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl focus:outline-none cursor-pointer"
+            >
+              <option value="1">1 dia antes</option>
+              <option value="2">2 dias antes</option>
+              <option value="3">3 dias antes</option>
+              <option value="5">5 dias antes</option>
+              <option value="7">7 dias antes</option>
+              <option value="10">10 dias antes</option>
+              <option value="15">15 dias antes</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-2.5 bg-white/3 p-3.5 rounded-2xl border border-white/5">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <span className="text-xs font-bold text-slate-300 block">Notificações do Sistema</span>
+                <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">
+                  {notificationPermission === 'granted' 
+                    ? '🟢 Permissão autorizada! Seus navegadores habilitados emitirão avisos do sistema.' 
+                    : notificationPermission === 'denied' 
+                    ? '🔴 Bloqueado no navegador. Acesse as permissões de site para ativar.' 
+                    : '🟡 Permissão pendente. Clique para receber alertas diretamente na área de trabalho.'}
+                </p>
+              </div>
+            </div>
+
+            {notificationPermission !== 'granted' && (
+              <button
+                onClick={handleEnableLocalNotifications}
+                className="mt-1 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Autorizar Notificações no Navegador
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

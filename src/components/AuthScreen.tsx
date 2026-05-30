@@ -1,7 +1,8 @@
 import { useState, FormEvent, useEffect } from 'react';
 import {
   signInWithEmailAndPassword,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { auth } from '../firebase';
 import { 
@@ -87,11 +88,33 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
     if (isResetMode) {
       setLoading(true);
       try {
+        // Verify registration first using sign-in methods
+        const methods = await fetchSignInMethodsForEmail(auth, email);
+        if (!methods || methods.length === 0) {
+          setErrorAlert('Nenhum cadastro correspondente a este e-mail foi encontrado. Por favor, adquira suas credenciais Premium via WhatsApp.');
+          setShakeTrigger(prev => prev + 1);
+          setLoading(false);
+          return;
+        }
+
         await sendPasswordResetEmail(auth, email);
         showToast('Link de recuperação enviado para o seu e-mail!', 'success');
         setIsResetMode(false);
       } catch (err: any) {
-        setErrorAlert(getAuthErrorMessage(err));
+        // Fallback for environment/protection constraints
+        if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-credential') {
+          setErrorAlert('Nenhum cadastro correspondente a este e-mail foi encontrado. Por favor, adquira suas credenciais Premium via WhatsApp.');
+        } else {
+          try {
+            await sendPasswordResetEmail(auth, email);
+            showToast('Link de recuperação enviado para o seu e-mail!', 'success');
+            setIsResetMode(false);
+            setLoading(false);
+            return;
+          } catch (innerErr: any) {
+            setErrorAlert(getAuthErrorMessage(innerErr));
+          }
+        }
         setShakeTrigger(prev => prev + 1);
       } finally {
         setLoading(false);

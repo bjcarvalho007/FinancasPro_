@@ -179,28 +179,75 @@ export default function DashboardAnalytics({
   const pontualidadeScoreMonth = Math.max(15, Math.min(100, 100 - overdueMonthTransactions.length * 25));
 
   // Nota de controle do mês
-  const activeMonthHealthScore = Math.round(
+  const rawMonthHealthScore = Math.round(
     liquidezScoreMonth * 0.40 + 
     adimplenciaScoreMonth * 0.40 + 
     pontualidadeScoreMonth * 0.20
   );
 
+  // Se sobrou algo o cara no mes fez uma boa gestão - give high bonus and clear designation
+  const hasLeftover = leftover > 0;
+  const activeMonthHealthScore = hasLeftover 
+    ? Math.min(100, rawMonthHealthScore + 15) // Boost score for successful dynamic monthly leftover
+    : leftover < 0 
+      ? Math.max(15, rawMonthHealthScore - 15) // Penalize slightly for deficit
+      : rawMonthHealthScore;
+
   let activeMonthLabel = 'Organização Excelente';
   let activeMonthColor = 'text-emerald-400';
   let activeStrokeColor = '#10b981';
-  if (activeMonthHealthScore < 50) {
-    activeMonthLabel = 'Atenção Necessária';
+
+  if (leftover > 0) {
+    activeMonthLabel = 'Boa Gestão (Saldo Positivo)';
+    activeMonthColor = 'text-emerald-400';
+    activeStrokeColor = '#10b981';
+  } else if (leftover < 0) {
+    activeMonthLabel = 'Gestão Deficitária (Gastos Altos)';
     activeMonthColor = 'text-rose-400';
     activeStrokeColor = '#f43f5e';
-  } else if (activeMonthHealthScore < 75) {
-    activeMonthLabel = 'Equilibrado';
-    activeMonthColor = 'text-amber-400';
-    activeStrokeColor = '#f59e0b';
+  } else {
+    if (activeMonthHealthScore < 50) {
+      activeMonthLabel = 'Atenção Necessária';
+      activeMonthColor = 'text-rose-400';
+      activeStrokeColor = '#f43f5e';
+    } else if (activeMonthHealthScore < 75) {
+      activeMonthLabel = 'Equilibrado (Zero Sobras)';
+      activeMonthColor = 'text-amber-400';
+      activeStrokeColor = '#f59e0b';
+    } else {
+      activeMonthLabel = 'Organização Muito Boa';
+      activeMonthColor = 'text-emerald-400';
+      activeStrokeColor = '#10b981';
+    }
   }
 
   // Notificações do Mês Focado
   const monthAlerts: { id: string; type: 'error' | 'warning' | 'success'; text: string; details?: string }[] = [];
-  
+
+  // Explicar se sobrou e destacar a boa gestão
+  if (leftover > 0) {
+    monthAlerts.push({
+      id: 'month-leftover-management-success',
+      type: 'success',
+      text: `Excelente Gestão! Sobrou ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(leftover)}`,
+      details: `Você realizou uma boa gestão financeira neste mês de ${formatMonthKey(currentMonthKey)}! Suas entradas superaram os gastos totais em ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(leftover)} livres para poupar ou atingir suas metas.`
+    });
+  } else if (leftover < 0) {
+    monthAlerts.push({
+      id: 'month-leftover-management-deficit',
+      type: 'error',
+      text: `Déficit de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(leftover))}`,
+      details: `Atenção: Suas faturas e despesas fixas/variáveis superaram seus ganhos de ${formatMonthKey(currentMonthKey)} em ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(leftover))}. Tente limitar gastos supérfluos no cotidiano.`
+    });
+  } else if (totalAvailable > 0) {
+    monthAlerts.push({
+      id: 'month-leftover-management-even',
+      type: 'warning',
+      text: 'Gestão no Limite: Sem sobras de dinheiro',
+      details: 'Não há déficit, mas também não sobrou saldo livre após pagar suas obrigações deste mês.'
+    });
+  }
+
   if (overdueMonthTransactions.length > 0) {
     monthAlerts.push({
       id: 'month-overdue',

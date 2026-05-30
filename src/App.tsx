@@ -118,6 +118,7 @@ export default function App() {
   const [payTransactionId, setPayTransactionId] = useState<string | null>(null);
   const [confirmValueStr, setConfirmValueStr] = useState<string>('');
   const [isPendingDebtListOpen, setIsPendingDebtListOpen] = useState<boolean>(false);
+  const [installmentInputs, setInstallmentInputs] = useState<Record<string, string>>({});
 
   // Income parameters custom configuration trigger modal
   const [isIncomeOpen, setIsIncomeOpen] = useState<boolean>(false);
@@ -760,7 +761,7 @@ export default function App() {
           id: virtualId,
           userId: masterTx.userId,
           name: masterTx.name,
-          amount: masterTx.amount,
+          amount: masterTx.type === 'parcelas' ? 0 : masterTx.amount,
           type: masterTx.type, // Keeps original type: 'fixos' or 'parcelas'
           cat: masterTx.cat,
           due: masterTx.due,
@@ -1254,20 +1255,30 @@ export default function App() {
                                     <div className={`relative rounded-xl border ${
                                       theme === 'light' ? 'bg-slate-50 border-slate-200 focus-within:border-indigo-400' : 'bg-slate-950/40 border-white/5 focus-within:border-indigo-500'
                                     } transition-all px-3 py-1.5 flex items-center`}>
-                                      <span className="text-[10px] text-slate-500 font-bold font-mono mr-1">R$</span>
                                       <input
-                                        type="number"
-                                        step="0.01"
-                                        placeholder="0,00"
-                                        defaultValue={tx.amount}
-                                        onBlur={async (e) => {
-                                          const newVal = parseFloat(e.target.value);
-                                          if (!isNaN(newVal) && newVal >= 0 && newVal !== tx.amount) {
+                                        type="text"
+                                        inputMode="numeric"
+                                        placeholder="R$ 0,00"
+                                        value={
+                                          installmentInputs[tx.id] !== undefined
+                                            ? installmentInputs[tx.id]
+                                            : (tx.amount > 0 ? handleMaskMoney(tx.amount.toFixed(2).replace('.', '')) : "R$ 0,00")
+                                        }
+                                        onChange={(e) => {
+                                          const masked = handleMaskMoney(e.target.value);
+                                          setInstallmentInputs(prev => ({ ...prev, [tx.id]: masked }));
+                                        }}
+                                        onBlur={async () => {
+                                          const currentValStr = installmentInputs[tx.id] !== undefined
+                                            ? installmentInputs[tx.id]
+                                            : (tx.amount > 0 ? handleMaskMoney(tx.amount.toFixed(2).replace('.', '')) : "R$ 0,00");
+                                          const newVal = handleParseMoney(currentValStr);
+                                          if (newVal !== tx.amount) {
                                             const path = `transactions/${tx.id}`;
                                             const updatedTx = { ...tx, amount: newVal, updatedAt: new Date().toISOString() };
                                             try {
                                               await setDoc(doc(db, 'transactions', tx.id), updatedTx);
-                                              triggerToast(`Valor a pagar alterado para R$ ${newVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'success');
+                                              triggerToast(`Valor a pagar alterado para ${formatCurrency(newVal)}`, 'success');
                                             } catch (err) {
                                               handleFirestoreError(err, OperationType.UPDATE, path);
                                             }
@@ -1278,7 +1289,7 @@ export default function App() {
                                             (e.currentTarget as HTMLInputElement).blur();
                                           }
                                         }}
-                                        className={`w-20 bg-transparent text-right font-mono font-bold text-xs focus:outline-none p-0 leading-none ${
+                                        className={`w-28 bg-transparent text-right font-mono font-bold text-xs focus:outline-none p-0 leading-none ${
                                           theme === 'light' ? 'text-slate-800' : 'text-slate-100'
                                         }`}
                                       />

@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Transaction } from '../types';
 import { auth } from '../firebase';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
-import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell } from 'lucide-react';
+import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { exportPremiumPDF, exportPremiumSpreadsheet } from '../utils/reportGenerator';
 
 interface SettingsPanelProps {
   currentTheme: 'dark' | 'light';
@@ -101,30 +102,48 @@ export default function SettingsPanel({
     }
   };
 
-  // Real, functional CSV exporting of all real Firestore entries!
-  const handleExportCSV = () => {
+  // Real, functional PDF exporting with custom styled layouts!
+  const handleExportPremiumPDF = () => {
     if (transactions.length === 0) {
       showToast('Nenhum lançamento gravado para exportar.', 'warning');
       return;
     }
+    try {
+      const userEmail = auth.currentUser?.email || 'Premium User';
+      exportPremiumPDF({
+        transactions,
+        baseIncome,
+        baseBalance,
+        currentCurrency,
+        userEmail,
+      });
+      showToast('Demonstrativo PDF Premium gerado com sucesso!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Erro ao gerar relatório em PDF.', 'error');
+    }
+  };
 
-    let csvContent = "\uFEFF"; // Byte Order Mark for Excel compatibility
-    csvContent += "ID,Descrição,Valor (R$),Moeda,Fluxo,Categoria,Vencimento,Valor Pago,Status Pagamento,Mes de Lancamento\n";
-
-    transactions.forEach(t => {
-      const isPaid = t.paid_amount >= t.amount ? "PAGO" : t.paid_amount > 0 ? "PARTIAL" : "PENDENTE";
-      csvContent += `"${t.id}","${t.name.replace(/"/g, '""')}",${t.amount},"${currentCurrency}","${t.type}","${t.cat}","${t.due}",${t.paid_amount},"${isPaid}","${t.monthKey}"\n`;
-    });
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `financaspro_export_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('Dados exportados com sucesso em CSV!', 'success');
+  // Real, functional corporate styled spreadsheet exporting!
+  const handleExportPremiumSpreadsheet = () => {
+    if (transactions.length === 0) {
+      showToast('Nenhum lançamento gravado para exportar.', 'warning');
+      return;
+    }
+    try {
+      const userEmail = auth.currentUser?.email || 'Premium User';
+      exportPremiumSpreadsheet({
+        transactions,
+        baseIncome,
+        baseBalance,
+        currentCurrency,
+        userEmail,
+      });
+      showToast('Planilha de Auditoria Geral baixada com sucesso!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Erro ao gerar relatório em Planilha.', 'error');
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -324,17 +343,33 @@ export default function SettingsPanel({
         </h5>
 
         <div className="space-y-2 pt-2">
-          {/* CSV Download Trigger */}
+          {/* PDF Download Trigger */}
           <button
-            id="btn-settings-export"
-            onClick={handleExportCSV}
+            id="btn-settings-export-pdf"
+            onClick={handleExportPremiumPDF}
             className="w-full text-left p-3 rounded-xl bg-white/3 border border-white/5 hover:border-indigo-500/50 flex items-center justify-between transition-all group cursor-pointer"
           >
             <div className="flex items-center gap-3">
-              <Download className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <FileDown className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
               <div>
-                <span className="text-xs font-bold text-slate-300 block">Exportar Relatório Geral (.CSV)</span>
-                <span className="text-[9px] text-slate-500">Extraia todas as transações para Excel ou Planilhas.</span>
+                <span className="text-xs font-bold text-slate-300 block">Demonstrativo Detalhado (.PDF)  <span className="ml-1 px-1 bg-indigo-500/30 text-[8px] text-indigo-300 rounded font-black uppercase tracking-wider">Premium</span></span>
+                <span className="text-[9px] text-slate-500">Baixe um relatório polido resumido do mês, faturas, categorias e fluxo.</span>
+              </div>
+            </div>
+            <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>
+          </button>
+
+          {/* Spreadsheet Download Trigger */}
+          <button
+            id="btn-settings-export-spreadsheet"
+            onClick={handleExportPremiumSpreadsheet}
+            className="w-full text-left p-3 rounded-xl bg-white/3 border border-white/5 hover:border-emerald-500/50 flex items-center justify-between transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <FileSpreadsheet className="w-4 h-4 text-sky-400 group-hover:scale-110 transition-transform" />
+              <div>
+                <span className="text-xs font-bold text-slate-300 block">Exportar Planilha de Auditoria (.CSV)</span>
+                <span className="text-[9px] text-slate-500">Gere uma planilha corporativa estruturada pronta para Excel ou Google Sheets.</span>
               </div>
             </div>
             <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>

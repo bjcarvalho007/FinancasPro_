@@ -88,15 +88,19 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       setLoading(true);
       try {
         await sendPasswordResetEmail(auth, email);
-        showToast('Link de recuperação enviado para o seu e-mail!', 'success');
+        showToast('Sucesso! Se o e-mail estiver cadastrado, o link de recuperação foi enviado. Verifique seu e-mail.', 'success');
         setIsResetMode(false);
       } catch (err: any) {
-        if (err?.code === 'auth/user-not-found' || err?.code === 'auth/user-not-found-disabled' || err?.code === 'auth/invalid-credential') {
-          setErrorAlert('Nenhum cadastro correspondente a este e-mail foi encontrado. Por favor, adquira suas credenciais Premium via WhatsApp.');
+        console.error("Erro no envio do e-mail de recuperação:", err);
+        if (err?.code === 'auth/invalid-email') {
+          setErrorAlert('O formato do e-mail informado é inválido. Por favor, verifique.');
+          setShakeTrigger(prev => prev + 1);
         } else {
-          setErrorAlert(getAuthErrorMessage(err));
+          // Em ambientes com proteção contra enumeração, o Firebase pode lançar erros genéricos.
+          // Para garantir a melhor UX e não travar usuários legítimos, exibimos a mensagem de sucesso padrão.
+          showToast('Solicitação processada! Verifique sua caixa de entrada ou spam.', 'success');
+          setIsResetMode(false);
         }
-        setShakeTrigger(prev => prev + 1);
       } finally {
         setLoading(false);
       }

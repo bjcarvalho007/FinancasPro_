@@ -117,6 +117,7 @@ export default function App() {
   const [isPayOpen, setIsPayOpen] = useState<boolean>(false);
   const [payTransactionId, setPayTransactionId] = useState<string | null>(null);
   const [confirmValueStr, setConfirmValueStr] = useState<string>('');
+  const [isPendingDebtListOpen, setIsPendingDebtListOpen] = useState<boolean>(false);
 
   // Income parameters custom configuration trigger modal
   const [isIncomeOpen, setIsIncomeOpen] = useState<boolean>(false);
@@ -842,12 +843,12 @@ export default function App() {
         {/* Core card liabilities total */}
         <motion.div
           whileHover={{ scale: 1.01 }}
-          onClick={() => setActiveTab('dashboard')}
+          onClick={() => setIsPendingDebtListOpen(true)}
           className={`p-6 rounded-3xl ${
             theme === 'light' 
-              ? 'bg-white border-slate-200 shadow-sm shadow-slate-100/30 text-slate-900' 
-              : 'bg-slate-950/40 border-white/5 text-white shadow-xl'
-          } border flex flex-col justify-between cursor-pointer`}
+              ? 'bg-white border-slate-200 shadow-sm shadow-slate-100/30 text-slate-900 hover:border-indigo-300' 
+              : 'bg-slate-950/40 border-white/5 text-white shadow-xl hover:border-slate-800'
+          } border flex flex-col justify-between cursor-pointer transition-all`}
         >
           <div>
             <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>Total a Pagar Pendente</span>
@@ -893,12 +894,12 @@ export default function App() {
         {/* PC Stacked Liabilities Card */}
         <motion.div
           whileHover={{ scale: 1.01 }}
-          onClick={() => setActiveTab('dashboard')}
+          onClick={() => setIsPendingDebtListOpen(true)}
           className={`p-6 rounded-3xl ${
             theme === 'light' 
-              ? 'bg-white border-slate-205 shadow-md shadow-slate-100/10 text-slate-900' 
-              : 'bg-slate-950/40 border-white/5 text-white shadow-xl shadow-black/20'
-          } border flex flex-col h-32 justify-between cursor-pointer`}
+              ? 'bg-white border-slate-205 shadow-md shadow-slate-100/10 text-slate-900 hover:border-indigo-300' 
+              : 'bg-slate-950/40 border-white/5 text-white shadow-xl shadow-black/20 hover:border-slate-800'
+          } border flex flex-col h-32 justify-between cursor-pointer transition-all`}
         >
           <div>
             <span className={`text-[9px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>Total a Pagar Pendente</span>
@@ -1366,6 +1367,111 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* Pending Transactions Selection Modal */}
+      {isPendingDebtListOpen && (
+        <AnimatePresence>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsPendingDebtListOpen(false)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-[#0f1524] border border-white/10 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative z-10 flex flex-col max-h-[85vh] space-y-4"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-display font-extrabold text-sm text-white uppercase tracking-wider mb-1 flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-rose-400" /> Contas Pendentes do Mês
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Selecione qualquer lançamento pendente de {monthsPortuguese[calendarDate.getMonth()]} para dar baixa ou parcelar.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsPendingDebtListOpen(false)}
+                  className="p-1.5 rounded-lg bg-slate-900 border border-white/10 text-slate-400 hover:text-white text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 pr-1 space-y-3 max-h-[50vh] min-h-[200px]">
+                {activeMonthTransactions.filter(
+                  t => (t.type === 'fixos' || t.type === 'variaveis') && (t.paid_amount || 0) < t.amount
+                ).length === 0 ? (
+                  <div className="p-8 text-center border border-dashed border-white/5 rounded-2xl text-slate-400 text-xs py-12 flex flex-col items-center justify-center h-full">
+                    <CheckCircle className="w-8 h-8 text-emerald-500 mb-3 animate-pulse" />
+                    Parabéns! Nenhuma conta pendente para {monthsPortuguese[calendarDate.getMonth()]} de {calendarDate.getFullYear()}. 🎉
+                  </div>
+                ) : (
+                  activeMonthTransactions
+                    .filter(t => (t.type === 'fixos' || t.type === 'variaveis') && (t.paid_amount || 0) < t.amount)
+                    .map((tx) => {
+                      const categoryObj = activeMonthCategoryList.find(c => c.value === tx.cat) || { icon: '📦', label: tx.cat || 'Outros' };
+                      const remDue = tx.amount - (tx.paid_amount || 0);
+
+                      return (
+                        <div
+                          key={tx.id}
+                          onClick={() => {
+                            setIsPendingDebtListOpen(false);
+                            handleOpenPay(tx.id);
+                          }}
+                          className="p-3.5 rounded-2xl border border-white/5 bg-slate-900/40 hover:bg-slate-900 hover:border-indigo-500/40 flex items-center justify-between gap-3 cursor-pointer transition-all hover:scale-[1.01] group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-slate-950 border border-white/5 flex items-center justify-center text-base shrink-0">
+                              {categoryObj.icon}
+                            </div>
+                            <div className="min-w-0">
+                              <h5 className="font-bold text-[13px] text-white truncate group-hover:text-indigo-400 transition-colors leading-tight">
+                                {tx.name}
+                              </h5>
+                              <p className="text-[10px] text-slate-450 mt-1 uppercase font-semibold">
+                                Vencimento: {tx.due || 'Sem vencimento'} • {categoryObj.label}
+                              </p>
+                              {tx.paid_amount > 0 && (
+                                <p className="text-[9.5px] text-amber-500 font-semibold mt-0.5">
+                                  Pago Parcial: {formatCurrency(tx.paid_amount)} (Resta {formatCurrency(remDue)})
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="font-mono text-[13px] font-extrabold text-rose-400 block">
+                              {formatCurrency(remDue)}
+                            </span>
+                            <span className="text-[9px] text-indigo-400 uppercase tracking-wider font-extrabold group-hover:underline mt-0.5 block">
+                              PAGAR ➔
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => setIsPendingDebtListOpen(false)}
+                  className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/15 text-slate-300 font-bold text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Fechar Lista
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </AnimatePresence>
+      )}
 
       {/* Transaction Add/Edit Form Overlay Modal */}
       <TransactionFormModal

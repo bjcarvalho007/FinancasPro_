@@ -32,6 +32,7 @@ interface DashboardAnalyticsProps {
   balance: number;
   extra: number;
   currentTheme?: 'dark' | 'light';
+  settings?: any;
 }
 
 export default function DashboardAnalytics({
@@ -44,7 +45,8 @@ export default function DashboardAnalytics({
   income = 0,
   balance = 0,
   extra = 0,
-  currentTheme = 'dark'
+  currentTheme = 'dark',
+  settings = null
 }: DashboardAnalyticsProps) {
   // Toggle between active month 'current' or total lifetime records 'history'
   const [activeDashboardMode, setActiveDashboardMode] = useState<'current' | 'history'>('current');
@@ -367,7 +369,11 @@ export default function DashboardAnalytics({
   uniqueMonths.forEach(mKey => {
     const listMonth = listAll.filter(t => t.monthKey === mKey);
     const spentMonth = listMonth.reduce((sum, t) => sum + t.amount, 0);
-    if (spentMonth > income && income > 0) {
+    const mIncome = settings?.monthlyIncome?.[mKey] ?? settings?.income ?? income ?? 0;
+    const mBalance = settings?.monthlyBalance?.[mKey] ?? settings?.balance ?? 0;
+    const mExtra = settings?.extras?.[mKey] ?? 0;
+    const totalInflows = mIncome + mBalance + mExtra;
+    if (spentMonth > totalInflows && totalInflows > 0) {
       deficitMonthsCount++;
     }
   });
@@ -473,13 +479,20 @@ export default function DashboardAnalytics({
     const monthTx = listAll.filter(t => t.monthKey === mKey);
     const spent = monthTx.reduce((sum, t) => sum + t.amount, 0);
     const paid = monthTx.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
-    // Rough monthly revenue: base income + extras for that month
+    
+    // Dynamic per-month metrics using settings mappings
+    const mIncome = settings?.monthlyIncome?.[mKey] ?? settings?.income ?? 0;
+    const mBalance = settings?.monthlyBalance?.[mKey] ?? settings?.balance ?? 0;
+    const mExtra = settings?.extras?.[mKey] ?? 0;
+    const totalInflows = mIncome + mBalance + mExtra;
+    const leftoverMargin = totalInflows - spent;
+
     return {
       monthKey: mKey,
       label: formatMonthKey(mKey),
       spent,
       paid,
-      balance: income - spent,
+      balance: leftoverMargin,
       txCount: monthTx.length
     };
   }).sort((a, b) => b.monthKey.localeCompare(a.monthKey)).slice(0, 5); // display 5 newest months

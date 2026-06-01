@@ -41,6 +41,8 @@ export interface Setting {
   theme: 'dark' | 'light';
   income: number;
   balance: number;
+  monthlyIncome?: Record<string, number>; // monthKey -> monthly income
+  monthlyBalance?: Record<string, number>; // monthKey -> monthly starting balance
   extras?: Record<string, number>; // monthKey -> sum of extra earnings
 }
 

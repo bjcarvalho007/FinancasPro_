@@ -502,12 +502,12 @@ export default function App() {
 
   // Preset configuration and extras cumulative earnings save
   const handleOpenIncome = () => {
-    const inc = settings?.income || 0;
-    const bal = settings?.balance || 0;
+    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
+    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
     const ext = settings?.extras?.[currentMonthKey] || 0;
 
-    setTempIncomeStr(inc > 0 ? formatCurrency(inc) : '');
-    setTempBalanceStr(bal > 0 ? formatCurrency(bal) : '');
+    setTempIncomeStr(incVal > 0 ? formatCurrency(incVal) : '');
+    setTempBalanceStr(balVal > 0 ? formatCurrency(balVal) : '');
     setTempExtraStr(ext > 0 ? formatCurrency(ext) : '');
     setIsIncomeOpen(true);
   };
@@ -518,11 +518,26 @@ export default function App() {
     const balVal = handleParseMoney(tempBalanceStr);
     const extVal = handleParseMoney(tempExtraStr);
 
+    const oldMonthlyIncome = settings.monthlyIncome || {};
+    const oldMonthlyBalance = settings.monthlyBalance || {};
     const oldExtrasMap = settings.extras || {};
+
+    // Auto-update standard fallback if not set yet
+    const baseInc = settings.income || incVal;
+    const baseBal = settings.balance || balVal;
+
     const updatedSettings: Setting = {
       ...settings,
-      income: incVal,
-      balance: balVal,
+      income: baseInc,
+      balance: baseBal,
+      monthlyIncome: {
+        ...oldMonthlyIncome,
+        [currentMonthKey]: incVal
+      },
+      monthlyBalance: {
+        ...oldMonthlyBalance,
+        [currentMonthKey]: balVal
+      },
       extras: {
         ...oldExtrasMap,
         [currentMonthKey]: extVal
@@ -787,8 +802,8 @@ export default function App() {
   }, [activeMonthTransactions, activeTab]);
 
   // Summaries Calculations
-  const inc = settings?.income || 0;
-  const bal = settings?.balance || 0;
+  const inc = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
+  const bal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
   const ext = settings?.extras?.[currentMonthKey] || 0;
   
   // Total funds active
@@ -1378,6 +1393,7 @@ export default function App() {
                     balance={bal}
                     extra={ext}
                     currentTheme={theme}
+                    settings={settings}
                   />
                 ) : activeTab === 'goals' ? (
                   <GoalsPanel

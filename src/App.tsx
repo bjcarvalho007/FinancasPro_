@@ -321,10 +321,51 @@ export default function App() {
           }
         }
       }
+
+      // --- AUTOMATIC ALERTS INJECTIONS (E-MAIL AND WHATSAPP AUTOMATION) ---
+      if (settings) {
+        // Automatic E-mail Alert dispatch
+        if (settings.emailAlerts && settings.alertEmail) {
+          const emailStorageKey = `financaspro_auto_email_sent_${currentMonthKey}_${targetBill.id}`;
+          if (!sessionStorage.getItem(emailStorageKey)) {
+            sessionStorage.setItem(emailStorageKey, 'true');
+            const pendingNames = expiring.map(e => `"${e.name}" (Vence dia ${e.due})`).join(', ');
+            console.log("📨 [AUTOMAÇÃO] Disparando e-mail de alerta automático de vencimento...");
+            
+            fetch('/api/notify/email-and-push', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: settings.alertEmail,
+                title: `⚠️ Lembrete de Vencimento de Caixa - FinançasPro`,
+                body: `Caro associado, identificamos contas com vencimento iminente no seu portal: ${pendingNames}. Mantenha suas contas em dia para maximizar seu índice de sobras estimadas.`,
+                detailedTransactions: expiring
+              })
+            })
+            .then(res => res.json())
+            .then(result => {
+              console.log("📨 [AUTOMAÇÃO DISPACHED] Resposta do despacho automático de e-mail:", result);
+              triggerToast(`📬 Alerta automático enviado p/ e-mail de ${settings.alertEmail}!`, 'success');
+            })
+            .catch(e => {
+              console.error("❌ Erro ao enviar lembrete automático por e-mail:", e);
+            });
+          }
+        }
+
+        // Automatic WhatsApp Alert feedback
+        if (settings.whatsappAlerts && settings.alertPhone) {
+          const whatsappStorageKey = `financaspro_auto_wa_warned_${currentMonthKey}_${targetBill.id}`;
+          if (!sessionStorage.getItem(whatsappStorageKey)) {
+            sessionStorage.setItem(whatsappStorageKey, 'true');
+            triggerToast(`💬 Alerta automático preparado para WhatsApp (${settings.alertPhone})! Para enviar instantaneamente, acesse as Configurações.`, 'warning');
+          }
+        }
+      }
     } else {
       setFloatingAlert(null);
     }
-  }, [transactions, currentMonthKey, settings?.alertThresholdDays]);
+  }, [transactions, currentMonthKey, settings?.alertThresholdDays, settings]);
 
   // Toast helper triggers
   const triggerToast = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {

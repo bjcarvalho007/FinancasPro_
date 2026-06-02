@@ -160,6 +160,15 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoadingUser(false);
+
+      // Request notification permissions automatically on login/load to enable background PWA notifications
+      if (currentUser && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then((perm) => {
+          if (perm === 'granted') {
+            console.log('Notificações ativadas pelo usuário!');
+          }
+        });
+      }
     });
     return unsubscribe;
   }, []);
@@ -296,6 +305,23 @@ export default function App() {
         }
       }
     });
+
+    // Sync current computed upcoming bills with the Service Worker cache for absolute background dispatch
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((reg) => {
+        if (reg.active) {
+          reg.active.postMessage({
+            type: 'SET_REMINDERS',
+            bills: expiring.map(e => ({
+              id: e.id,
+              name: e.name,
+              due: e.due,
+              amount: e.amount
+            }))
+          });
+        }
+      });
+    }
 
     if (expiring.length > 0) {
       const targetBill = expiring[0];
@@ -887,7 +913,7 @@ export default function App() {
           id: virtualId,
           userId: masterTx.userId,
           name: masterTx.name,
-          amount: masterTx.type === 'parcelas' ? 0 : masterTx.amount,
+          amount: masterTx.amount,
           type: masterTx.type, // Keeps original type: 'fixos' or 'parcelas'
           cat: masterTx.cat,
           due: masterTx.due,
@@ -1093,7 +1119,7 @@ export default function App() {
           transition={{ type: 'spring', damping: 20, stiffness: 100 }}
           className={`fixed bottom-24 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[55] p-5 rounded-3xl shadow-[0_20px_50px_rgba(239,68,68,0.15)] flex flex-col gap-4 transition-all border backdrop-blur-xl ${
             theme === 'light'
-              ? 'bg-white/95 border-rose-200/80 text-slate-850'
+              ? 'bg-white/95 border-rose-200/80 text-slate-900 shadow-slate-200/50'
               : 'bg-slate-950/95 border-rose-550/30 text-slate-100'
           }`}
         >
@@ -1104,14 +1130,14 @@ export default function App() {
             <div className="flex gap-3.5 items-start">
               <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500/10 to-amber-500/10 border border-rose-500/15 flex items-center justify-center text-rose-500 shrink-0 relative shadow-inner">
                 <span className="absolute inset-0 rounded-2xl bg-rose-500/5 animate-ping opacity-75" />
-                <Bell className="w-5 h-5 text-rose-500 relative z-10 animate-swing" />
+                <Bell className="w-5 h-5 text-rose-550 relative z-10 animate-swing" />
               </div>
               <div className="space-y-1.5">
                 <h5 className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${theme === 'light' ? 'text-rose-600' : 'text-rose-400 font-display'}`}>
                   <span>{floatingAlert.title}</span>
                   <span className="inline-flex items-center rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-500 ring-1 ring-inset ring-rose-500/20">Urgente</span>
                 </h5>
-                <p className={`text-xs font-bold leading-relaxed pr-1 ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>
+                <p className={`text-xs font-bold leading-relaxed pr-1 ${theme === 'light' ? 'text-slate-800' : 'text-slate-300'}`}>
                   {floatingAlert.desc}
                 </p>
               </div>
@@ -1119,7 +1145,7 @@ export default function App() {
             <button
               onClick={() => setFloatingAlert(null)}
               className={`p-1.5 rounded-xl transition-all cursor-pointer text-xs font-bold hover:scale-110 active:scale-95 ${
-                theme === 'light' ? 'hover:bg-slate-100 text-slate-400 hover:text-slate-700' : 'hover:bg-white/5 text-slate-500 hover:text-white'
+                theme === 'light' ? 'hover:bg-slate-105 text-slate-500 hover:text-slate-900' : 'hover:bg-white/5 text-slate-500 hover:text-white'
               }`}
               title="Dispensar alerta"
             >
@@ -1132,8 +1158,8 @@ export default function App() {
               onClick={() => setFloatingAlert(null)}
               className={`flex-1 py-3 rounded-2xl text-[10px] font-bold tracking-widest transition-all cursor-pointer text-center uppercase border ${
                 theme === 'light' 
-                  ? 'bg-slate-50 hover:bg-slate-100 text-slate-500 border-slate-150' 
-                  : 'bg-slate-900/60 hover:bg-slate-905 text-slate-400 hover:text-slate-300 border-white/5'
+                  ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200' 
+                  : 'bg-slate-900/60 hover:bg-slate-800 text-slate-400 hover:text-slate-300 border-white/5'
               }`}
             >
               AGENDAR DEPOIS

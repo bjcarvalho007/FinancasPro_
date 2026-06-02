@@ -306,23 +306,39 @@ export default function App() {
         type: 'vencimento'
       });
 
-      // Browser Web Notifications integration
+      // Browser Web Notifications integration with active PWA app-launch visual styling
       if ('Notification' in window && Notification.permission === 'granted') {
         const sessionKey = `financaspro_notified_bill_${targetBill.id}`;
         if (!sessionStorage.getItem(sessionKey)) {
           try {
-            new Notification('Alerta de Vencimento', {
+            const hasServiceWorker = 'serviceWorker' in navigator;
+            const notificationTitle = 'FinançasPro';
+            const notificationOptions = {
               body: `A conta "${targetBill.name}" de ${formatCurrency(targetBill.amount)} vence nos próximos dias!`,
-              icon: '/favicon.ico'
-            });
+              icon: '/app_icon.png',
+              badge: '/app_icon.png',
+              vibrate: [200, 100, 200],
+              tag: `financaspro-bill-${targetBill.id}`,
+              renotify: true
+            };
+
+            if (hasServiceWorker) {
+              navigator.serviceWorker.ready.then((reg) => {
+                reg.showNotification(notificationTitle, notificationOptions);
+              }).catch(() => {
+                new Notification(notificationTitle, notificationOptions);
+              });
+            } else {
+              new Notification(notificationTitle, notificationOptions);
+            }
             sessionStorage.setItem(sessionKey, 'true');
           } catch (e) {
-            console.warn('System browser notification list: ', e);
+            console.warn('System browser notification list fallback: ', e);
           }
         }
       }
 
-      // --- AUTOMATIC ALERTS INJECTIONS (E-MAIL AND WHATSAPP AUTOMATION) ---
+      // --- AUTOMATIC ALERTS INJECTIONS (E-MAIL AUTOMATION) ---
       if (settings) {
         // Automatic E-mail Alert dispatch
         if (settings.emailAlerts && settings.alertEmail) {
@@ -350,15 +366,6 @@ export default function App() {
             .catch(e => {
               console.error("❌ Erro ao enviar lembrete automático por e-mail:", e);
             });
-          }
-        }
-
-        // Automatic WhatsApp Alert feedback
-        if (settings.whatsappAlerts && settings.alertPhone) {
-          const whatsappStorageKey = `financaspro_auto_wa_warned_${currentMonthKey}_${targetBill.id}`;
-          if (!sessionStorage.getItem(whatsappStorageKey)) {
-            sessionStorage.setItem(whatsappStorageKey, 'true');
-            triggerToast(`💬 Alerta automático preparado para WhatsApp (${settings.alertPhone})! Para enviar instantaneamente, acesse as Configurações.`, 'warning');
           }
         }
       }

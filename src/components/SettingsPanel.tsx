@@ -364,17 +364,17 @@ export default function SettingsPanel({
         </div>
       </div>
 
-      {/* AUTORIZAÇÃO E CONFIGURAÇÃO DE ALERTAS AUTOMÁTICOS (EMAIL & ZIP/ZAP) */}
+      {/* AUTORIZAÇÃO E CONFIGURAÇÃO DE ALERTAS AUTOMÁTICOS (EMAIL DE CAIXA) */}
       <div className="p-6 rounded-3xl glass-panel border-white/5 space-y-5">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center text-emerald-400">
+          <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/15 flex items-center justify-center text-indigo-400">
             <Bell className="w-4 h-4 animate-bounce" />
           </div>
           <div>
             <h5 className="font-display font-black text-white text-sm leading-none">
-              Autorização de Alertas Automáticos
+              Autorização de Alertas de E-mail
             </h5>
-            <p className="text-[10px] text-slate-500 mt-1">Configure o recebimento de lembretes de vencimento por E-mail ou WhatsApp.</p>
+            <p className="text-[10px] text-slate-500 mt-1">Configure o recebimento de lembretes de vencimento direto no seu e-mail de forma automática.</p>
           </div>
         </div>
 
@@ -385,8 +385,8 @@ export default function SettingsPanel({
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-indigo-400" />
                 <div>
-                  <span className="text-xs font-bold text-slate-300 block">Alertas por E-mail</span>
-                  <span className="text-[9.5px] text-slate-500">Enviar e-mail automático antes do vencimento.</span>
+                  <span className="text-xs font-bold text-slate-300 block">Alertas automáticos por E-mail</span>
+                  <span className="text-[9.5px] text-slate-500">Enviar lembretes iminentes antes da data de vencimento.</span>
                 </div>
               </div>
               <button
@@ -418,77 +418,30 @@ export default function SettingsPanel({
             )}
           </div>
 
-          {/* WhatsApp alerts switch & input */}
-          <div className="space-y-3 p-3 bg-white/2 rounded-2xl border border-white/3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Smartphone className="w-4 h-4 text-emerald-400" />
-                <div>
-                  <span className="text-xs font-bold text-slate-300 block">Alertas por WhatsApp</span>
-                  <span className="text-[9.5px] text-slate-500">Autorizar disparo de lembrete via número cadastrado.</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setWhatsappAlerts(!whatsappAlerts)}
-                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  whatsappAlerts ? 'bg-emerald-600' : 'bg-slate-800'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    whatsappAlerts ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </div>
-            
-            {whatsappAlerts && (
-              <div className="pt-1.5 space-y-1">
-                <label className="block text-[8.5px] font-bold text-slate-400 uppercase tracking-widest mb-1">Telefone WhatsApp (com DDD e DDI)</label>
-                <input
-                  type="text"
-                  placeholder="55XXXXXXXXXXX"
-                  value={alertPhone}
-                  onChange={(e) => setAlertPhone(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/5 focus:border-emerald-500 focus:outline-none text-slate-200 text-xs px-3.5 py-2.5 rounded-xl block font-mono"
-                />
-                <span className="text-[8.5px] text-slate-500 italic block leading-relaxed">Insira o código do país (55 para Brasil), DDD e o número completo, sem traços ou parênteses (ex: 5511999999999).</span>
-              </div>
-            )}
-          </div>
-
           <button
             onClick={handleSaveAlerts}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5"
           >
-            <Check className="w-3.5 h-3.5" /> Salvar Autorizações de Alerta
+            <Check className="w-3.5 h-3.5" /> Salvar Configuração de Alerta
           </button>
 
           {/* SIMULAÇÕES / TESTE DE DESPACHO */}
           <div className="pt-3 border-t border-white/5 space-y-2">
             <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center mb-1">Ambiente de Teste & Demonstração</span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                id="btn-test-whatsapp"
-                onClick={handleOpenWhatsAppSim}
-                className="p-2.5 rounded-xl bg-emerald-550/10 border border-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 text-[9.5px] font-bold text-center flex items-center justify-center gap-1 cursor-pointer transition-all"
-              >
-                ⚡ Disparar WhatsApp
-              </button>
+            <div className="flex justify-center">
               <button
                 id="btn-test-email"
                 onClick={() => {
                   setSimulatorChannel('email');
                   setIsAlertSimulatorOpen(true);
                 }}
-                className="p-2.5 rounded-xl bg-indigo-550/10 border border-indigo-500/15 text-indigo-400 hover:bg-indigo-500/20 text-[9.5px] font-bold text-center flex items-center justify-center gap-1 cursor-pointer transition-all"
+                className="w-full p-2.5 rounded-xl bg-indigo-550/10 border border-indigo-500/15 text-indigo-400 hover:bg-indigo-500/20 text-[9.5px] font-bold text-center flex items-center justify-center gap-1 cursor-pointer transition-all"
               >
-                📬 Simular E-mail
+                📬 Simular E-mail de Notificação
               </button>
             </div>
             <p className="text-[8.5px] text-slate-500 text-center leading-normal mt-1">
-              *Nota: No ambiente em nuvem, triggers automáticos são executados por uma rotina Cloud Scheduler (cron de retaguarda) vinculada ao Firestore. O botão acima simula a ação de disparo imediato para validar os dados cadastrados.
+              *Nota: No ambiente em nuvem, triggers automáticos são executados por uma rotina Cloud Scheduler (cron de retaguarda) vinculada ao seu Firestore. O botão acima simula a ação de disparo prévio para validar os dados cadastrados.
             </p>
           </div>
         </div>

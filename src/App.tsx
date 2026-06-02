@@ -301,8 +301,8 @@ export default function App() {
       const targetBill = expiring[0];
       setFloatingAlert({
         id: targetBill.id,
-        title: 'FinançasPro',
-        desc: `Lembrete: A conta "${targetBill.name}" vence em breve.`,
+        title: '⚠️ ATENÇÃO - VENCIMENTO',
+        desc: `A despesa "${targetBill.name}" está agendada para vencer no dia ${targetBill.due}. Regularize para manter em dia o seu índice de sobras estimadas!`,
         type: 'vencimento'
       });
 
@@ -314,7 +314,7 @@ export default function App() {
             const hasServiceWorker = 'serviceWorker' in navigator;
             const notificationTitle = 'FinançasPro';
             const notificationOptions = {
-              body: `Lembrete: A conta "${targetBill.name}" vence em breve.`,
+              body: `Atenção: A despesa "${targetBill.name}" vence no dia ${targetBill.due}.`,
               icon: '/app_icon.png',
               badge: '/app_icon.png',
               vibrate: [200, 100, 200],
@@ -334,38 +334,6 @@ export default function App() {
             sessionStorage.setItem(sessionKey, 'true');
           } catch (e) {
             console.warn('System browser notification list fallback: ', e);
-          }
-        }
-      }
-
-      // --- AUTOMATIC ALERTS INJECTIONS (E-MAIL AUTOMATION) ---
-      if (settings) {
-        // Automatic E-mail Alert dispatch
-        if (settings.emailAlerts && settings.alertEmail) {
-          const emailStorageKey = `financaspro_auto_email_sent_${currentMonthKey}_${targetBill.id}`;
-          if (!sessionStorage.getItem(emailStorageKey)) {
-            sessionStorage.setItem(emailStorageKey, 'true');
-            const pendingNames = expiring.map(e => `"${e.name}" (Vence dia ${e.due})`).join(', ');
-            console.log("📨 [AUTOMAÇÃO] Disparando e-mail de alerta automático de vencimento...");
-            
-            fetch('/api/notify/email-and-push', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                email: settings.alertEmail,
-                title: `⚠️ Lembrete de Vencimento de Caixa - FinançasPro`,
-                body: `Caro associado, identificamos contas com vencimento iminente no seu portal: ${pendingNames}. Mantenha suas contas em dia para maximizar seu índice de sobras estimadas.`,
-                detailedTransactions: expiring
-              })
-            })
-            .then(res => res.json())
-            .then(result => {
-              console.log("📨 [AUTOMAÇÃO DISPACHED] Resposta do despacho automático de e-mail:", result);
-              triggerToast(`📬 Alerta automático enviado p/ e-mail de ${settings.alertEmail}!`, 'success');
-            })
-            .catch(e => {
-              console.error("❌ Erro ao enviar lembrete automático por e-mail:", e);
-            });
           }
         }
       }
@@ -1116,52 +1084,59 @@ export default function App() {
         </motion.div>
       )}
 
-      {/* Dynamic Floating Due alert matching user logic */}
+      {/* Dynamic Floating Due alert matching user logic - Remastered Premium Visual Design */}
       {floatingAlert && (
         <motion.div
-          initial={{ y: 50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 50, opacity: 0 }}
-          className={`fixed bottom-20 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[55] p-4 rounded-2xl shadow-3xl flex flex-col gap-3 transition-all border ${
+          initial={{ y: 80, opacity: 0, scale: 0.9 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 40, opacity: 0, scale: 0.95 }}
+          transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+          className={`fixed bottom-24 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[55] p-5 rounded-3xl shadow-[0_20px_50px_rgba(239,68,68,0.15)] flex flex-col gap-4 transition-all border backdrop-blur-xl ${
             theme === 'light'
-              ? 'bg-white border-rose-400 text-slate-800 glow-indigo'
-              : 'bg-slate-900 border-rose-500/40 text-slate-100 glow-indigo'
+              ? 'bg-white/95 border-rose-200/80 text-slate-850'
+              : 'bg-slate-950/95 border-rose-550/30 text-slate-100'
           }`}
         >
-          <div className="flex items-start justify-between w-full gap-2">
-            <div className="flex gap-3 items-center">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500 shrink-0">
-                <AlertCircle className="w-5 h-5 animate-bounce" />
+          {/* Accent colored indicator line at the top */}
+          <div className="absolute top-0 left-6 right-6 h-0.5 bg-gradient-to-r from-rose-500 via-amber-400 to-rose-600 rounded-full" />
+
+          <div className="flex items-start justify-between w-full gap-3 mt-1">
+            <div className="flex gap-3.5 items-start">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500/10 to-amber-500/10 border border-rose-500/15 flex items-center justify-center text-rose-500 shrink-0 relative shadow-inner">
+                <span className="absolute inset-0 rounded-2xl bg-rose-500/5 animate-ping opacity-75" />
+                <Bell className="w-5 h-5 text-rose-500 relative z-10 animate-swing" />
               </div>
-              <div>
-                <h5 className={`text-xs font-black uppercase tracking-wider ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
-                  {floatingAlert.title}
+              <div className="space-y-1.5">
+                <h5 className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${theme === 'light' ? 'text-rose-600' : 'text-rose-400 font-display'}`}>
+                  <span>{floatingAlert.title}</span>
+                  <span className="inline-flex items-center rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-500 ring-1 ring-inset ring-rose-500/20">Urgente</span>
                 </h5>
-                <p className={`text-xs font-semibold leading-snug mt-0.5 ${theme === 'light' ? 'text-slate-600' : 'text-slate-300'}`}>
+                <p className={`text-xs font-bold leading-relaxed pr-1 ${theme === 'light' ? 'text-slate-700' : 'text-slate-300'}`}>
                   {floatingAlert.desc}
                 </p>
               </div>
             </div>
             <button
               onClick={() => setFloatingAlert(null)}
-              className={`p-1 px-1.5 rounded-lg transition-colors cursor-pointer text-[11px] font-bold ${
-                theme === 'light' ? 'hover:bg-slate-100 text-slate-400 hover:text-slate-700' : 'hover:bg-slate-800 text-slate-500 hover:text-white'
+              className={`p-1.5 rounded-xl transition-all cursor-pointer text-xs font-bold hover:scale-110 active:scale-95 ${
+                theme === 'light' ? 'hover:bg-slate-100 text-slate-400 hover:text-slate-700' : 'hover:bg-white/5 text-slate-500 hover:text-white'
               }`}
               title="Dispensar alerta"
             >
               ✕
             </button>
           </div>
-          <div className="flex gap-2 w-full pt-1">
+
+          <div className="flex gap-2 w-full pt-1.5">
             <button
               onClick={() => setFloatingAlert(null)}
-              className={`flex-1 py-2 rounded-xl text-[10px] font-bold tracking-wider transition-colors cursor-pointer text-center uppercase ${
+              className={`flex-1 py-3 rounded-2xl text-[10px] font-bold tracking-widest transition-all cursor-pointer text-center uppercase border ${
                 theme === 'light' 
-                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-600' 
-                  : 'bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-slate-200'
+                  ? 'bg-slate-50 hover:bg-slate-100 text-slate-500 border-slate-150' 
+                  : 'bg-slate-900/60 hover:bg-slate-905 text-slate-400 hover:text-slate-300 border-white/5'
               }`}
             >
-              IGNORAR
+              AGENDAR DEPOIS
             </button>
             <button
               onClick={() => {
@@ -1169,9 +1144,9 @@ export default function App() {
                 handleOpenPay(floatingAlert.id);
                 setFloatingAlert(null);
               }}
-              className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-xl text-[10px] font-black tracking-wider cursor-pointer font-display transition-all text-center uppercase shadow-md shadow-rose-600/15"
+              className="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-450 text-white py-3 rounded-2xl text-[10px] font-black tracking-widest cursor-pointer font-display transition-all text-center uppercase shadow-lg shadow-rose-600/20"
             >
-              PAGAR AGORA
+              EFETUAR PAGAMENTO
             </button>
           </div>
         </motion.div>

@@ -761,6 +761,28 @@ export default function App() {
     }
   };
 
+  const handleUpdateAlertSettings = async (
+    emailAlerts: boolean,
+    whatsappAlerts: boolean,
+    alertEmail: string,
+    alertPhone: string
+  ) => {
+    if (!user || !settings) return;
+    const path = `settings/${user.uid}`;
+    try {
+      const updatedSettings: Setting = {
+        ...settings,
+        emailAlerts,
+        whatsappAlerts,
+        alertEmail,
+        alertPhone
+      };
+      await setDoc(doc(db, 'settings', user.uid), updatedSettings);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  };
+
   // Pull to refresh gestures events
   const handleTouchStart = (e: React.TouchEvent) => {
     const container = document.getElementById('main-scroller-view');
@@ -1484,6 +1506,7 @@ export default function App() {
                     baseIncome={inc}
                     baseBalance={bal}
                     onSavePreferences={handlePresetConfigsSave}
+                    onSaveAlertSettings={handleUpdateAlertSettings}
                     transactions={transactions}
                     showToast={triggerToast}
                     alertThresholdDays={settings?.alertThresholdDays !== undefined ? settings.alertThresholdDays : 3}

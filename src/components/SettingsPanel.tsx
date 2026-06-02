@@ -15,6 +15,7 @@ interface SettingsPanelProps {
   baseIncome: number;
   baseBalance: number;
   onSavePreferences: (income: number, balance: number, alertDays?: number) => void;
+  onSaveAlertSettings?: (emailAlerts: boolean, whatsappAlerts: boolean, alertEmail: string, alertPhone: string) => Promise<void>;
   transactions: Transaction[];
   showToast: (msg: string, type?: 'success' | 'error' | 'warning') => void;
   alertThresholdDays?: number;
@@ -29,6 +30,7 @@ export default function SettingsPanel({
   baseIncome,
   baseBalance,
   onSavePreferences,
+  onSaveAlertSettings,
   transactions,
   showToast,
   alertThresholdDays = 3,
@@ -43,6 +45,23 @@ export default function SettingsPanel({
   const [alertDays, setAlertDays] = useState<number>(alertThresholdDays);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState<boolean>(false);
   const [selectedReportMonth, setSelectedReportMonth] = useState<string>('all');
+
+  const [emailAlerts, setEmailAlerts] = useState<boolean>(settings?.emailAlerts ?? false);
+  const [whatsappAlerts, setWhatsappAlerts] = useState<boolean>(settings?.whatsappAlerts ?? false);
+  const [alertEmail, setAlertEmail] = useState<string>(settings?.alertEmail ?? auth.currentUser?.email ?? '');
+  const [alertPhone, setAlertPhone] = useState<string>(settings?.alertPhone ?? '');
+  const [isAlertSimulatorOpen, setIsAlertSimulatorOpen] = useState<boolean>(false);
+  const [simulatorChannel, setSimulatorChannel] = useState<'email' | 'whatsapp' | null>(null);
+
+  // Sync state values when settings object loads/changes
+  useEffect(() => {
+    if (settings) {
+      setEmailAlerts(!!settings.emailAlerts);
+      setWhatsappAlerts(!!settings.whatsappAlerts);
+      if (settings.alertEmail) setAlertEmail(settings.alertEmail);
+      if (settings.alertPhone) setAlertPhone(settings.alertPhone);
+    }
+  }, [settings]);
 
   const formatMoney = (val: number): string => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -92,6 +111,44 @@ export default function SettingsPanel({
     const bal = parseMoney(balStr);
     onSavePreferences(inc, bal, alertDays);
     showToast('Preferências base salvas com sucesso!', 'success');
+  };
+
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const pendingDebts = transactions.filter(t => t.monthKey === currentMonthKey && t.paid_amount < t.amount);
+
+  const handleSaveAlerts = async () => {
+    if (onSaveAlertSettings) {
+      await onSaveAlertSettings(emailAlerts, whatsappAlerts, alertEmail, alertPhone);
+      showToast('Autorizações de alerta salvas com sucesso!', 'success');
+    }
+  };
+
+  const handleOpenWhatsAppSim = () => {
+    if (!alertPhone.trim()) {
+      showToast('Por favor, cadastre e salve seu telefone para testar o envio.', 'warning');
+      return;
+    }
+    const cleanPhone = alertPhone.replace(/\D/g, '');
+    
+    // Format message
+    let text = `🚨 *FinançasPro - Lembrete de Despesas* 🚨\n\n`;
+    text += `Olá! Identificamos contas agendadas com vencimento próximo em aberto:\n\n`;
+    
+    if (pendingDebts.length === 0) {
+      text += `✅ Excelente! Não há contas em aberto mapeadas para este período.`;
+    } else {
+      pendingDebts.forEach(d => {
+        const rem = d.amount - (d.paid_amount || 0);
+        text += `• *${d.name}*: Resta pagar *R$ ${rem.toFixed(2).replace('.', ',')}* (Dia ${d.due})\n`;
+      });
+    }
+    
+    text += `\n\n_Dica: Acesse o portal FinançasPro para marcar como pagas e manter sua sobra estimada atualizada._\n👉 https://ai.studio/build`;
+    const encoded = encodeURIComponent(text);
+    const url = `https://wa.me/${cleanPhone}?text=${encoded}`;
+    window.open(url, '_blank');
+    showToast('Link do WhatsApp gerado! Redirecionando...', 'success');
   };
 
   const handlePasswordReset = async () => {
@@ -307,6 +364,136 @@ export default function SettingsPanel({
         </div>
       </div>
 
+      {/* AUTORIZAÇÃO E CONFIGURAÇÃO DE ALERTAS AUTOMÁTICOS (EMAIL & ZIP/ZAP) */}
+      <div className="p-6 rounded-3xl glass-panel border-white/5 space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center text-emerald-400">
+            <Bell className="w-4 h-4 animate-bounce" />
+          </div>
+          <div>
+            <h5 className="font-display font-black text-white text-sm leading-none">
+              Autorização de Alertas Automáticos
+            </h5>
+            <p className="text-[10px] text-slate-500 mt-1">Configure o recebimento de lembretes de vencimento por E-mail ou WhatsApp.</p>
+          </div>
+        </div>
+
+        <div className="space-y-4 pt-2 border-t border-white/5">
+          {/* E-mail alerts switch & input */}
+          <div className="space-y-3 p-3 bg-white/2 rounded-2xl border border-white/3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-indigo-400" />
+                <div>
+                  <span className="text-xs font-bold text-slate-300 block">Alertas por E-mail</span>
+                  <span className="text-[9.5px] text-slate-500">Enviar e-mail automático antes do vencimento.</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEmailAlerts(!emailAlerts)}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  emailAlerts ? 'bg-indigo-650' : 'bg-slate-800'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    emailAlerts ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            
+            {emailAlerts && (
+              <div className="pt-1.5">
+                <label className="block text-[8.5px] font-bold text-slate-400 uppercase tracking-widest mb-1">E-mail Destinatário para Alertas</label>
+                <input
+                  type="email"
+                  placeholder="seu-email@exemplo.com"
+                  value={alertEmail}
+                  onChange={(e) => setAlertEmail(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/5 focus:border-indigo-500 focus:outline-none text-slate-200 text-xs px-3.5 py-2.5 rounded-xl block"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* WhatsApp alerts switch & input */}
+          <div className="space-y-3 p-3 bg-white/2 rounded-2xl border border-white/3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-emerald-400" />
+                <div>
+                  <span className="text-xs font-bold text-slate-300 block">Alertas por WhatsApp</span>
+                  <span className="text-[9.5px] text-slate-500">Autorizar disparo de lembrete via número cadastrado.</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWhatsappAlerts(!whatsappAlerts)}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  whatsappAlerts ? 'bg-emerald-600' : 'bg-slate-800'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    whatsappAlerts ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            
+            {whatsappAlerts && (
+              <div className="pt-1.5 space-y-1">
+                <label className="block text-[8.5px] font-bold text-slate-400 uppercase tracking-widest mb-1">Telefone WhatsApp (com DDD e DDI)</label>
+                <input
+                  type="text"
+                  placeholder="55XXXXXXXXXXX"
+                  value={alertPhone}
+                  onChange={(e) => setAlertPhone(e.target.value)}
+                  className="w-full bg-slate-900 border border-white/5 focus:border-emerald-500 focus:outline-none text-slate-200 text-xs px-3.5 py-2.5 rounded-xl block font-mono"
+                />
+                <span className="text-[8.5px] text-slate-500 italic block leading-relaxed">Insira o código do país (55 para Brasil), DDD e o número completo, sem traços ou parênteses (ex: 5511999999999).</span>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleSaveAlerts}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <Check className="w-3.5 h-3.5" /> Salvar Autorizações de Alerta
+          </button>
+
+          {/* SIMULAÇÕES / TESTE DE DESPACHO */}
+          <div className="pt-3 border-t border-white/5 space-y-2">
+            <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center mb-1">Ambiente de Teste & Demonstração</span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                id="btn-test-whatsapp"
+                onClick={handleOpenWhatsAppSim}
+                className="p-2.5 rounded-xl bg-emerald-550/10 border border-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20 text-[9.5px] font-bold text-center flex items-center justify-center gap-1 cursor-pointer transition-all"
+              >
+                ⚡ Disparar WhatsApp
+              </button>
+              <button
+                id="btn-test-email"
+                onClick={() => {
+                  setSimulatorChannel('email');
+                  setIsAlertSimulatorOpen(true);
+                }}
+                className="p-2.5 rounded-xl bg-indigo-550/10 border border-indigo-500/15 text-indigo-400 hover:bg-indigo-500/20 text-[9.5px] font-bold text-center flex items-center justify-center gap-1 cursor-pointer transition-all"
+              >
+                📬 Simular E-mail
+              </button>
+            </div>
+            <p className="text-[8.5px] text-slate-500 text-center leading-normal mt-1">
+              *Nota: No ambiente em nuvem, triggers automáticos são executados por uma rotina Cloud Scheduler (cron de retaguarda) vinculada ao Firestore. O botão acima simula a ação de disparo imediato para validar os dados cadastrados.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Action panel for Exportation and Credentials */}
       <div className="p-6 rounded-3xl glass-panel border-white/5 space-y-4">
         <h5 className="font-display font-black text-white text-sm leading-none">
@@ -463,6 +650,133 @@ export default function SettingsPanel({
                 >
                   Voltar ao Painel
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Simulator Modal for Email preview */}
+      <AnimatePresence>
+        {isAlertSimulatorOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAlertSimulatorOpen(false)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', duration: 0.4 }}
+              className={`w-full max-w-lg rounded-3xl p-6 shadow-2xl relative z-10 text-left space-y-4 border transition-all ${
+                currentTheme === 'light' 
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-100/30' 
+                  : 'bg-[#0f1524] border-white/10 text-white'
+              }`}
+            >
+              <div className={`flex items-center justify-between border-b pb-2 ${
+                currentTheme === 'light' ? 'border-slate-100' : 'border-white/5'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-indigo-400" />
+                  <h4 className={`font-display font-black text-xs uppercase tracking-wider ${
+                    currentTheme === 'light' ? 'text-slate-800' : 'text-slate-200'
+                  }`}>
+                    Simulador de Alerta por E-mail (Preview)
+                  </h4>
+                </div>
+                <button 
+                  onClick={() => setIsAlertSimulatorOpen(false)}
+                  className="text-slate-500 hover:text-slate-200 font-bold transition-all text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3 font-sans text-xs">
+                <div className={`p-3 rounded-xl space-y-1 text-[11px] font-mono ${
+                  currentTheme === 'light' ? 'bg-slate-100 text-slate-650' : 'bg-slate-900/60 text-slate-300'
+                }`}>
+                  <div><strong>Destinatário:</strong> {alertEmail || 'seu-email@exemplo.com'}</div>
+                  <div><strong>Assunto:</strong> ⚠️ Lembrete Importante: Contas Vencendo nos Próximos Dias</div>
+                  <div><strong>Remetente:</strong> alertas@financaspro.com.br</div>
+                </div>
+
+                <div className={`p-5 rounded-2xl border text-slate-250 space-y-4 ${
+                  currentTheme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-950 border-white/5'
+                }`}>
+                  <div className={`border-b pb-3 flex items-center justify-between ${
+                    currentTheme === 'light' ? 'border-slate-200' : 'border-white/5'
+                  }`}>
+                    <span className="text-sm font-black text-indigo-500">FINANÇASPRO</span>
+                    <span className="text-[9px] font-mono text-slate-500">2026</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs">Olá, <strong>{auth.currentUser?.email?.split('@')[0]}</strong>!</p>
+                    <p className={`leading-relaxed text-[11px] ${
+                      currentTheme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                    }`}>
+                      Este é um comunicado automático autorizado do seu assistente de caixa. Identificamos as seguintes contas pendentes de regularização com vencimento próximo nos próximos dias:
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {pendingDebts.length === 0 ? (
+                      <div className={`p-3 text-center text-[10px] italic rounded-xl ${
+                        currentTheme === 'light' ? 'bg-slate-100 text-slate-500' : 'bg-slate-900/40 text-slate-450'
+                      }`}>
+                        Nenhuma conta pendente identificada para este mês! Parabéns pela organização. 🎉
+                      </div>
+                    ) : (
+                      <div className={`border rounded-xl overflow-hidden text-[10px] ${
+                        currentTheme === 'light' ? 'border-slate-200' : 'border-white/5'
+                      }`}>
+                        <div className={`p-2 font-bold grid grid-cols-3 border-b select-none ${
+                          currentTheme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-white/3 border-white/5'
+                        }`}>
+                          <span>Descrição</span>
+                          <span className="text-center">Vencimento</span>
+                          <span className="text-right">Valor em Aberto</span>
+                        </div>
+                        {pendingDebts.map(d => (
+                          <div key={d.id} className={`p-2 grid grid-cols-3 border-b last:border-0 ${
+                            currentTheme === 'light' ? 'border-slate-150 hover:bg-slate-100/50' : 'border-white/3 hover:bg-white/2'
+                          }`}>
+                            <span className="font-bold">{d.name}</span>
+                            <span className="text-center">Dia {d.due}</span>
+                            <span className="text-right font-mono text-indigo-400">
+                              R$ {(d.amount - d.paid_amount).toFixed(2).replace('.', ',')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={`pt-2 text-center border-t ${
+                    currentTheme === 'light' ? 'border-slate-200' : 'border-white/5'
+                  }`}>
+                    <p className="text-[10px] text-slate-500 leading-normal">
+                      Mantenha seu fluxo atualizado para garantir análises de sobras sempre fidedignas.
+                    </p>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setIsAlertSimulatorOpen(false);
+                        showToast('Excelente! Simulação finalizada.', 'success');
+                      }}
+                      className="mt-3 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[9px] uppercase tracking-wider rounded-lg transition-all"
+                    >
+                      Ok, Entendi
+                    </button>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>

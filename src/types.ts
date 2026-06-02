@@ -54,6 +54,11 @@ export interface Setting {
   monthlyBalance?: Record<string, number>; // monthKey -> monthly starting balance
   extras?: Record<string, number>; // monthKey -> sum of extra earnings
   extraEarnings?: ExtraEarning[];
+  emailAlerts?: boolean;
+  whatsappAlerts?: boolean;
+  alertEmail?: string;
+  alertPhone?: string;
+  alertThresholdDays?: number;
 }
 
 export interface AppNotification {

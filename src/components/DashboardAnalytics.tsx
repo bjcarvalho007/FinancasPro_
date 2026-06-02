@@ -369,8 +369,8 @@ export default function DashboardAnalytics({
   uniqueMonths.forEach(mKey => {
     const listMonth = listAll.filter(t => t.monthKey === mKey);
     const spentMonth = listMonth.reduce((sum, t) => sum + t.amount, 0);
-    const mIncome = settings?.monthlyIncome?.[mKey] ?? 0;
-    const mBalance = settings?.monthlyBalance?.[mKey] ?? 0;
+    const mIncome = settings?.monthlyIncome?.[mKey] !== undefined ? settings.monthlyIncome[mKey] : (income ?? 0);
+    const mBalance = settings?.monthlyBalance?.[mKey] !== undefined ? settings.monthlyBalance[mKey] : (balance ?? 0);
     const mExtra = settings?.extras?.[mKey] ?? 0;
     const totalInflows = mIncome + mBalance + mExtra;
     if (spentMonth > totalInflows && totalInflows > 0) {
@@ -481,8 +481,8 @@ export default function DashboardAnalytics({
     const paid = monthTx.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
     
     // Dynamic per-month metrics using settings mappings
-    const mIncome = settings?.monthlyIncome?.[mKey] ?? 0;
-    const mBalance = settings?.monthlyBalance?.[mKey] ?? 0;
+    const mIncome = settings?.monthlyIncome?.[mKey] !== undefined ? settings.monthlyIncome[mKey] : (income ?? 0);
+    const mBalance = settings?.monthlyBalance?.[mKey] !== undefined ? settings.monthlyBalance[mKey] : (balance ?? 0);
     const mExtra = settings?.extras?.[mKey] ?? 0;
     const totalInflows = mIncome + mBalance + mExtra;
     const leftoverMargin = totalInflows - spent;

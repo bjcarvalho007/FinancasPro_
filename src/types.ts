@@ -35,6 +35,15 @@ export interface Goal {
   createdAt?: string;
 }
 
+export interface ExtraEarning {
+  id: string;
+  amount: number;
+  source: string;
+  date: string; // YYYY-MM-DD
+  monthKey: string; // YYYY-MM
+  createdAt?: string;
+}
+
 export interface Setting {
   userId: string;
   currency: 'BRL' | 'USD' | 'EUR';
@@ -44,6 +53,7 @@ export interface Setting {
   monthlyIncome?: Record<string, number>; // monthKey -> monthly income
   monthlyBalance?: Record<string, number>; // monthKey -> monthly starting balance
   extras?: Record<string, number>; // monthKey -> sum of extra earnings
+  extraEarnings?: ExtraEarning[];
 }
 
 export interface AppNotification {

@@ -15,13 +15,14 @@ import {
   deleteDoc,
   getDocFromServer
 } from 'firebase/firestore';
-import { Transaction, Category, Goal, Setting, AppNotification } from './types';
+import { Transaction, Category, Goal, Setting, AppNotification, ExtraEarning } from './types';
 import AuthScreen from './components/AuthScreen';
 import TransactionFormModal from './components/TransactionFormModal';
 import DashboardAnalytics from './components/DashboardAnalytics';
 import GoalsPanel from './components/GoalsPanel';
 import SettingsPanel from './components/SettingsPanel';
 import OnboardingTutorial from './components/OnboardingTutorial';
+import ExtraEarningsManager from './components/ExtraEarningsManager';
 import { 
   TrendingUp, 
   Plus, 
@@ -502,8 +503,8 @@ export default function App() {
 
   // Preset configuration and extras cumulative earnings save
   const handleOpenIncome = () => {
-    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? 0;
-    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? 0;
+    const incVal = settings?.monthlyIncome?.[currentMonthKey] !== undefined ? settings.monthlyIncome[currentMonthKey] : (settings?.income ?? 0);
+    const balVal = settings?.monthlyBalance?.[currentMonthKey] !== undefined ? settings.monthlyBalance[currentMonthKey] : (settings?.balance ?? 0);
     const ext = settings?.extras?.[currentMonthKey] || 0;
 
     setTempIncomeStr(incVal > 0 ? formatCurrency(incVal) : '');
@@ -549,6 +550,78 @@ export default function App() {
       await setDoc(doc(db, 'settings', user.uid), updatedSettings);
       triggerToast('Ganhos do mês atualizados!', 'success');
       setIsIncomeOpen(false);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleAddExtraEarning = async (earning: Omit<ExtraEarning, 'id' | 'createdAt'>) => {
+    if (!user || !settings) return;
+    const newId = `ext_${Date.now()}`;
+    const newEarning: ExtraEarning = {
+      ...earning,
+      id: newId,
+      createdAt: new Date().toISOString()
+    };
+
+    const currentEarningList = settings.extraEarnings || [];
+    const updatedEarningList = [...currentEarningList, newEarning];
+
+    // Compute the sum of all itemized extra earnings for this monthKey
+    const targetMonthKey = earning.monthKey;
+    const sameMonthEarnings = updatedEarningList.filter(item => item.monthKey === targetMonthKey);
+    const sumForMonth = sameMonthEarnings.reduce((acc, item) => acc + item.amount, 0);
+
+    const oldExtrasMap = settings.extras || {};
+    const updatedSettings: Setting = {
+      ...settings,
+      extras: {
+        ...oldExtrasMap,
+        [targetMonthKey]: sumForMonth
+      },
+      extraEarnings: updatedEarningList
+    };
+
+    const path = `settings/${user.uid}`;
+    try {
+      await setDoc(doc(db, 'settings', user.uid), updatedSettings);
+      if (targetMonthKey === currentMonthKey) {
+        setTempExtraStr(formatCurrency(sumForMonth));
+      }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleDeleteExtraEarning = async (id: string) => {
+    if (!user || !settings) return;
+    const currentEarningList = settings.extraEarnings || [];
+    const targetEarning = currentEarningList.find(item => item.id === id);
+    if (!targetEarning) return;
+
+    const targetMonthKey = targetEarning.monthKey;
+    const updatedEarningList = currentEarningList.filter(item => item.id !== id);
+
+    // Compute the sum of all itemized extra earnings for this monthKey after deletion
+    const sameMonthEarnings = updatedEarningList.filter(item => item.monthKey === targetMonthKey);
+    const sumForMonth = sameMonthEarnings.reduce((acc, item) => acc + item.amount, 0);
+
+    const oldExtrasMap = settings.extras || {};
+    const updatedSettings: Setting = {
+      ...settings,
+      extras: {
+        ...oldExtrasMap,
+        [targetMonthKey]: sumForMonth
+      },
+      extraEarnings: updatedEarningList
+    };
+
+    const path = `settings/${user.uid}`;
+    try {
+      await setDoc(doc(db, 'settings', user.uid), updatedSettings);
+      if (targetMonthKey === currentMonthKey) {
+        setTempExtraStr(sumForMonth > 0 ? formatCurrency(sumForMonth) : '');
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, path);
     }
@@ -802,8 +875,8 @@ export default function App() {
   }, [activeMonthTransactions, activeTab]);
 
   // Summaries Calculations
-  const inc = settings?.monthlyIncome?.[currentMonthKey] ?? 0;
-  const bal = settings?.monthlyBalance?.[currentMonthKey] ?? 0;
+  const inc = settings?.monthlyIncome?.[currentMonthKey] !== undefined ? settings.monthlyIncome[currentMonthKey] : (settings?.income ?? 0);
+  const bal = settings?.monthlyBalance?.[currentMonthKey] !== undefined ? settings.monthlyBalance[currentMonthKey] : (settings?.balance ?? 0);
   const ext = settings?.extras?.[currentMonthKey] || 0;
   
   // Total funds active
@@ -1617,68 +1690,95 @@ export default function App() {
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className="bg-[#0f1524] border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative z-10 space-y-4"
+              className="bg-[#0f1524] border border-white/10 w-full max-w-4xl rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 space-y-4 max-h-[90vh] overflow-y-auto"
             >
               <div>
-                <h4 className="font-display font-extrabold text-sm text-white uppercase tracking-wider mb-1">💸 Ganhos da Competência</h4>
-                <p className="text-xs text-slate-400">Configure suas rendas básicas e faturamento complementar.</p>
+                <h4 className="font-display font-extrabold text-base text-white uppercase tracking-wider mb-1">💸 Ganhos da Competência</h4>
+                <p className="text-xs text-slate-400">Configure suas rendas básicas, reserva e histórico de rendimentos adicionais.</p>
               </div>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">Renda Mensal do Mês</label>
-                  <input
-                    id="income-modal-input"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="R$ 0,00"
-                    value={tempIncomeStr}
-                    onChange={(e) => setTempIncomeStr(handleMaskMoney(e.target.value))}
-                    className="w-full bg-slate-950/60 border border-white/5 focus:border-indigo-500 text-slate-100 text-xs px-4 py-3 rounded-xl font-mono"
-                  />
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
+                {/* Col 1: Standard configs */}
+                <div className="lg:col-span-5 space-y-4">
+                  <div className="p-4 bg-slate-950/40 border border-white/5 rounded-2xl space-y-3">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Configurações Base</div>
+                    
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">Renda Mensal do Mês</label>
+                      <input
+                        id="income-modal-input"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="R$ 0,00"
+                        value={tempIncomeStr}
+                        onChange={(e) => setTempIncomeStr(handleMaskMoney(e.target.value))}
+                        className="w-full bg-slate-950/60 border border-white/5 focus:border-indigo-500 text-slate-100 text-xs px-4 py-3 rounded-xl font-mono focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">Reserva / Dinheiro em Mãos</label>
+                      <input
+                        id="balance-modal-input"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="R$ 0,00"
+                        value={tempBalanceStr}
+                        onChange={(e) => setTempBalanceStr(handleMaskMoney(e.target.value))}
+                        className="w-full bg-slate-950/60 border border-white/5 focus:border-indigo-500 text-slate-100 text-xs px-4 py-3 rounded-xl font-mono focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest">Soma Ganhos Extras</label>
+                        <span className="text-[8px] bg-emerald-500/15 text-emerald-400 font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">Calculadora</span>
+                      </div>
+                      <input
+                        id="extra-modal-input"
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="R$ 0,00"
+                        value={tempExtraStr}
+                        onChange={(e) => setTempExtraStr(handleMaskMoney(e.target.value))}
+                        className="w-full bg-slate-950/40 border border-white/5 focus:border-indigo-500 text-slate-400 text-xs px-4 py-3 rounded-xl font-mono focus:outline-none"
+                        disabled
+                      />
+                      <p className="text-[8.5px] text-slate-500 leading-relaxed mt-1.5">
+                        Esta soma é atualizada de forma automática ao preencher/remover itens do histórico ao lado.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      id="income-modal-save-btn"
+                      onClick={handleSaveIncomeConfigs}
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
+                    >
+                      Salvar Outros Confis
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsIncomeOpen(false)}
+                      className="px-4 py-3 rounded-xl bg-slate-900 border border-white/10 text-slate-450 hover:text-white text-[11px] font-bold cursor-pointer"
+                    >
+                      Voltar
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">Reserva / Dinheiro em Mãos</label>
-                  <input
-                    id="balance-modal-input"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="R$ 0,00"
-                    value={tempBalanceStr}
-                    onChange={(e) => setTempBalanceStr(handleMaskMoney(e.target.value))}
-                    className="w-full bg-slate-950/60 border border-white/5 focus:border-indigo-500 text-slate-100 text-xs px-4 py-3 rounded-xl font-mono"
+                {/* Col 2: Extras detailed history manager */}
+                <div className="lg:col-span-7">
+                  <ExtraEarningsManager
+                    currentMonthKey={currentMonthKey}
+                    extraEarnings={settings?.extraEarnings || []}
+                    currentCurrency={settings?.currency || 'BRL'}
+                    onAddEarning={handleAddExtraEarning}
+                    onDeleteEarning={handleDeleteExtraEarning}
+                    showToast={triggerToast}
                   />
                 </div>
-
-                <div>
-                  <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">Rendas Extras Acumuladas</label>
-                  <input
-                    id="extra-modal-input"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="R$ 0,00"
-                    value={tempExtraStr}
-                    onChange={(e) => setTempExtraStr(handleMaskMoney(e.target.value))}
-                    className="w-full bg-slate-950/60 border border-white/5 focus:border-indigo-500 text-slate-100 text-xs px-4 py-3 rounded-xl font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  id="income-modal-save-btn"
-                  onClick={handleSaveIncomeConfigs}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
-                >
-                  Atualizar Receitas
-                </button>
-                <button
-                  onClick={() => setIsIncomeOpen(false)}
-                  className="px-4 py-3 rounded-xl bg-slate-900 border border-white/10 text-slate-450 hover:text-white text-[11px] font-bold cursor-pointer"
-                >
-                  Voltar
-                </button>
               </div>
             </motion.div>
           </div>

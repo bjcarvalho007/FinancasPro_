@@ -18,6 +18,7 @@ interface SettingsPanelProps {
   transactions: Transaction[];
   showToast: (msg: string, type?: 'success' | 'error' | 'warning') => void;
   alertThresholdDays?: number;
+  settings?: any;
 }
 
 export default function SettingsPanel({
@@ -30,7 +31,8 @@ export default function SettingsPanel({
   onSavePreferences,
   transactions,
   showToast,
-  alertThresholdDays = 3
+  alertThresholdDays = 3,
+  settings = null
 }: SettingsPanelProps) {
   const [incStr, setIncStr] = useState<string>(
     baseIncome > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseIncome) : ''
@@ -40,6 +42,7 @@ export default function SettingsPanel({
   );
   const [alertDays, setAlertDays] = useState<number>(alertThresholdDays);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState<boolean>(false);
+  const [selectedReportMonth, setSelectedReportMonth] = useState<string>('all');
 
   const formatMoney = (val: number): string => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -60,6 +63,30 @@ export default function SettingsPanel({
     return parseFloat(clean) || 0;
   };
 
+  // Compile list of available months in user data (either from settings or transactions)
+  const uniqueMonths = Array.from(
+    new Set([
+      ...transactions.map(t => t.monthKey),
+      ...Object.keys(settings?.monthlyIncome || {}),
+      ...Object.keys(settings?.monthlyBalance || {}),
+      ...Object.keys(settings?.extras || {})
+    ].filter(Boolean))
+  ).sort((a, b) => b.localeCompare(a));
+
+  const formatMonthLabel = (key: string) => {
+    if (!key || !key.includes('-')) return key;
+    const [year, month] = key.split('-');
+    const months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    const idx = parseInt(month, 10) - 1;
+    if (idx >= 0 && idx < 12) {
+      return `${months[idx]} ${year}`;
+    }
+    return key;
+  };
+
   const handleSaveConfigs = () => {
     const inc = parseMoney(incStr);
     const bal = parseMoney(balStr);
@@ -78,7 +105,7 @@ export default function SettingsPanel({
     }
   };
 
-  // Real, functional PDF exporting with custom styled layouts!
+  // Premium PDF download
   const handleExportPremiumPDF = () => {
     if (transactions.length === 0) {
       showToast('Nenhum lançamento gravado para exportar.', 'warning');
@@ -92,6 +119,8 @@ export default function SettingsPanel({
         baseBalance,
         currentCurrency,
         userEmail,
+        selectedMonthKey: selectedReportMonth,
+        settings,
       });
       showToast('Demonstrativo PDF Premium gerado com sucesso!', 'success');
     } catch (err) {
@@ -100,7 +129,7 @@ export default function SettingsPanel({
     }
   };
 
-  // Real, functional corporate styled spreadsheet exporting!
+  // Corporate styled spreadsheet download
   const handleExportPremiumSpreadsheet = () => {
     if (transactions.length === 0) {
       showToast('Nenhum lançamento gravado para exportar.', 'warning');
@@ -114,6 +143,8 @@ export default function SettingsPanel({
         baseBalance,
         currentCurrency,
         userEmail,
+        selectedMonthKey: selectedReportMonth,
+        settings,
       });
       showToast('Planilha de Auditoria Geral baixada com sucesso!', 'success');
     } catch (err) {
@@ -138,6 +169,8 @@ export default function SettingsPanel({
       showToast('Por segurança, re-autentique-se antes de excluir sua conta.', 'error');
     }
   };
+
+  const isLight = currentTheme === 'light';
 
   return (
     <div className="space-y-6 max-w-xl mx-auto">
@@ -164,7 +197,7 @@ export default function SettingsPanel({
               <button
                 id="btn-theme-dark"
                 onClick={() => onChangeTheme('dark')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
                   currentTheme === 'dark' 
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' 
                     : 'text-slate-400 hover:text-white'
@@ -175,7 +208,7 @@ export default function SettingsPanel({
               <button
                 id="btn-theme-light"
                 onClick={() => onChangeTheme('light')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
                   currentTheme === 'light' 
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' 
                     : 'text-slate-400 hover:text-white'
@@ -195,7 +228,7 @@ export default function SettingsPanel({
             <select
               value={currentCurrency}
               onChange={(e) => onChangeCurrency(e.target.value as any)}
-              className="bg-slate-900 border border-white/5 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl focus:outline-none"
+              className="bg-slate-900 border border-white/5 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl focus:outline-none cursor-pointer"
             >
               <option value="BRL">Real (R$) 🇧🇷</option>
               <option value="USD">Dólar ($) 🇺🇸</option>
@@ -280,69 +313,93 @@ export default function SettingsPanel({
           Ações e Segurança Corporativa
         </h5>
 
-        <div className="space-y-2 pt-2">
-          {/* PDF Download Trigger */}
-          <button
-            id="btn-settings-export-pdf"
-            onClick={handleExportPremiumPDF}
-            className="w-full text-left p-3 rounded-xl bg-white/3 border border-white/5 hover:border-indigo-500/50 flex items-center justify-between transition-all group cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <FileDown className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
-              <div>
-                <span className="text-xs font-bold text-slate-300 block">Demonstrativo Detalhado (.PDF)  <span className="ml-1 px-1 bg-indigo-500/30 text-[8px] text-indigo-300 rounded font-black uppercase tracking-wider">Premium</span></span>
-                <span className="text-[9px] text-slate-500">Baixe um relatório polido resumido do mês, faturas, categorias e fluxo.</span>
-              </div>
-            </div>
-            <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>
-          </button>
+        <div className="space-y-4 pt-2">
+          {/* Selector for PDF / Spreadsheet Scope */}
+          <div className="p-4 bg-slate-950/40 rounded-2xl border border-white/5 space-y-2">
+            <label className="block text-[9.5px] font-extrabold text-slate-350 uppercase tracking-widest leading-none">
+              Abrangência dos Relatórios
+            </label>
+            <p className="text-[9.5px] text-slate-500 leading-normal">
+              Escolha extrair do diário a relação de um mês específico ou o consolidado geral contendo todo o histórico acumulado.
+            </p>
+            <select
+              value={selectedReportMonth}
+              onChange={(e) => setSelectedReportMonth(e.target.value)}
+              className="w-full bg-slate-900 border border-white/5 text-slate-300 text-xs font-bold px-3 py-2.5 rounded-xl focus:outline-none cursor-pointer mt-1"
+            >
+              <option value="all">📊 Relatório Geral (Todo o Histórico Acumulado)</option>
+              {uniqueMonths.map(mKey => (
+                <option key={mKey} value={mKey}>
+                  📅 Relatório Mensal — {formatMonthLabel(mKey)}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          {/* Spreadsheet Download Trigger */}
-          <button
-            id="btn-settings-export-spreadsheet"
-            onClick={handleExportPremiumSpreadsheet}
-            className="w-full text-left p-3 rounded-xl bg-white/3 border border-white/5 hover:border-emerald-500/50 flex items-center justify-between transition-all group cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <FileSpreadsheet className="w-4 h-4 text-sky-400 group-hover:scale-110 transition-transform" />
-              <div>
-                <span className="text-xs font-bold text-slate-300 block">Exportar Planilha de Auditoria (.CSV)</span>
-                <span className="text-[9px] text-slate-500">Gere uma planilha corporativa estruturada pronta para Excel ou Google Sheets.</span>
+          <div className="space-y-2">
+            {/* PDF Download Trigger */}
+            <button
+              id="btn-settings-export-pdf"
+              onClick={handleExportPremiumPDF}
+              className="w-full text-left p-3 rounded-xl bg-white/3 border border-white/5 hover:border-indigo-500/50 flex items-center justify-between transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <FileDown className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <div>
+                  <span className="text-xs font-bold text-slate-300 block">Demonstrativo Detalhado (.PDF)  <span className="ml-1 px-1 bg-indigo-500/30 text-[8px] text-indigo-300 rounded font-black uppercase tracking-wider">Premium</span></span>
+                  <span className="text-[9px] text-slate-500">Baixe o relatório polido de faturas, categorias e fluxos para a abrangência selecionada.</span>
+                </div>
               </div>
-            </div>
-            <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>
-          </button>
+              <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>
+            </button>
 
-          {/* Reset password trigger */}
-          <button
-            id="btn-settings-reset-pw"
-            onClick={handlePasswordReset}
-            className="w-full text-left p-3 rounded-xl bg-white/3 border border-white/5 hover:border-indigo-500/50 flex items-center justify-between transition-all group cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <KeyRound className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
-              <div>
-                <span className="text-xs font-bold text-slate-300 block">Redefinir Senha do Usuário</span>
-                <span className="text-[9px] text-slate-500">Receba um código de acesso por e-mail para atualizar a credencial.</span>
+            {/* Spreadsheet Download Trigger */}
+            <button
+              id="btn-settings-export-spreadsheet"
+              onClick={handleExportPremiumSpreadsheet}
+              className="w-full text-left p-3 rounded-xl bg-white/3 border border-white/5 hover:border-emerald-500/50 flex items-center justify-between transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <FileSpreadsheet className="w-4 h-4 text-sky-400 group-hover:scale-110 transition-transform" />
+                <div>
+                  <span className="text-xs font-bold text-slate-300 block">Exportar Planilha de Auditoria (.CSV)</span>
+                  <span className="text-[9px] text-slate-500">Gere uma planilha corporativa estruturada do período desejado para Excel ou Google Sheets.</span>
+                </div>
               </div>
-            </div>
-            <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>
-          </button>
+              <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>
+            </button>
 
-          {/* Account deletion */}
-          <button
-            onClick={handleDeleteAccount}
-            className="w-full text-left p-3 rounded-xl bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/10 hover:border-rose-500/30 flex items-center justify-between transition-all group cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <Trash2 className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
-              <div>
-                <span className="text-xs font-bold text-rose-400 block">Excluir Conta</span>
-                <span className="text-[9px] text-rose-500">Deleta permanentemente seu cadastro e logs.</span>
+            {/* Reset password trigger */}
+            <button
+              id="btn-settings-reset-pw"
+              onClick={handlePasswordReset}
+              className="w-full text-left p-3 rounded-xl bg-white/3 border border-white/5 hover:border-indigo-500/50 flex items-center justify-between transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <KeyRound className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
+                <div>
+                  <span className="text-xs font-bold text-slate-300 block">Redefinir Senha do Usuário</span>
+                  <span className="text-[9px] text-slate-500">Receba um código de acesso por e-mail para atualizar a credencial.</span>
+                </div>
               </div>
-            </div>
-            <span className="text-rose-500/60 text-xs group-hover:text-rose-500 transition-colors">➔</span>
-          </button>
+              <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>
+            </button>
+
+            {/* Account deletion */}
+            <button
+              onClick={handleDeleteAccount}
+              className="w-full text-left p-3 rounded-xl bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/10 hover:border-rose-500/30 flex items-center justify-between transition-all group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <Trash2 className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
+                <div>
+                  <span className="text-xs font-bold text-rose-400 block">Excluir Conta</span>
+                  <span className="text-[9px] text-rose-500">Deleta permanentemente seu cadastro e logs.</span>
+                </div>
+              </div>
+              <span className="text-rose-500/60 text-xs group-hover:text-rose-500 transition-colors">➔</span>
+            </button>
+          </div>
         </div>
       </div>
 

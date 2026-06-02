@@ -93,17 +93,17 @@ export const exportPremiumPDF = ({
 
     if (uniqueMonthKeys.length > 0) {
       uniqueMonthKeys.forEach(mKey => {
-        mIncome += settings?.monthlyIncome?.[mKey] !== undefined ? settings.monthlyIncome[mKey] : baseIncome;
-        mBalance += settings?.monthlyBalance?.[mKey] !== undefined ? settings.monthlyBalance[mKey] : baseBalance;
+        mIncome += settings?.monthlyIncome?.[mKey] ?? 0;
+        mBalance += settings?.monthlyBalance?.[mKey] ?? 0;
         mExtra += settings?.extras?.[mKey] ?? 0;
       });
     } else {
-      mIncome = baseIncome;
-      mBalance = baseBalance;
+      mIncome = 0;
+      mBalance = 0;
     }
   } else {
-    mIncome = settings?.monthlyIncome?.[selectedMonthKey] !== undefined ? settings.monthlyIncome[selectedMonthKey] : baseIncome;
-    mBalance = settings?.monthlyBalance?.[selectedMonthKey] !== undefined ? settings.monthlyBalance[selectedMonthKey] : baseBalance;
+    mIncome = settings?.monthlyIncome?.[selectedMonthKey] ?? 0;
+    mBalance = settings?.monthlyBalance?.[selectedMonthKey] ?? 0;
     mExtra = settings?.extras?.[selectedMonthKey] ?? 0;
   }
 
@@ -514,17 +514,17 @@ export const exportPremiumSpreadsheet = ({
 
     if (uniqueMonthKeys.length > 0) {
       uniqueMonthKeys.forEach(mKey => {
-        mIncome += settings?.monthlyIncome?.[mKey] !== undefined ? settings.monthlyIncome[mKey] : baseIncome;
-        mBalance += settings?.monthlyBalance?.[mKey] !== undefined ? settings.monthlyBalance[mKey] : baseBalance;
+        mIncome += settings?.monthlyIncome?.[mKey] ?? 0;
+        mBalance += settings?.monthlyBalance?.[mKey] ?? 0;
         mExtra += settings?.extras?.[mKey] ?? 0;
       });
     } else {
-      mIncome = baseIncome;
-      mBalance = baseBalance;
+      mIncome = 0;
+      mBalance = 0;
     }
   } else {
-    mIncome = settings?.monthlyIncome?.[selectedMonthKey] !== undefined ? settings.monthlyIncome[selectedMonthKey] : baseIncome;
-    mBalance = settings?.monthlyBalance?.[selectedMonthKey] !== undefined ? settings.monthlyBalance[selectedMonthKey] : baseBalance;
+    mIncome = settings?.monthlyIncome?.[selectedMonthKey] ?? 0;
+    mBalance = settings?.monthlyBalance?.[selectedMonthKey] ?? 0;
     mExtra = settings?.extras?.[selectedMonthKey] ?? 0;
   }
 

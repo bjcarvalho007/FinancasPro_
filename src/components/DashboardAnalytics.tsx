@@ -55,6 +55,20 @@ export default function DashboardAnalytics({
   const isLight = currentTheme === 'light';
   const todayStr = '2026-05-29'; // Dynamic reference baseline for overdue liabilities
 
+  // Variables for extra earnings detail dashboard section
+  const extraHistory = settings?.extraEarnings || [];
+  const filteredExtras = extraHistory.filter((item: any) => {
+    if (activeDashboardMode === 'current') {
+      return item.monthKey === currentMonthKey;
+    }
+    return true;
+  }).sort((a: any, b: any) => b.date.localeCompare(a.date));
+
+  const totalExtras = filteredExtras.reduce((sum: number, item: any) => sum + item.amount, 0);
+  const topSource = filteredExtras.length > 0 
+    ? [...filteredExtras].sort((a: any, b: any) => b.amount - a.amount)[0] 
+    : null;
+
   // Format key-value months cleanly (Brazilian calendar)
   const formatMonthKey = (key: string) => {
     if (!key || !key.includes('-')) return key;
@@ -369,8 +383,8 @@ export default function DashboardAnalytics({
   uniqueMonths.forEach(mKey => {
     const listMonth = listAll.filter(t => t.monthKey === mKey);
     const spentMonth = listMonth.reduce((sum, t) => sum + t.amount, 0);
-    const mIncome = settings?.monthlyIncome?.[mKey] !== undefined ? settings.monthlyIncome[mKey] : (income ?? 0);
-    const mBalance = settings?.monthlyBalance?.[mKey] !== undefined ? settings.monthlyBalance[mKey] : (balance ?? 0);
+    const mIncome = settings?.monthlyIncome?.[mKey] ?? 0;
+    const mBalance = settings?.monthlyBalance?.[mKey] ?? 0;
     const mExtra = settings?.extras?.[mKey] ?? 0;
     const totalInflows = mIncome + mBalance + mExtra;
     if (spentMonth > totalInflows && totalInflows > 0) {
@@ -481,8 +495,8 @@ export default function DashboardAnalytics({
     const paid = monthTx.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
     
     // Dynamic per-month metrics using settings mappings
-    const mIncome = settings?.monthlyIncome?.[mKey] !== undefined ? settings.monthlyIncome[mKey] : (income ?? 0);
-    const mBalance = settings?.monthlyBalance?.[mKey] !== undefined ? settings.monthlyBalance[mKey] : (balance ?? 0);
+    const mIncome = settings?.monthlyIncome?.[mKey] ?? 0;
+    const mBalance = settings?.monthlyBalance?.[mKey] ?? 0;
     const mExtra = settings?.extras?.[mKey] ?? 0;
     const totalInflows = mIncome + mBalance + mExtra;
     const leftoverMargin = totalInflows - spent;
@@ -960,6 +974,92 @@ export default function DashboardAnalytics({
                 );
               })()}
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* DETALHAMENTO DE RENDAS EXTRAS CARD */}
+      <div className={`p-6 rounded-3xl transition-all duration-300 border ${
+        isLight 
+          ? 'bg-white border-slate-200 shadow-xl shadow-slate-100/35 text-slate-800' 
+          : 'glass-panel border-white/5 shadow-2xl text-slate-100'
+      }`}>
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+          <div>
+            <h4 className={`font-display font-extrabold text-sm tracking-wide flex items-center gap-2 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+              <TrendingUp className="w-4 h-4 text-emerald-400" /> 
+              Rendas Extras & Serviços Recebidos ({activeDashboardMode === 'current' ? 'Mês Focado' : 'Histórico Geral'})
+            </h4>
+            <p className="text-[11px] text-slate-500 mt-1">Breakdown detalhado dos ingressos financeiros e extras adicionados.</p>
+          </div>
+        </div>
+
+        {/* Mini stats dashboard */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 my-4 select-none">
+          <div className={`p-3.5 rounded-2xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-white/2 border-white/5'}`}>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">Total Extra Recebido</span>
+            <span className="text-sm font-mono font-black text-emerald-400">
+              {fmt(totalExtras)}
+            </span>
+          </div>
+          <div className={`p-3.5 rounded-2xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-white/2 border-white/5'}`}>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">Serviços / Lançamentos</span>
+            <span className={`text-sm font-mono font-black ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>
+              {filteredExtras.length} registros
+            </span>
+          </div>
+          <div className={`p-3.5 rounded-2xl border col-span-2 md:col-span-1 ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-white/2 border-white/5'}`}>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">Maior Origem</span>
+            <span className={`text-xs font-bold truncate block mt-0.5 uppercase ${isLight ? 'text-slate-755' : 'text-slate-350'}`} title={topSource?.source}>
+              {topSource ? `${topSource.source} (${fmt(topSource.amount)})` : 'Nenhuma'}
+            </span>
+          </div>
+        </div>
+
+        {filteredExtras.length === 0 ? (
+          <div className={`py-8 text-center text-xs italic ${isLight ? 'text-slate-400' : 'text-slate-505'}`}>
+            Nenhuma renda extra ou serviço adicional registrado para este escopo.
+          </div>
+        ) : (
+          <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1">
+            {filteredExtras.map((item: any) => (
+              <div 
+                key={item.id} 
+                className={`flex items-center justify-between p-3.5 border rounded-2xl transition-all ${
+                  isLight 
+                    ? 'bg-slate-50 border-slate-150 hover:bg-slate-100/50' 
+                    : 'bg-white/2 border-white/3 hover:border-white/10 hover:bg-white/3'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/15 flex items-center justify-center text-emerald-400">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className={`text-xs font-bold block leading-tight ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                      {item.source}
+                    </span>
+                    <div className="flex items-center gap-2 mt-1 select-none">
+                      <span className="text-[9px] text-slate-500 font-mono">
+                        {item.date.split('-').reverse().join('/')}
+                      </span>
+                      {activeDashboardMode === 'history' && (
+                        <span className={`px-1.5 py-0.5 text-[8px] rounded font-bold ${
+                          isLight ? 'bg-slate-200 text-slate-600' : 'bg-white/5 text-slate-400'
+                        }`}>
+                          {item.monthKey}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-black font-mono text-emerald-400">
+                    {fmt(item.amount)}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

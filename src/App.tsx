@@ -301,8 +301,8 @@ export default function App() {
       const targetBill = expiring[0];
       setFloatingAlert({
         id: targetBill.id,
-        title: '⚠️ Contas a Vencer',
-        desc: `"${targetBill.name}" (${formatCurrency(targetBill.amount)}) vence nos próximos dias!`,
+        title: 'FinançasPro',
+        desc: `Lembrete: A conta "${targetBill.name}" vence em breve.`,
         type: 'vencimento'
       });
 
@@ -314,7 +314,7 @@ export default function App() {
             const hasServiceWorker = 'serviceWorker' in navigator;
             const notificationTitle = 'FinançasPro';
             const notificationOptions = {
-              body: `A conta "${targetBill.name}" de ${formatCurrency(targetBill.amount)} vence nos próximos dias!`,
+              body: `Lembrete: A conta "${targetBill.name}" vence em breve.`,
               icon: '/app_icon.png',
               badge: '/app_icon.png',
               vibrate: [200, 100, 200],

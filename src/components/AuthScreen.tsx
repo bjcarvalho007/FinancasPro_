@@ -266,6 +266,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
 
       // Vincula a sessão e inicializa os dados básicos do usuário no Firestore
       await setDoc(doc(db, "users", registeredUser.uid), {
+        uid: registeredUser.uid,
         email: email,
         sessionId: sessionId,
         createdAt: new Date().toISOString()

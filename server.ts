@@ -83,7 +83,18 @@ app.get("/api/health", (req, res) => {
 // Stripe checkout session creation
 app.post("/api/stripe/create-checkout-session", async (req, res) => {
   try {
-    const origin = (process.env.APP_URL || req.get("origin") || req.get("referer") || "http://localhost:3000").trim().replace(/\/$/, "");
+    const rawOrigin = process.env.APP_URL || req.get("origin") || req.get("referer") || "http://localhost:3000";
+    let origin = "http://localhost:3000";
+    try {
+      const parsedUrl = new URL(rawOrigin);
+      origin = `${parsedUrl.protocol}//${parsedUrl.host}`;
+    } catch {
+      origin = rawOrigin.trim().replace(/\/$/, "");
+      if (origin.includes("://")) {
+        const parts = origin.split("/");
+        origin = `${parts[0]}//${parts[2]}`;
+      }
+    }
     const stripeKey = getStripeKey();
     
     if (!stripeKey) {

@@ -30,10 +30,16 @@ service cloud.firestore {
 
     // Entity validator definitions
     function isValidUser(data) {
-      return data.uid == request.auth.uid
+      return (!data.keys().hasAny(['uid']) || data.uid == request.auth.uid)
         && data.email is string && data.email.size() <= 200
         && (!data.keys().hasAny(['displayName']) || (data.displayName is string && data.displayName.size() <= 150))
         && (!data.keys().hasAny(['photoURL']) || (data.photoURL is string && data.photoURL.size() <= 1000));
+    }
+
+    function isValidRegistration(data) {
+      return data.userId == request.auth.uid
+        && data.email is string && data.email.size() <= 200
+        && (!data.keys().hasAny(['claimedAt']) || (data.claimedAt is string && data.claimedAt.size() <= 100));
     }
 
     function isValidTransaction(data) {
@@ -133,6 +139,13 @@ service cloud.firestore {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSignedIn() && isValidId(subId) && incoming().userId == request.auth.uid;
       allow update: if isSignedIn() && isValidId(subId) && existing().userId == request.auth.uid && incoming().userId == request.auth.uid;
+    }
+
+    match /registrations/{registrationId} {
+      allow get: if true;
+      allow create: if isSignedIn() && isValidId(registrationId) && isValidRegistration(incoming());
+      allow update: if isSignedIn() && isValidId(registrationId) && existing().userId == request.auth.uid && isValidRegistration(incoming()) && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && isValidId(registrationId) && existing().userId == request.auth.uid;
     }
   }
 }

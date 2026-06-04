@@ -11,8 +11,9 @@ dotenv.config();
 
 // Safely load stripe key avoiding plaintext detection in code repository
 const getStripeKey = (): string => {
-  if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.trim() !== "") {
-    return process.env.STRIPE_SECRET_KEY.trim();
+  const envKey = process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.trim() : "";
+  if (envKey && envKey.startsWith("sk_") && envKey.length > 20) {
+    return envKey;
   }
   // Base64 of sk_test_51Tee... for safe committing without blocking github pushes
   const obfuscatedKey = "c2tfdGVzdF81MVRlZUFrSGdBZU12Rkx5cm9rUHRuY2s2amVKSFFSVjJsTWhoWk5rb1UySmNkbmhKU3E5TGkzUTh3Z2pXRXA4a0hqYTIzcVZieWd0cUlUSlU5d1Z2aDF1NjAwV2tTU2RWYzc=";

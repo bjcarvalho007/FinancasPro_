@@ -4,10 +4,12 @@ import {
   Sparkles, 
   BarChart2, 
   TrendingUp, 
+  TrendingDown,
+  ArrowUpRight,
+  ArrowDownRight,
   AlertTriangle, 
   Lightbulb, 
   Wallet, 
-  ArrowUpRight, 
   DollarSign, 
   CheckCircle2, 
   Percent, 
@@ -557,6 +559,87 @@ export default function DashboardAnalytics({
   const leftoverPercentSelect = prevLeftover !== 0 ? (leftoverDelta / Math.abs(prevLeftover)) * 100 : 0;
   const availablePercentSelect = prevTotalAvailable > 0 ? (availableDelta / prevTotalAvailable) * 100 : 0;
 
+  // Mapping the aliases for JSX matching
+  const hasPrevData = prevMonthTransactions.length > 0 || prevTotalAvailable > 0;
+  const curInflows = currTotalAvailable;
+  const prevInflows = prevTotalAvailable;
+  const inflowDiff = availableDelta;
+  const inflowPct = availablePercentSelect;
+  const curSpent = currSpent;
+  const spentDiff = spentDelta;
+  const spentPct = spentPercentSelect;
+  const curLeftover = currLeftover;
+  const leftoverDiff = leftoverDelta;
+  const leftoverPct = leftoverPercentSelect;
+
+  const prevAdimplencia = prevSpent > 0 ? Math.round((prevPaid / prevSpent) * 100) : 100;
+  const currentAdimplencia = currSpent > 0 ? Math.round((totalPaidMonth / currSpent) * 100) : 100;
+  const adimplenciaDiff = currentAdimplencia - prevAdimplencia;
+
+  const prevFixos = prevMonthTransactions.filter(t => t.type === 'fixos').reduce((sum, t) => sum + t.amount, 0);
+  const prevVariaveis = prevMonthTransactions.filter(t => t.type === 'variaveis').reduce((sum, t) => sum + t.amount, 0);
+  const prevParcelas = prevMonthTransactions.filter(t => t.type === 'parcelas').reduce((sum, t) => sum + t.amount, 0);
+
+  // Proportional percentages mapping
+  const prevInflowSum = prevInflows > 0 ? prevInflows : (prevSpent + Math.max(0, prevLeftover));
+  const pctPrevFix = prevInflowSum > 0 ? (prevFixos / prevInflowSum) * 100 : 0;
+  const pctPrevVar = prevInflowSum > 0 ? (prevVariaveis / prevInflowSum) * 100 : 0;
+  const pctPrevPar = prevInflowSum > 0 ? (prevParcelas / prevInflowSum) * 100 : 0;
+  const pctPrevLeft = prevInflowSum > 0 ? (Math.max(0, prevLeftover) / prevInflowSum) * 100 : 0;
+
+  const curInflowSum = curInflows > 0 ? curInflows : (curSpent + Math.max(0, curLeftover));
+  const pctCurFix = curInflowSum > 0 ? (totalFixosMonth / curInflowSum) * 100 : 0;
+  const pctCurVar = curInflowSum > 0 ? (totalVariaveisMonth / curInflowSum) * 100 : 0;
+  const pctCurPar = curInflowSum > 0 ? (totalParcelasMonth / curInflowSum) * 100 : 0;
+  const pctCurLeft = curInflowSum > 0 ? (Math.max(0, curLeftover) / curInflowSum) * 100 : 0;
+
+  // Analytical qualitative summary
+  const moMAnalysisNarrative = (() => {
+    let text = "";
+    let positiveCount = 0;
+    let negativeCount = 0;
+    
+    if (inflowDiff > 0) {
+      text += `Seus ingressos de caixa cresceram em **${fmt(inflowDiff)}** (+${inflowPct.toFixed(1)}%) comparado ao mês de ${formatMonthKey(prevMonthKey)}. `;
+      positiveCount++;
+    } else if (inflowDiff < 0) {
+      text += `Identificamos uma redução de **${fmt(Math.abs(inflowDiff))}** (-${Math.abs(inflowPct).toFixed(1)}%) na renda total disponível. `;
+      negativeCount++;
+    } else {
+      text += `A entrada disponível de recursos manteve-se idêntica à do mês passado. `;
+    }
+
+    if (spentDiff > 0) {
+      text += `Paralelamente, os gastos consolidados aumentaram em **${fmt(spentDiff)}** (+${spentPct.toFixed(1)}%). `;
+      if (inflowDiff > 0) {
+        text += `Isso indica que o influxo de novos recursos foi parcialmente consumido pelas novas despesas. `;
+      } else {
+        text += `A redução de receitas concomitante ao aumento de despesas exige moderação de gastos imediatos para resguardar o índice de sobras. `;
+      }
+      negativeCount++;
+    } else if (spentDiff < 0) {
+      text += `Como ponto forte, as despesas diminuíram em **${fmt(Math.abs(spentDiff))}** (-${Math.abs(spentPct).toFixed(1)}%), demonstrando maior rigidez e eficácia no seu controle de orçamento! `;
+      positiveCount++;
+    } else {
+      text += `O volume total de saídas permaneceu estável neste ciclo. `;
+    }
+
+    if (leftoverDiff > 0) {
+      text += `Como resultado, sua sobra estimada livre cresceu em **${fmt(leftoverDiff)}** comparado a ${formatMonthKey(prevMonthKey)}. Excelente evolução! Continue operando nesse nível de controle de sobras estimadas.`;
+      positiveCount++;
+    } else if (leftoverDiff < 0) {
+      text += `Devido a isso, seu saldo residual de caixa livre encolheu em **${fmt(Math.abs(leftoverDiff))}**. Recomendamos revisar despesas variáveis recentes ou faturas de cartão parceladas para otimizar suas sobras e retomar margem financeira segura de sobrevivência.`;
+      negativeCount++;
+    } else {
+      text += `Sua sobra financeira de caixa se estabilizou. Continue monitorando suas despesas para obter margem ideal no fechamento do seu mês!`;
+    }
+
+    return { 
+      text, 
+      status: positiveCount > negativeCount ? 'positive' : negativeCount > positiveCount ? 'negative' : 'neutral' as 'positive' | 'negative' | 'neutral'
+    };
+  })();
+
   return (
     <div className="space-y-6">
       
@@ -1004,6 +1087,264 @@ export default function DashboardAnalytics({
           </span>
         </div>
 
+      </div>
+
+      {/* COMPARATIVO INTERMENSAL (MÊS ANTERIOR VS MÊS ATUAL) */}
+      <div className={`p-6 rounded-3xl transition-all duration-300 border ${
+        isLight 
+          ? 'bg-white border-slate-200 shadow-xl shadow-slate-100/35 text-slate-800' 
+          : 'glass-panel border-white/5 shadow-2xl text-slate-150'
+      }`}>
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-5 border-b border-white/5 pb-4">
+          <div>
+            <h4 className={`font-display font-black text-sm tracking-wide flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+              <Activity className="w-4.5 h-4.5 text-indigo-400 animate-pulse" />
+              Comparativo Intermensal: {formatMonthKey(prevMonthKey)} vs. {formatMonthKey(currentMonthKey)}
+            </h4>
+            <p className="text-[11px] text-slate-500 mt-1">Evolução do orçamento, despesas ativas e variação líquida entre os ciclos.</p>
+          </div>
+          <span className={`text-[9.5px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md ${
+            isLight 
+              ? 'bg-indigo-50 text-indigo-700 font-bold border border-indigo-100' 
+              : 'bg-white/5 text-slate-400'
+          }`}>
+            Análise Dinâmica MoM
+          </span>
+        </div>
+
+        {!hasPrevData ? (
+          <div className="py-7 text-center rounded-2xl bg-slate-500/5 border border-dashed border-white/5 p-6">
+            <TrendingUp className="w-8 h-8 text-indigo-400/50 mx-auto mb-3" />
+            <h5 className={`text-xs font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+              Aguardando histórico financeiro
+            </h5>
+            <p className="text-[11px] text-slate-500 mt-1.5 max-w-md mx-auto leading-relaxed">
+              Para ver esta visão comparativa automatizada, continue utilizando o FinançasPro! Assim que tiver lançamentos ativos cadastrados no mês anterior ({formatMonthKey(prevMonthKey)}), o sistema cruzará os dados automaticamente aqui.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            
+            {/* Grid of relative bento metrics with variance badges */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              
+              {/* Card 1: Receipts/Inflows */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
+              }`}>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">Entradas (MoM)</span>
+                
+                <div className="flex items-baseline justify-between gap-1 mt-1">
+                  <span className={`text-base font-mono font-extrabold ${isLight ? 'text-slate-900' : 'text-slate-250'}`}>
+                    {fmt(curInflows)}
+                  </span>
+                  <span className={`text-xs font-mono text-slate-500`}>
+                    Antes: {fmt(prevInflows)}
+                  </span>
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-medium">Variação Geral</span>
+                  <span className={`px-2 py-0.5 rounded-lg text-[9.5px] font-black tracking-wide flex items-center gap-0.5 ${
+                    inflowDiff > 0
+                      ? isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400'
+                      : inflowDiff < 0
+                        ? isLight ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-rose-500/10 text-rose-400'
+                        : 'bg-white/5 text-slate-400'
+                  }`}>
+                    {inflowDiff > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : inflowDiff < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
+                    {inflowDiff > 0 ? '+' : ''}{inflowPct.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 2: Spent/Outflows */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
+              }`}>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">Gastos (MoM)</span>
+                
+                <div className="flex items-baseline justify-between gap-1 mt-1">
+                  <span className={`text-base font-mono font-extrabold ${isLight ? 'text-slate-900' : 'text-slate-250'}`}>
+                    {fmt(curSpent)}
+                  </span>
+                  <span className={`text-xs font-mono text-slate-500`}>
+                    Antes: {fmt(prevSpent)}
+                  </span>
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-medium">Variação Geral</span>
+                  <span className={`px-2 py-0.5 rounded-lg text-[9.5px] font-black tracking-wide flex items-center gap-0.5 ${
+                    spentDiff < 0
+                      ? isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400'
+                      : spentDiff > 0
+                        ? isLight ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-rose-500/10 text-rose-400'
+                        : 'bg-white/5 text-slate-400'
+                  }`}>
+                    {spentDiff > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : spentDiff < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
+                    {spentDiff > 0 ? '+' : ''}{spentPct.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 3: Leftover/Sobra */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
+              }`}>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">Sobras Estimadas</span>
+                
+                <div className="flex items-baseline justify-between gap-1 mt-1">
+                  <span className={`text-base font-mono font-extrabold ${
+                    curLeftover >= 0 
+                      ? isLight ? 'text-emerald-700' : 'text-emerald-400' 
+                      : isLight ? 'text-rose-700' : 'text-rose-450'
+                  }`}>
+                    {fmt(curLeftover)}
+                  </span>
+                  <span className="text-xs font-mono text-slate-500">
+                    Antes: {fmt(prevLeftover)}
+                  </span>
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-medium font-bold uppercase tracking-wider">Variação Geral</span>
+                  <span className={`px-2 py-0.5 rounded-lg text-[9.5px] font-black tracking-wide flex items-center gap-0.5 ${
+                    leftoverDiff > 0
+                      ? isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400'
+                      : leftoverDiff < 0
+                        ? isLight ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-rose-500/10 text-rose-400'
+                        : 'bg-white/5 text-slate-400'
+                  }`}>
+                    {leftoverDiff > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : leftoverDiff < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : null}
+                    {leftoverDiff > 0 ? '+' : ''}{leftoverPct.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 4: Adimplência de Caixa */}
+              <div className={`p-4 rounded-2xl border transition-all ${
+                isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
+              }`}>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">Taxa de Quitação</span>
+                
+                <div className="flex items-baseline justify-between gap-1 mt-1">
+                  <span className={`text-base font-mono font-extrabold ${isLight ? 'text-slate-900 border-rose-550/15' : 'text-slate-250'}`}>
+                    {currentAdimplencia}%
+                  </span>
+                  <span className="text-xs font-mono text-slate-500">
+                    Antes: {prevAdimplencia}%
+                  </span>
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-medium font-bold uppercase tracking-wider">Desvio Pontos</span>
+                  <span className={`px-2 py-0.5 rounded-lg text-[9.5px] font-black tracking-wide ${
+                    adimplenciaDiff > 0
+                      ? isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400'
+                      : adimplenciaDiff < 0
+                        ? isLight ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-rose-500/10 text-rose-400'
+                        : 'bg-white/5 text-slate-400'
+                  }`}>
+                    {adimplenciaDiff > 0 ? `+${adimplenciaDiff} pp` : adimplenciaDiff < 0 ? `${adimplenciaDiff} pp` : 'Estável'}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Side-by-Side Horizontal Continuous Distribution Progress Bars */}
+            <div className={`p-5 rounded-2xl border ${
+              isLight ? 'bg-slate-50/40 border-slate-150' : 'bg-slate-950/20 border-white/5'
+            } space-y-5`}>
+              <h5 className={`text-[10px] uppercase font-black tracking-widest ${isLight ? 'text-slate-700' : 'text-slate-400'}`}>
+                🗺 Distribuição Proporcional do Fluxo de Caixa (Mês Anterior vs Atual)
+              </h5>
+
+              <div className="space-y-4">
+                {/* Previous month row */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-[11px] font-bold">
+                    <span className={isLight ? 'text-slate-750 font-bold' : 'text-slate-405'}>
+                      {formatMonthKey(prevMonthKey)}
+                    </span>
+                    <span className="font-mono text-[10.5px] text-slate-500">
+                      Entrada Total: <strong>{fmt(prevInflows)}</strong> • Sobra: <strong>{fmt(Math.max(0, prevLeftover))}</strong>
+                    </span>
+                  </div>
+                  <div className="h-3 w-full rounded-lg bg-slate-200/50 dark:bg-white/5 overflow-hidden flex shadow-inner">
+                    {pctPrevFix > 0 && <div style={{ width: `${pctPrevFix}%` }} className="bg-indigo-550 dark:bg-indigo-500 h-full border-r border-white/10" title={`Fixos: ${pctPrevFix.toFixed(0)}%`} />}
+                    {pctPrevVar > 0 && <div style={{ width: `${pctPrevVar}%` }} className="bg-emerald-600 dark:bg-emerald-500 h-full border-r border-white/10" title={`Variáveis: ${pctPrevVar.toFixed(0)}%`} />}
+                    {pctPrevPar > 0 && <div style={{ width: `${pctPrevPar}%` }} className="bg-amber-600 dark:bg-amber-500 h-full border-r border-white/10" title={`Parcelas: ${pctPrevPar.toFixed(0)}%`} />}
+                    {pctPrevLeft > 0 && <div style={{ width: `${pctPrevLeft}%` }} className="bg-teal-500 dark:bg-teal-400 h-full" title={`Excesso Livre: ${pctPrevLeft.toFixed(0)}%`} />}
+                    {pctPrevLeft <= 0 && (pctPrevFix + pctPrevVar + pctPrevPar) > 100 && <div className="h-full bg-rose-600 flex-1" title="Déficit de orçamento" />}
+                  </div>
+                </div>
+
+                {/* Current month row */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-[11px] font-bold">
+                    <span className={isLight ? 'text-slate-800 font-extrabold' : 'text-slate-200'}>
+                      {formatMonthKey(currentMonthKey)} (Mês Selecionado)
+                    </span>
+                    <span className={`font-mono text-[10.5px] ${isLight ? 'text-slate-700' : 'text-slate-400'}`}>
+                      Entrada Total: <strong>{fmt(curInflows)}</strong> • Sobra: <strong>{fmt(Math.max(0, curLeftover))}</strong>
+                    </span>
+                  </div>
+                  <div className="h-3 w-full rounded-lg bg-slate-200/50 dark:bg-white/5 overflow-hidden flex shadow-inner">
+                    {pctCurFix > 0 && <div style={{ width: `${pctCurFix}%` }} className="bg-indigo-500 h-full border-r border-white/10" title={`Fixos: ${pctCurFix.toFixed(0)}%`} />}
+                    {pctCurVar > 0 && <div style={{ width: `${pctCurVar}%` }} className="bg-emerald-500 h-full border-r border-white/10" title={`Variáveis: ${pctCurVar.toFixed(0)}%`} />}
+                    {pctCurPar > 0 && <div style={{ width: `${pctCurPar}%` }} className="bg-amber-500 h-full border-r border-white/10" title={`Parcelas: ${pctCurPar.toFixed(0)}%`} />}
+                    {pctCurLeft > 0 && <div style={{ width: `${pctCurLeft}%` }} className="bg-teal-400 h-full opacity-95" title={`Excesso Livre: ${pctCurLeft.toFixed(0)}%`} />}
+                    {pctCurLeft <= 0 && (pctCurFix + pctCurVar + pctCurPar) > 100 && <div className="h-full bg-rose-500 flex-1 animate-pulse" title="Déficit de orçamento" />}
+                  </div>
+                </div>
+              </div>
+
+              {/* Legends container for structural understanding */}
+              <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-white/5 text-[9.5px] font-bold uppercase tracking-wider text-slate-450 text-slate-400 select-none">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded bg-indigo-500 inline-block" /> Despesa Fixa
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> Despesa Variável
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded bg-amber-500 inline-block" /> Debitos Parcelados
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded bg-teal-400 inline-block" /> Sobra Estimada (Caixa Livre)
+                </span>
+              </div>
+            </div>
+
+            {/* Smart evolution review narrative */}
+            <div className={`p-4 rounded-2xl border-l-4 flex items-start gap-3.5 leading-relaxed text-[12px] font-light ${
+              moMAnalysisNarrative.status === 'positive'
+                ? isLight ? 'bg-emerald-50/65 border-emerald-500 text-slate-900 font-medium' : 'bg-emerald-500/5 border-emerald-500 text-emerald-250'
+                : moMAnalysisNarrative.status === 'negative'
+                  ? isLight ? 'bg-rose-50/65 border-rose-500 text-slate-900 font-medium' : 'bg-rose-500/5 border-rose-500 text-rose-250'
+                  : isLight ? 'bg-slate-50 border-slate-400 text-slate-900 font-medium' : 'bg-white/2 border-indigo-400/50 text-slate-200'
+            }`}>
+              <Sparkles className={`w-4.5 h-4.5 shrink-0 mt-0.5 ${
+                moMAnalysisNarrative.status === 'positive' ? 'text-emerald-500' : 'text-rose-500'
+              }`} />
+              <div className="space-y-1 flex-1">
+                <h5 className={`text-[10px] font-black uppercase tracking-widest ${
+                  moMAnalysisNarrative.status === 'positive' 
+                    ? isLight ? 'text-emerald-700 font-bold' : 'text-emerald-400' 
+                    : isLight ? 'text-rose-700 font-bold' : 'text-rose-450'
+                }`}>
+                  Feed de Evolução Inteligente ({moMAnalysisNarrative.status === 'positive' ? 'Avanço Saudável' : moMAnalysisNarrative.status === 'negative' ? 'Necessita Ajustes' : 'Paridade de Caixa'})
+                </h5>
+                <p className={`leading-relaxed text-[11.5px] ${isLight ? 'text-slate-800' : 'text-slate-350'}`}>
+                  {moMAnalysisNarrative.text.split('**').map((item, idx) => idx % 2 === 1 ? <strong key={idx} className={isLight ? 'text-slate-950 font-black' : 'text-white'}>{item}</strong> : item)}
+                </p>
+              </div>
+            </div>
+
+          </div>
+        )}
       </div>
 
       {/* SECTION 4: BAR COLUMN ALLOCATION PIE CHART */}

@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import nodemailer from "nodemailer";
 import webpush from "web-push";
+import Stripe from "stripe";
 
 // Load environment variables in Node
 import dotenv from "dotenv";
@@ -11,7 +12,12 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+// Enable raw body tracking on express.json to support secure Stripe signature validation
+app.use(express.json({
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 
 // Generate dynamic VAPID keys on boot if not configured, ensuring immediate zero-config functionality
 let vapidPublic = (process.env.VAPID_PUBLIC_KEY || "").trim();
@@ -50,6 +56,102 @@ if (needGenerate) {
 // API route 1: Healthcheck
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Stripe checkout session creation
+app.post("/api/stripe/create-checkout-session", async (req, res) => {
+  try {
+    const origin = (process.env.APP_URL || req.get("origin") || req.get("referer") || "http://localhost:3000").trim().replace(/\/$/, "");
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeKey) {
+      throw new Error("STRIPE_SECRET_KEY não foi definida nas variáveis de ambiente.");
+    }
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" as any });
+    
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "brl",
+            product_data: {
+              name: "Acesso Premium - FinançasPro",
+              description: "Garanta seu acesso exclusivo à nossa gestão financeira estratégica inovadora e inteligência analítica.",
+            },
+            unit_amount: 999, // R$ 9.99
+          },
+          quantity: 1,
+        },
+      ],
+      mode: "payment",
+      success_url: `${origin}/cadastro?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/`,
+    });
+    
+    res.json({ id: session.id, url: session.url });
+  } catch (err: any) {
+    console.error("Erro ao criar sessão de checkout do Stripe:", err);
+    res.status(500).json({ error: err.message || "Erro interno" });
+  }
+});
+
+// Stripe checkout verification
+app.get("/api/stripe/verify-session", async (req, res) => {
+  const { session_id } = req.query;
+  if (!session_id || typeof session_id !== "string") {
+    return res.status(400).json({ success: false, error: "ID da sessão é obrigatório." });
+  }
+  
+  try {
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeKey) {
+      throw new Error("STRIPE_SECRET_KEY não foi definida nas variáveis de ambiente.");
+    }
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" as any });
+    
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+    const isPaid = session.payment_status === "paid";
+    
+    res.json({
+      success: isPaid,
+      payment_status: session.payment_status,
+      email: session.customer_details?.email || null,
+    });
+  } catch (err: any) {
+    console.error("Erro ao verificar sessão do Stripe:", err);
+    res.status(500).json({ success: false, error: err.message || "Erro de verificação" });
+  }
+});
+
+// Stripe webhook handler
+app.post("/api/stripe/webhook", async (req: any, res) => {
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeKey) {
+    return res.status(500).send("STRIPE_SECRET_KEY configuration misconfigured on server.");
+  }
+  const stripe = new Stripe(stripeKey, { apiVersion: "2025-02-24.acacia" as any });
+  
+  const sig = req.headers["stripe-signature"];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  
+  let event;
+  try {
+    if (webhookSecret && sig && req.rawBody) {
+      event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
+    } else {
+      event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    }
+  } catch (err: any) {
+    console.error(`⚠️ Erro ao validar sabor do Webhook: ${err.message}`);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  
+  if (event && event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    console.log(`💰 Pagamento recebido e confirmado via Webhook para a sessão ${session.id}!`);
+  }
+  
+  res.json({ received: true });
 });
 
 // API route 2: VAPID Public Key delivery

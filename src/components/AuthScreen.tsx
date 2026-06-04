@@ -1,9 +1,11 @@
 import { useState, FormEvent, useEffect } from 'react';
 import {
   signInWithEmailAndPassword,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  createUserWithEmailAndPassword
 } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, setDoc, getDocFromServer } from 'firebase/firestore';
 import { 
   Mail, 
   Lock, 
@@ -66,6 +68,81 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       localStorage.setItem('finpro_show_pitch', String(showPitch));
     } catch (_) {}
   }, [showPitch]);
+
+  const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
+  const [sessionId, setSessionId] = useState<string>('');
+  const [sessionVerified, setSessionVerified] = useState<boolean | null>(null);
+  const [verifyingSession, setVerifyingSession] = useState<boolean>(false);
+  const [verifiedEmail, setVerifiedEmail] = useState<string>('');
+  const [isCadastroMode, setIsCadastroMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sId = urlParams.get('session_id');
+    const isCadastro = window.location.pathname.startsWith('/cadastro') || !!sId;
+    
+    if (isCadastro) {
+      setIsCadastroMode(true);
+      setShowPitch(false); // Garante que o formulário de cadastro tem prioridade sobre a apresentação de vendas
+      if (!sId) {
+        setSessionVerified(false);
+        setErrorAlert("Bloqueio de Registro: Você não pode criar uma conta premium sem realizar o pagamento de R$ 9,99 antes.");
+        return;
+      }
+      
+      setSessionId(sId);
+      setVerifyingSession(true);
+      fetch(`/api/stripe/verify-session?session_id=${sId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success) {
+            setSessionVerified(true);
+            if (data.email) {
+              setVerifiedEmail(data.email);
+              setEmail(data.email); // Pré-preenche o e-mail cadastrado no checkout
+            }
+          } else {
+            setSessionVerified(false);
+            setErrorAlert("Bloqueio de Registro: A sessão de checkout do Stripe informada é inválida ou o pagamento não foi concluído.");
+          }
+        })
+        .catch(err => {
+          console.error("Erro na verificação da sessão:", err);
+          setSessionVerified(false);
+          setErrorAlert("Falha ao se conectar com os servidores de checkout. Por favor, tente recarregar a página.");
+        })
+        .finally(() => {
+          setVerifyingSession(false);
+        });
+    }
+  }, []);
+
+  const handleStripeCheckout = async () => {
+    setCheckoutLoading(true);
+    setErrorAlert(null);
+    try {
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Falha ao iniciar o fluxo de pagamento do Stripe.');
+      }
+      const data = await response.json();
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('Retorno inválido do Stripe Checkout.');
+      }
+    } catch (err: any) {
+      console.error("Erro ao iniciar faturamento do Stripe:", err);
+      setErrorAlert(err.message || 'Erro ao conectar ao servidor de faturamento.');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   const getAuthErrorMessage = (err: any): string => {
     const code = err?.code || '';
@@ -138,6 +215,66 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
     }
   };
 
+  const handleCadastroSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setErrorAlert(null);
+
+    if (!sessionId) {
+      setErrorAlert("Bloqueio de Registro: Uma sessão de faturamento válida é necessária para prosseguir.");
+      setShakeTrigger(prev => prev + 1);
+      return;
+    }
+
+    if (!email || !email.includes("@")) {
+      setErrorAlert("Por favor, informe um endereço de email válido.");
+      setShakeTrigger(prev => prev + 1);
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      setErrorAlert("Por favor, informe uma senha segura com 6 ou mais caracteres.");
+      setShakeTrigger(prev => prev + 1);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Verifica se a sessão do Stripe já foi vinculada a um e-mail para evitar fraudes de compartilhamento de link
+      const regDocRef = doc(db, "registrations", sessionId);
+      const regSnap = await getDocFromServer(regDocRef).catch(() => null);
+      if (regSnap && regSnap.exists()) {
+        throw new Error("Bloqueio de Registro: Esta sessão já foi vinculada a uma conta registrada ativa.");
+      }
+
+      // Cria a conta do usuário no Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const registeredUser = userCredential.user;
+
+      // Registra a reivindicação da sessão no Firestore
+      await setDoc(doc(db, "registrations", sessionId), {
+        userId: registeredUser.uid,
+        email: email,
+        claimedAt: new Date().toISOString()
+      });
+
+      // Vincula a sessão e inicializa os dados básicos do usuário no Firestore
+      await setDoc(doc(db, "users", registeredUser.uid), {
+        email: email,
+        sessionId: sessionId,
+        createdAt: new Date().toISOString()
+      }, { merge: true });
+
+      showToast("Garantia ativa. Sua conta de Membro Premium foi gerada com sucesso!", "success");
+      onSuccess();
+    } catch (err: any) {
+      console.error("Erro ao registrar no Firebase Auth:", err);
+      setErrorAlert(getAuthErrorMessage(err));
+      setShakeTrigger(prev => prev + 1);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const salesPitchWhatsappUrl = "https://wa.me/5563992092699?text=Olá!%20Gostaria%20de%20assinar%20o%20FinançasPro%20e%20liberar%20minhas%20credenciais%20de%20acesso.";
 
   return (
@@ -186,7 +323,140 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       {/* Main Responsive Dynamic Content Area */}
       <div className="w-full max-w-6xl flex flex-col items-center justify-center py-6 flex-1">
         <AnimatePresence mode="wait">
-          {showPitch ? (
+          {isCadastroMode ? (
+            /* ================= VIEW C: PREMIUM REGISTRATION / SIGNUP FORM ================= */
+            <motion.div
+              key="cadastro-view"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.35 }}
+              className="w-full max-w-md animate-fade-in"
+            >
+              <div className="p-6 md:p-8 rounded-3xl bg-[#090e1b] border border-white/5 shadow-2xl relative">
+                <div className="absolute top-4 right-4 text-emerald-400 animate-pulse">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+
+                {/* Compact brand marker */}
+                <div className="text-center mb-6">
+                  <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
+                    ✨ Compra Confirmada - Acesso Premium
+                  </span>
+                  <h2 className="font-display font-black text-2xl md:text-3xl text-white tracking-tight">
+                    Crie sua Conta Premium
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1.5 font-light leading-relaxed">
+                    Defina abaixo sua senha privada para começar a organizar suas finanças de forma premium hoje mesmo.
+                  </p>
+                </div>
+
+                {verifyingSession ? (
+                  <div className="py-12 flex flex-col items-center justify-center space-y-4">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center animate-spin">
+                      <TrendingUp className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider animate-pulse font-mono">
+                      Validando faturamento no Stripe...
+                    </p>
+                  </div>
+                ) : sessionVerified === false ? (
+                  <div className="space-y-6">
+                    {/* Custom Error Alert */}
+                    <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-start gap-3">
+                      <div className="w-5 h-5 rounded-lg bg-rose-500/20 flex items-center justify-center shrink-0 text-rose-400 mt-0.5 animate-pulse">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex-1 text-[11px] leading-relaxed font-semibold">
+                        <span className="font-extrabold text-rose-200 block mb-0.5 uppercase tracking-wide text-[8.5px]">Acesso de Cadastro Bloqueado</span>
+                        {errorAlert || "Você não pode criar uma conta premium sem antes realizar o pagamento."}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleStripeCheckout}
+                      disabled={checkoutLoading}
+                      className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/15 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {checkoutLoading ? "Iniciando pagamento..." : "Adquirir Acesso por R$ 9,99"}
+                      {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCadastroMode(false);
+                        setShowPitch(true);
+                      }}
+                      className="w-full text-xs text-slate-400 hover:text-white font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-transparent border-none mt-2"
+                    >
+                      ← Voltar para Apresentação
+                    </button>
+                  </div>
+                ) : (
+                  /* Formulario de Cadastro Ativo */
+                  <form onSubmit={handleCadastroSubmit} className="space-y-4">
+                    {errorAlert && (
+                      <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-rose-300 flex items-start gap-3">
+                        <div className="w-5 h-5 rounded-lg bg-rose-500/20 flex items-center justify-center shrink-0 text-rose-400 mt-0.5">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex-1 text-[11px] leading-relaxed font-semibold">
+                          <span className="font-extrabold text-rose-200 block mb-0.5 uppercase tracking-wide text-[8.5px]">Erro de cadastro</span>
+                          {errorAlert}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Seu E-mail Premium</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
+                        <input 
+                          type="email" 
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="seu.email@gmail.com"
+                          required
+                          disabled={!!verifiedEmail}
+                          className="w-full bg-[#030610] border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-100 placeholder-slate-500 text-[13px] pl-11 pr-4 py-3 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Escolha Sua Senha</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
+                        <input 
+                          type="password" 
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Minimo de 6 caracteres"
+                          required
+                          className="w-full bg-[#030610] border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-100 placeholder-slate-500 text-[13px] pl-11 pr-4 py-3 rounded-xl transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <button 
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {loading ? 'Criando Conta...' : 'Criar Minha Conta & Acessar'}
+                      {!loading && <ArrowRight className="w-4 h-4" />}
+                    </button>
+                    
+                    <p className="text-[10px] text-slate-500 text-center uppercase tracking-wider font-bold leading-relaxed pt-2">
+                      🔒 Você usará este e-mail e senha para acessar o painel corporativo a qualquer momento.
+                    </p>
+                  </form>
+                )}
+              </div>
+            </motion.div>
+          ) : showPitch ? (
             /* ================= VIEW A: PRESENTATION / SALES LANDER ================= */
             <motion.div
               key="pitch-view"
@@ -244,17 +514,17 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
 
                   <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex gap-3">
                     <div className="w-8.5 h-8.5 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 text-purple-400">
-                      <Target className="w-4.5 h-4.5" />
+                      <Target className="w-4.5 h-4.5 text-purple-400" />
                     </div>
                     <div>
-                      <h4 className="text-[13.5px] font-bold text-slate-100">Cofrinhos / Metas CDI</h4>
-                      <p className="text-[11.5px] text-slate-400 leading-normal mt-0.5">Rentabilize e simule projeções fiscais com precisão matemática refinada.</p>
+                      <h4 className="text-[13.5px] font-bold text-slate-105">Cofrinhos / Metas CDI</h4>
+                      <p className="text-[11.5px] text-slate-404 leading-normal mt-0.5">Rentabilize e simule projeções fiscais com precisão matemática refinada.</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Activation call-to-action */}
-                <div className="p-5 rounded-3xl bg-indigo-950/20 border border-indigo-500/20 relative overflow-hidden backdrop-blur-md">
+                <div className="p-5 rounded-3xl bg-[#090e1b] border border-white/5 relative overflow-hidden backdrop-blur-md">
                   <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="space-y-1">
                       <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest flex items-center gap-1">
@@ -262,13 +532,13 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         Como obter meu login de acesso?
                       </span>
                       <p className="text-xs text-slate-350 leading-relaxed font-semibold">
-                        Garantimos privacidade de alto nível. Novos usuários ganham workspaces privativos configurados sob demanda pelo nosso administrador. Adquira instantaneamente pelo WhatsApp!
+                        Garantimos privacidade de alto nível. O registro é liberado imediatamente após a confirmação do pagamento de R$ 9,99 na plataforma do Stripe.
                       </p>
                     </div>
                     <button
                       onClick={(e) => {
                         e.preventDefault();
-                        handleOpenWhatsappVerify("Olá! Gostaria de assinar o FinançasPro e liberar minhas credenciais de acesso.");
+                        handleStripeCheckout();
                       }}
                       className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-3.5 rounded-2xl text-[10.5px] uppercase tracking-wider transition-all duration-300 cursor-pointer shadow-lg shadow-emerald-500/15 flex items-center justify-center gap-2 shrink-0 border-none"
                     >
@@ -307,11 +577,12 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                     <button
                       onClick={(e) => {
                         e.preventDefault();
-                        handleOpenWhatsappVerify("Olá! Gostaria de adquirir o login Premium do FinançasPro.");
+                        handleStripeCheckout();
                       }}
-                      className="text-[11px] text-emerald-450 font-bold uppercase tracking-wider hover:underline bg-transparent border-none cursor-pointer"
+                      disabled={checkoutLoading}
+                      className="text-[11px] text-emerald-400 font-bold uppercase tracking-wider hover:underline bg-transparent border-none cursor-pointer disabled:opacity-50"
                     >
-                      Adquirir login Premium via WhatsApp →
+                      {checkoutLoading ? "Iniciando Stripe..." : "Garantir Acesso por R$ 9,99 →"}
                     </button>
                   </div>
                 </div>
@@ -465,11 +736,12 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       <button 
                         onClick={(e) => {
                           e.preventDefault();
-                          handleOpenWhatsappVerify("Olá! Quero liberar meu acesso premium no WhatsApp.");
+                          handleStripeCheckout();
                         }}
-                        className="text-emerald-400 font-black hover:text-emerald-300 hover:underline transition-all block uppercase tracking-widest text-[9.5px] bg-transparent border-none cursor-pointer mx-auto"
+                        disabled={checkoutLoading}
+                        className="text-emerald-400 font-black hover:text-emerald-300 hover:underline transition-all block uppercase tracking-widest text-[9.5px] bg-transparent border-none cursor-pointer mx-auto disabled:opacity-50"
                       >
-                        ⚡ Liberar Acesso no WhatsApp →
+                        {checkoutLoading ? "Iniciando..." : "⚡ Garantir Acesso por R$ 9,99 →"}
                       </button>
                     </div>
                   )}

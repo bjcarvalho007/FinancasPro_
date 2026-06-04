@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "prebuild": "node scripts/prebuild.js",
+    "prelint": "node scripts/prebuild.js",
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
@@ -24,6 +26,7 @@
     "nodemailer": "^8.0.10",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "stripe": "^22.2.0",
     "vite": "^6.2.3",
     "web-push": "^3.6.7"
   },

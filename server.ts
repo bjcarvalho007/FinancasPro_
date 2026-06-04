@@ -23,6 +23,17 @@ const getStripeKey = (): string => {
 const app = express();
 const PORT = 3000;
 
+// Set up CORS header management and preflight OPTIONS handler to prevent 405/401 browser integration blocks
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Stripe-Signature, X-Requested-With");
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+  next();
+});
+
 // Enable raw body tracking on express.json to support secure Stripe signature validation
 app.use(express.json({
   verify: (req: any, res, buf) => {

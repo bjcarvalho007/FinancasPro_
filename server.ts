@@ -112,7 +112,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // Stripe checkout session creation
-app.post("/api/stripe/create-checkout-session", async (req, res) => {
+app.post(["/api/stripe/create-checkout-session", "/api/create-checkout-session"], async (req, res) => {
   try {
     const rawOrigin = process.env.APP_URL || req.get("origin") || req.get("referer") || (req.get("host") ? `${req.protocol}://${req.get("host")}` : "http://localhost:3000");
     let origin = "http://localhost:3000";

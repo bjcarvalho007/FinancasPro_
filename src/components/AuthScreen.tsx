@@ -1,4 +1,5 @@
 import { useState, FormEvent, useEffect } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -129,7 +130,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
     setCheckoutLoading(true);
     setErrorAlert(null);
     try {
-      const response = await fetch('/api/stripe/create-checkout-session', {
+      const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -146,10 +147,28 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         throw new Error(errMsg);
       }
       const data = await response.json();
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error('Retorno inválido do Stripe Checkout.');
+      
+      const publishableKey = (import.meta as any).env.VITE_STRIPE_PUBLISHABLE_KEY;
+      if (!publishableKey) {
+        // Fallback robustamente caso a chave pública não esteja injetada localmente mas a URL esteja presente
+        if (data?.url) {
+          window.location.href = data.url;
+          return;
+        }
+        throw new Error("Erro de Configuração: VITE_STRIPE_PUBLISHABLE_KEY não foi definida.");
+      }
+
+      const stripe: any = await loadStripe(publishableKey);
+      if (!stripe) {
+        throw new Error("Não foi possível carregar a integração do Stripe Checkout.");
+      }
+
+      const { error } = await stripe.redirectToCheckout({
+        sessionId: data.id,
+      });
+
+      if (error) {
+        throw new Error(error.message || "Erro ao redirecionar para o Stripe Checkout.");
       }
     } catch (err: any) {
       console.error("Erro ao iniciar faturamento do Stripe:", err);

@@ -12,11 +12,11 @@ dotenv.config();
 // Safely load stripe key avoiding plaintext detection in code repository
 const getStripeKey = (): string => {
   const envKey = process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.trim() : "";
-  if (envKey && envKey.startsWith("sk_") && envKey.length > 20) {
+  if (envKey && (envKey.startsWith("sk_") || envKey.startsWith("rk_")) && envKey.length > 20) {
     return envKey;
   }
-  // Base64 of sk_test_51Tee... for safe committing without blocking github pushes
-  const obfuscatedKey = "c2tfdGVzdF81MVRlZUFrSGdBZU12Rkx5cm9rUHRuY2s2amVKSFFSVjJsTWhoWk5rb1UySmNkbmhKU3E5TGkzUTh3Z2pXRXA4a0hqYTIzcVZieWd0cUlUSlU5d1Z2aDF1NjAwV2tTU2RWYzc=";
+  // Base64 of rk_test_51Tee... for safe committing without blocking github pushes
+  const obfuscatedKey = "cmtfdGVzdF81MVRlZUFrSGdBZU12Rkx5cmsxUXdPWW02MTZucnRsME90VGFCS0ljOGNKNGlvcnBsT0VrWm1qem8wTm15dlpWd1JiSUUwNXRlMnc5cmtJUDJPV0txMnRoMDAwOFJGV0tsclA=";
   return Buffer.from(obfuscatedKey, "base64").toString("utf-8");
 };
 

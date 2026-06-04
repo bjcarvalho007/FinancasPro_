@@ -511,6 +511,52 @@ export default function DashboardAnalytics({
     };
   }).sort((a, b) => b.monthKey.localeCompare(a.monthKey)).slice(0, 5); // display 5 newest months
 
+  // ========================================================
+  // PREVIOUS MONTH VS CURRENT MONTH COMPARISON LOGIC
+  // ========================================================
+  const getPreviousMonthKey = (monthKey: string) => {
+    if (!monthKey || !monthKey.includes('-')) return '';
+    const [yearStr, monthStr] = monthKey.split('-');
+    let year = parseInt(yearStr, 10);
+    let month = parseInt(monthStr, 10);
+    month--;
+    if (month === 0) {
+      month = 12;
+      year--;
+    }
+    return `${year}-${String(month).padStart(2, '0')}`;
+  };
+
+  const prevMonthKey = getPreviousMonthKey(currentMonthKey);
+  const prevMonthLabel = formatMonthKey(prevMonthKey);
+  const currentMonthLabel = formatMonthKey(currentMonthKey);
+
+  // Previous month transactions
+  const prevMonthTransactions = listAll.filter(t => t.monthKey === prevMonthKey);
+
+  // Compute stats for previous month
+  const prevSpent = prevMonthTransactions.reduce((sum, t) => sum + t.amount, 0);
+  const prevPaid = prevMonthTransactions.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
+  const prevIncome = settings?.monthlyIncome?.[prevMonthKey] ?? 0;
+  const prevBalanceOld = settings?.monthlyBalance?.[prevMonthKey] ?? 0;
+  const prevExtra = settings?.extras?.[prevMonthKey] || 0;
+  const prevTotalAvailable = prevIncome + prevBalanceOld + prevExtra;
+  const prevLeftover = prevTotalAvailable - prevSpent;
+
+  // Current month stats copy for clarity
+  const currSpent = totalSpentMonth;
+  const currTotalAvailable = totalAvailable;
+  const currLeftover = leftover;
+
+  // Deltas and percentage changes
+  const spentDelta = currSpent - prevSpent;
+  const leftoverDelta = currLeftover - prevLeftover;
+  const availableDelta = currTotalAvailable - prevTotalAvailable;
+
+  const spentPercentSelect = prevSpent > 0 ? (spentDelta / prevSpent) * 100 : 0;
+  const leftoverPercentSelect = prevLeftover !== 0 ? (leftoverDelta / Math.abs(prevLeftover)) * 100 : 0;
+  const availablePercentSelect = prevTotalAvailable > 0 ? (availableDelta / prevTotalAvailable) * 100 : 0;
+
   return (
     <div className="space-y-6">
       
@@ -697,6 +743,167 @@ export default function DashboardAnalytics({
         </div>
       </motion.div>
 
+      {/* SECTION 1.5: COMPARATIVE TEMPORAL ANALYSIS (PREVIOUS MONTH VS CURRENT MONTH) */}
+      <div className={`p-6 rounded-3xl border transition-all duration-355 ${
+        isLight 
+          ? 'bg-white border-slate-205/90 shadow-md shadow-slate-100/35 text-slate-800' 
+          : 'glass-panel border-white/5 shadow-2xl text-slate-100'
+      }`}>
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-2 select-none">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4.5 h-4.5 text-indigo-400" />
+            <h4 className={`font-display font-black text-sm uppercase tracking-wider ${isLight ? 'text-slate-900 bg-slate-100/50 px-2.5 py-1 rounded-xl border border-slate-200/40' : 'text-slate-200'}`}>
+              Comparativo Mensal ({prevMonthLabel} vs. {currentMonthLabel})
+            </h4>
+          </div>
+          <span className={`text-[9.5px] font-black uppercase px-2.5 py-1 rounded-md tracking-wider ${
+            isLight ? 'bg-slate-100 text-slate-700 font-black' : 'bg-white/5 text-slate-400'
+          }`}>
+            Análise de Tendência
+          </span>
+        </div>
+
+        <p className={`text-[12px] font-normal leading-relaxed mb-6 ${isLight ? 'text-slate-700' : 'text-slate-400 font-light'}`}>
+          Acompanhe como suas finanças evoluíram em relação ao ciclo anterior. O controle mensal inteligente ajuda a identificar se você está poupando mais ou expandindo despesas desnecessárias.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Card 1: Ganhos & Entrada */}
+          <div className={`p-4 rounded-2xl border transition-colors ${
+            isLight ? 'bg-slate-50/55 border-slate-200/60' : 'bg-white/2 border-white/5'
+          }`}>
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-600' : 'text-slate-450'}`}>
+                Recursos Totais
+              </span>
+              {availableDelta > 0 ? (
+                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                  +{availablePercentSelect.toFixed(1)}% ▲
+                </span>
+              ) : availableDelta < 0 ? (
+                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-0.5">
+                  {availablePercentSelect.toFixed(1)}% ▼
+                </span>
+              ) : (
+                <span className={`text-[10px] font-bold ${isLight ? 'text-slate-600' : 'text-slate-500'}`}>
+                  Estável
+                </span>
+              )}
+            </div>
+            
+            <div className="space-y-2 select-none font-sans">
+              <div className="flex items-baseline justify-between">
+                <span className={`text-[11px] ${isLight ? 'text-slate-650 font-bold' : 'text-slate-400'}`}>{prevMonthLabel}:</span>
+                <span className={`text-xs font-mono font-bold ${isLight ? 'text-slate-900' : 'text-slate-300'}`}>{fmt(prevTotalAvailable)}</span>
+              </div>
+              <div className={`flex items-baseline justify-between border-t border-dashed pt-1.5 ${isLight ? 'border-slate-200' : 'border-white/10'}`}>
+                <span className={`text-[11px] font-black ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{currentMonthLabel}:</span>
+                <span className={`text-sm font-mono font-black ${isLight ? 'text-indigo-650 font-extrabold' : 'text-indigo-400'}`}>{fmt(currTotalAvailable)}</span>
+              </div>
+            </div>
+            
+            <div className={`mt-3 pt-2 border-t text-[11px] ${isLight ? 'border-slate-250/50 text-slate-700 font-medium' : 'border-white/5 text-slate-450'}`}>
+              <span>
+                {availableDelta >= 0 ? 'Houve um aumento de ' : 'Houve uma queda de '}
+                <strong className={availableDelta >= 0 ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : 'text-rose-600 dark:text-rose-400 font-extrabold'}>
+                  {fmt(Math.abs(availableDelta))}
+                </strong> no caixa disponível para obrigações.
+              </span>
+            </div>
+          </div>
+
+          {/* Card 2: Despesas Totais */}
+          <div className={`p-4 rounded-2xl border transition-colors ${
+            isLight ? 'bg-slate-50/55 border-slate-200/60' : 'bg-white/2 border-white/5'
+          }`}>
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-600' : 'text-slate-450'}`}>
+                Despesas Registradas
+              </span>
+              {spentDelta < 0 ? (
+                <span className="text-[10px] font-bold text-emerald-650 dark:text-emerald-400 flex items-center gap-0.5" title="Redução de despesas é benéfica!">
+                  {spentPercentSelect.toFixed(1)}% ▼ (Econômico)
+                </span>
+              ) : spentDelta > 0 ? (
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+                  +{spentPercentSelect.toFixed(1)}% ▲
+                </span>
+              ) : (
+                <span className={`text-[10px] font-bold ${isLight ? 'text-slate-600' : 'text-slate-500'}`}>
+                  Estável
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2 select-none font-sans">
+              <div className="flex items-baseline justify-between">
+                <span className={`text-[11px] ${isLight ? 'text-slate-650 font-bold' : 'text-slate-400'}`}>{prevMonthLabel}:</span>
+                <span className={`text-xs font-mono font-bold ${isLight ? 'text-slate-900' : 'text-slate-300'}`}>{fmt(prevSpent)}</span>
+              </div>
+              <div className={`flex items-baseline justify-between border-t border-dashed pt-1.5 ${isLight ? 'border-slate-200' : 'border-white/10'}`}>
+                <span className={`text-[11px] font-black ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{currentMonthLabel}:</span>
+                <span className={`text-sm font-mono font-black ${isLight ? 'text-rose-650 font-extrabold' : 'text-rose-400'}`}>{fmt(currSpent)}</span>
+              </div>
+            </div>
+
+            <div className={`mt-3 pt-2 border-t text-[11px] ${isLight ? 'border-slate-250/50 text-slate-700 font-medium' : 'border-white/5 text-slate-450'}`}>
+              <span>
+                {spentDelta <= 0 ? (
+                  <span>Economizou <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold">{fmt(Math.abs(spentDelta))}</strong> em gastos em relação ao ciclo passado!</span>
+                ) : (
+                  <span>Gastou <strong className="text-amber-600 dark:text-amber-400 font-extrabold">{fmt(spentDelta)}</strong> a mais que no ciclo passado.</span>
+                )}
+              </span>
+            </div>
+          </div>
+
+          {/* Card 3: Margem Real / Sobras */}
+          <div className={`p-4 rounded-2xl border transition-colors ${
+            isLight ? 'bg-slate-50/55 border-slate-200/60' : 'bg-white/2 border-white/5'
+          }`}>
+            <div className="flex items-center justify-between mb-3">
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-660' : 'text-slate-450'}`}>
+                Índice de Sobras Líquidas
+              </span>
+              {leftoverDelta > 0 ? (
+                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                  +{leftoverPercentSelect.toFixed(1)}% ▲ (Melhorou)
+                </span>
+              ) : leftoverDelta < 0 ? (
+                <span className="text-[10px] font-bold text-rose-650 dark:text-rose-400 flex items-center gap-0.5">
+                  {leftoverPercentSelect.toFixed(1)}% ▼
+                </span>
+              ) : (
+                <span className={`text-[10px] font-bold ${isLight ? 'text-slate-600' : 'text-slate-500'}`}>
+                  Sem alteração
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2 select-none font-sans">
+              <div className="flex items-baseline justify-between">
+                <span className={`text-[11px] ${isLight ? 'text-slate-650 font-bold' : 'text-slate-400'}`}>{prevMonthLabel}:</span>
+                <span className={`text-xs font-mono font-bold ${isLight ? 'text-slate-900' : 'text-slate-300'}`}>{fmt(prevLeftover)}</span>
+              </div>
+              <div className={`flex items-baseline justify-between border-t border-dashed pt-1.5 ${isLight ? 'border-slate-200' : 'border-white/10'}`}>
+                <span className={`text-[11px] font-black ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{currentMonthLabel}:</span>
+                <span className={`text-sm font-mono font-black ${isLight ? 'text-emerald-600 font-extrabold' : 'text-emerald-400'}`}>{fmt(currLeftover)}</span>
+              </div>
+            </div>
+
+            <div className={`mt-3 pt-2 border-t text-[11px] ${isLight ? 'border-slate-250/50 text-slate-700 font-medium' : 'border-white/5 text-slate-450'}`}>
+              <span>
+                {leftoverDelta >= 0 ? (
+                  <span>Sua margem aumentou em <strong className="text-emerald-650 dark:text-emerald-400 font-extrabold">{fmt(leftoverDelta)}</strong>! Ótimo ritmo.</span>
+                ) : (
+                  <span>Redução de <strong className="text-rose-600 dark:text-rose-400 font-extrabold">{fmt(Math.abs(leftoverDelta))}</strong> na sua capacidade de sobras de caixa.</span>
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* SECTION 2: COMPARATIVE ALERTS (ALERTA EM TODAS AS CONTAS INTELIGENTES SEPARADOS) */}
       <div className={`p-6 rounded-3xl border transition-colors duration-300 ${
         isLight ? 'bg-white border-slate-200' : 'bg-[#090d1c]/45 border-white/5'
@@ -704,11 +911,13 @@ export default function DashboardAnalytics({
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-4.5 h-4.5 text-rose-400 animate-pulse" />
-            <h4 className="font-display font-black text-sm text-slate-100 uppercase tracking-wider">
+            <h4 className={`font-display font-black text-sm uppercase tracking-wider ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
               Avisos & Alertas Importantes ({activeDashboardMode === 'current' ? 'Mês Atual' : 'Histórico Geral'})
             </h4>
           </div>
-          <span className="text-[9px] font-black uppercase text-slate-500 bg-white/5 px-2.5 py-1 rounded-md tracking-wider">
+          <span className={`text-[9px] font-black uppercase text-slate-500 bg-white/5 px-2.5 py-1 rounded-md tracking-wider ${
+            isLight ? 'bg-slate-150 text-slate-850 font-black' : ''
+          }`}>
             {activeScores.alerts.length} Notificações Ativas
           </span>
         </div>

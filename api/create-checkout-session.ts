@@ -2,15 +2,17 @@ import Stripe from "stripe";
 import crypto from "crypto";
 
 export default async function handler(req: any, res: any) {
-  // Allow OPTIONS method for preflight
+  // Configuração segura de CORS para o ambiente Serverless da Vercel
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
+  );
+
+  // Permite a requisição de pré-vôo (preflight) do navegador
   if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
-    );
     return res.status(200).end();
   }
 
@@ -19,8 +21,10 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const rawOrigin = process.env.APP_URL || req.headers.origin || req.headers.referer || "http://localhost:3000";
-    let origin = "http://localhost:3000";
+    // Captura a origem exata do seu site atual na Vercel de forma dinâmica
+    const rawOrigin = process.env.APP_URL || req.headers.origin || req.headers.referer || "https://financaspro.com";
+    let origin = "https://financaspro.com";
+    
     try {
       const parsedUrl = new URL(Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin);
       origin = `${parsedUrl.protocol}//${parsedUrl.host}`;
@@ -41,9 +45,10 @@ export default async function handler(req: any, res: any) {
       apiVersion: "2023-10-16" as any
     });
 
+    // Mantida a sua lógica perfeita de geração de token seguro
     const generatedToken = "pro_" + crypto.randomBytes(16).toString("hex");
 
-    // Creating Stripe session
+    // Criação da sessão do Stripe com as propriedades corrigidas e limpas
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -54,21 +59,21 @@ export default async function handler(req: any, res: any) {
               name: "Acesso Premium - FinançasPro",
               description: "Garanta seu acesso exclusivo à nossa gestão financeira estratégica inovadora e inteligência analítica.",
             },
-            unit_amount: 999, // R$ 9.99
+            unit_amount: 999, // R$ 9,99
           },
           quantity: 1,
         },
       ],
       mode: "payment",
-      success_url: `${origin}/cadastro?token=${generatedToken}`,
-      cancel_url: `${origin}/`,
+      // Garante que não haverá duplicidade de barras na URL gerada
+      success_url: `${origin.replace(/\/$/, "")}/cadastro?token=${generatedToken}`,
+      cancel_url: `${origin.replace(/\/$/, "")}/`,
       metadata: {
         token: generatedToken
       }
     });
 
-    // Send access headers
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    // Retorna com sucesso o ID e a URL estável para o redirecionamento
     return res.status(200).json({ id: session.id, url: session.url });
   } catch (err: any) {
     console.error("Erro ao criar sessão de checkout no servidor Vercel:", err);

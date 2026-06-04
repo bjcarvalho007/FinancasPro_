@@ -148,27 +148,13 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       }
       const data = await response.json();
       
-      const publishableKey = (import.meta as any).env.VITE_STRIPE_PUBLISHABLE_KEY;
-      if (!publishableKey) {
-        // Fallback robustamente caso a chave pública não esteja injetada localmente mas a URL esteja presente
-        if (data?.url) {
-          window.location.href = data.url;
-          return;
-        }
-        throw new Error("Erro de Configuração: VITE_STRIPE_PUBLISHABLE_KEY não foi definida.");
-      }
-
-      const stripe: any = await loadStripe(publishableKey);
-      if (!stripe) {
-        throw new Error("Não foi possível carregar a integração do Stripe Checkout.");
-      }
-
-      const { error } = await stripe.redirectToCheckout({
-        sessionId: data.id,
-      });
-
-      if (error) {
-        throw new Error(error.message || "Erro ao redirecionar para o Stripe Checkout.");
+      // REDIRECIONAMENTO MODERNO ATUALIZADO:
+      // Se o servidor retornar a URL gerada pelo Stripe, redireciona o navegador de forma nativa e segura
+      if (data && data.url) {
+        window.location.href = data.url;
+        return;
+      } else {
+        throw new Error("URL de checkout não foi encontrada na resposta do servidor.");
       }
     } catch (err: any) {
       console.error("Erro ao iniciar faturamento do Stripe:", err);
@@ -304,7 +290,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         createdAt: new Date().toISOString()
       }, { merge: true });
 
-      showToast("Garantia ativa. Sua conta de Membro Premium foi gerada com sucesso!", "success");
+      showToast("Garantia activa. Sua conta de Membro Premium foi gerada com sucesso!", "success");
       onSuccess();
     } catch (err: any) {
       console.error("Erro ao registrar no Firebase Auth:", err);

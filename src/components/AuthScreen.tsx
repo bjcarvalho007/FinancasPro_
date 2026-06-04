@@ -128,7 +128,14 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         }
       });
       if (!response.ok) {
-        throw new Error('Falha ao iniciar o fluxo de pagamento do Stripe.');
+        let errMsg = 'Falha ao iniciar o fluxo de pagamento do Stripe.';
+        try {
+          const errData = await response.json();
+          if (errData && errData.error) {
+            errMsg = errData.error;
+          }
+        } catch (_) {}
+        throw new Error(errMsg);
       }
       const data = await response.json();
       if (data?.url) {

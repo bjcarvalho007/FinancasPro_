@@ -398,6 +398,8 @@ app.post("/api/notify/email-and-push", async (req, res) => {
   });
 });
 
+export default app;
+
 async function runExpressServer() {
   // Setup Vite Dev Server custom middleware if NOT in production. Otherwise serve client static files inside dist/
   if (process.env.NODE_ENV !== "production") {
@@ -419,6 +421,8 @@ async function runExpressServer() {
   });
 }
 
-runExpressServer().catch((e) => {
-  console.error("❌ Falha crítica ao inicializar o servidor Express:", e);
-});
+if (!process.env.VERCEL) {
+  runExpressServer().catch((e) => {
+    console.error("❌ Falha crítica ao inicializar o servidor Express:", e);
+  });
+}

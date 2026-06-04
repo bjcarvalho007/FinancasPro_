@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import nodemailer from "nodemailer";
 import webpush from "web-push";
 import Stripe from "stripe";
@@ -83,7 +82,7 @@ app.get("/api/health", (req, res) => {
 // Stripe checkout session creation
 app.post("/api/stripe/create-checkout-session", async (req, res) => {
   try {
-    const rawOrigin = process.env.APP_URL || req.get("origin") || req.get("referer") || "http://localhost:3000";
+    const rawOrigin = process.env.APP_URL || req.get("origin") || req.get("referer") || (req.get("host") ? `${req.protocol}://${req.get("host")}` : "http://localhost:3000");
     let origin = "http://localhost:3000";
     try {
       const parsedUrl = new URL(rawOrigin);
@@ -414,6 +413,7 @@ export default app;
 async function runExpressServer() {
   // Setup Vite Dev Server custom middleware if NOT in production. Otherwise serve client static files inside dist/
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

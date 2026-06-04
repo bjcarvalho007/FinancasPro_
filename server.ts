@@ -3,10 +3,42 @@ import path from "path";
 import nodemailer from "nodemailer";
 import webpush from "web-push";
 import Stripe from "stripe";
+import admin from "firebase-admin";
+import fs from "fs";
+import crypto from "crypto";
 
 // Load environment variables in Node
 import dotenv from "dotenv";
 dotenv.config();
+
+// Initialize Firebase Admin SDK for secure server-side Firestore operations
+try {
+  let config: any = {};
+  try {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(configPath)) {
+      config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    }
+  } catch (e) {
+    console.warn("⚠️ Não foi possível carregar firebase-applet-config.json:", e);
+  }
+
+  const projectId = process.env.FIREBASE_PROJECT_ID || config.projectId || "financaspro-bcbb4";
+  
+  if (!admin.apps.length) {
+    console.log(`🚀 Inicializando Firebase Admin SDK para o projeto: ${projectId}`);
+    admin.initializeApp({
+      projectId: projectId
+    });
+  }
+} catch (err: any) {
+  console.warn("⚠️ Falha ao inicializar o Firebase Admin SDK:", err);
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      projectId: "financaspro-bcbb4"
+    });
+  }
+}
 
 // Safely load stripe key avoiding plaintext detection in code repository
 const getStripeKey = (): string => {
@@ -101,7 +133,8 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
     }
     
     const stripe = new Stripe(stripeKey);
-    
+    const generatedToken = "pro_" + crypto.randomBytes(16).toString("hex");
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -118,10 +151,13 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
         },
       ],
       mode: "payment",
-      success_url: `${origin}/cadastro?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${origin}/cadastro?token=${generatedToken}`,
       cancel_url: `${origin}/`,
+      metadata: {
+        token: generatedToken
+      }
     });
-    
+
     res.json({ id: session.id, url: session.url });
   } catch (err: any) {
     console.error("Erro ao criar sessão de checkout do Stripe:", err);
@@ -129,11 +165,28 @@ app.post("/api/stripe/create-checkout-session", async (req, res) => {
   }
 });
 
-// Stripe checkout verification
+// Backward compatible / Backup verification endpoint
 app.get("/api/stripe/verify-session", async (req, res) => {
   const { session_id } = req.query;
   if (!session_id || typeof session_id !== "string") {
-    return res.status(400).json({ success: false, error: "ID da sessão é obrigatório." });
+    // If they passed token instead
+    const { token } = req.query;
+    if (token && typeof token === "string") {
+      try {
+        const adminDb = admin.firestore();
+        const docRef = adminDb.collection("tokens_pagos").doc(token);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+          const d = docSnap.data();
+          return res.json({
+            success: d?.used === false,
+            payment_status: "paid",
+            email: d?.email || null,
+          });
+        }
+      } catch (_) {}
+    }
+    return res.status(400).json({ success: false, error: "ID da sessão ou Token é obrigatório." });
   }
   
   try {
@@ -153,7 +206,6 @@ app.get("/api/stripe/verify-session", async (req, res) => {
     }
     
     const stripe = new Stripe(stripeKey);
-    
     const session = await stripe.checkout.sessions.retrieve(session_id);
     const isPaid = session.payment_status === "paid";
     
@@ -168,8 +220,8 @@ app.get("/api/stripe/verify-session", async (req, res) => {
   }
 });
 
-// Stripe webhook handler
-app.post("/api/stripe/webhook", async (req: any, res) => {
+// Stripe webhook handler (Supports both Express and Vercel routing aliases)
+app.post(["/api/stripe/webhook", "/api/webhook"], async (req: any, res) => {
   const stripeKey = getStripeKey();
   if (!stripeKey) {
     console.error("Erro de Configuração: Chave do Stripe não definida para processar Webhook.");
@@ -188,13 +240,85 @@ app.post("/api/stripe/webhook", async (req: any, res) => {
       event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     }
   } catch (err: any) {
-    console.error(`⚠️ Erro ao validar sabor do Webhook: ${err.message}`);
+    console.error(`⚠️ Erro ao validar webhook do Stripe: ${err.message}`);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
   
   if (event && event.type === "checkout.session.completed") {
-    const session = event.data.object;
+    const session = event.data.object as Stripe.Checkout.Session;
     console.log(`💰 Pagamento recebido e confirmado via Webhook para a sessão ${session.id}!`);
+    
+    const token = session.metadata?.token || ("pro_fallback_" + crypto.randomBytes(12).toString("hex"));
+    const email = session.customer_details?.email || "";
+    
+    try {
+      console.log(`🔓 Ativando Token Premium: ${token} para o e-mail: ${email}`);
+      
+      const adminDb = admin.firestore();
+      
+      // Save secure buyer details in Firestore collection 'tokens_pagos' with used: false
+      await adminDb.collection("tokens_pagos").doc(token).set({
+        token: token,
+        email: email,
+        used: false,
+        sessionId: session.id,
+        createdAt: new Date().toISOString()
+      }, { merge: true });
+      
+      console.log(`✅ Token Premium gravado com sucesso no Firestore!`);
+      
+      // Send receipt/confirmation registration link email with nodemailer if SMTP values are set
+      const appUrl = process.env.APP_URL || "https://financas-pro-eosin.vercel.app";
+      const registerLink = `${appUrl}/cadastro?token=${token}`;
+      
+      const smtpHost = process.env.SMTP_HOST;
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPass = process.env.SMTP_PASSWORD;
+      const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+      
+      if (email && smtpUser && smtpPass && smtpHost) {
+        try {
+          const transporter = nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: {
+              user: smtpUser,
+              pass: smtpPass
+            }
+          });
+          
+          await transporter.sendMail({
+            from: `"Acesso Premium FinançasPro" <${smtpUser}>`,
+            to: email,
+            subject: "🚀 Seu Link de Cadastro Premium - FinançasPro",
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #f0f0f0; border-radius: 12px; background-color: #ffffff; color: #334155;">
+                <h2 style="color: #4f46e5; text-align: center; margin-bottom: 24px;">Sua Assinatura está Pronta!</h2>
+                <p>Olá,</p>
+                <p>Confirmamos seu pagamento de R$ 9,99 para a liberação do seu painel corporativo do <strong>FinançasPro</strong>.</p>
+                <p>Sua segurança é nossa prioridade absoluta. Clique no botão de segurança abaixo para cadastrar sua senha privada de acesso:</p>
+                
+                <div style="text-align: center; margin: 32px 0;">
+                  <a href="${registerLink}" style="background-color: #10b981; color: white; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 8px; display: inline-block; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);">CONFIGURAR MINHA SENHA PRIVADA</a>
+                </div>
+                
+                <p style="font-size: 11px; color: #64748b; line-height: 1.5;">Se o botão acima não carregar, copie e cole o endereço abaixo em seu navegador:<br>
+                <a href="${registerLink}" style="color: #4f46e5;">${registerLink}</a></p>
+                
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+                <p style="font-size: 10px; color: #94a3b8; text-align: center;">BJC DESENVOLVIMENTOS. Este é um e-mail confidencial de faturamento privado corporativo.</p>
+              </div>
+            `
+          });
+          console.log(`📧 E-mail com link de cadastro enviado com sucesso para ${email}!`);
+        } catch (mailErr) {
+          console.error("❌ Falha crítica ao disparar e-mail com link do token:", mailErr);
+        }
+      }
+    } catch (saveErr) {
+      console.error("❌ Falha crítica ao gravar token na coleção tokens_pagos no Firestore:", saveErr);
+    }
   }
   
   res.json({ received: true });

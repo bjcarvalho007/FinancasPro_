@@ -91,6 +91,15 @@ service cloud.firestore {
         && data.read is bool;
     }
 
+    function isValidTokenPago(data) {
+      return data.token is string && data.token.size() <= 128
+        && data.email is string && data.email.size() <= 200
+        && data.used is bool
+        && (!data.keys().hasAny(['userId']) || (data.userId is string && data.userId.size() <= 128))
+        && (!data.keys().hasAny(['usedAt']) || (data.usedAt is string && data.usedAt.size() <= 100))
+        && (!data.keys().hasAny(['createdAt']) || (data.createdAt is string && data.createdAt.size() <= 100));
+    }
+
     // Rules for Collections
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -146,6 +155,18 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(registrationId) && isValidRegistration(incoming());
       allow update: if isSignedIn() && isValidId(registrationId) && existing().userId == request.auth.uid && isValidRegistration(incoming()) && incoming().userId == existing().userId;
       allow delete: if isSignedIn() && isValidId(registrationId) && existing().userId == request.auth.uid;
+    }
+
+    match /tokens_pagos/{tokenId} {
+      allow get: if true;
+      allow create: if false; // Only server (firebase-admin) can create tokens
+      allow update: if isSignedIn()
+        && existing().used == false
+        && incoming().used == true
+        && incoming().userId == request.auth.uid
+        && incoming().token == existing().token
+        && incoming().email == existing().email;
+      allow delete: if false;
     }
   }
 }

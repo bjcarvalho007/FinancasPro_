@@ -89,6 +89,20 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "userId", "title", "body", "read"]
+    },
+    "token_pago": {
+      "title": "Token Pago",
+      "description": "Represents a paid registration token created upon successful Stripe checkout",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "description": "Highly secure cryptographic registration token" },
+        "email": { "type": "string", "description": "Buyer's email address compiled from Stripe" },
+        "used": { "type": "boolean", "description": "Indicates whether this token has been claimed/used" },
+        "userId": { "type": "string", "description": "UID of the registered user who claimed this token" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "usedAt": { "type": "string", "format": "date-time", "description": "Claim/usage timestamp" }
+      },
+      "required": ["token", "email", "used"]
     }
   },
   "firestore": {
@@ -115,6 +129,10 @@
     "/notifications/{notificationId}": {
       "schema": "notification",
       "description": "User notifications regarding approaching bills or events"
+    },
+    "/tokens_pagos/{tokenId}": {
+      "schema": "token_pago",
+      "description": "Secure paid tokens for restricted registrations"
     }
   }
 }

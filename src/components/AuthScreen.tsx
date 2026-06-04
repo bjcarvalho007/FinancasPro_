@@ -70,50 +70,58 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
   }, [showPitch]);
 
   const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
-  const [sessionId, setSessionId] = useState<string>('');
-  const [sessionVerified, setSessionVerified] = useState<boolean | null>(null);
-  const [verifyingSession, setVerifyingSession] = useState<boolean>(false);
+  const [token, setToken] = useState<string>('');
+  const [tokenVerified, setTokenVerified] = useState<boolean | null>(null);
+  const [verifyingToken, setVerifyingToken] = useState<boolean>(false);
   const [verifiedEmail, setVerifiedEmail] = useState<string>('');
   const [isCadastroMode, setIsCadastroMode] = useState<boolean>(false);
 
+  const verifyToken = async (tokenValue: string) => {
+    setVerifyingToken(true);
+    setErrorAlert(null);
+    try {
+      const tokenDocRef = doc(db, "tokens_pagos", tokenValue);
+      const docSnap = await getDocFromServer(tokenDocRef);
+      if (docSnap && docSnap.exists()) {
+        const tokenData = docSnap.data();
+        if (tokenData.used === true) {
+          setTokenVerified(false);
+          setErrorAlert("Bloqueio de Registro: Este token de pagamento já foi utilizado para criar uma conta.");
+        } else {
+          setTokenVerified(true);
+          if (tokenData.email) {
+            setVerifiedEmail(tokenData.email);
+            setEmail(tokenData.email); // Pré-preenche o e-mail cadastrado no checkout
+          }
+        }
+      } else {
+        setTokenVerified(false);
+        setErrorAlert("Buscando confirmação... Seu pagamento está sendo processado pelo Stripe. Se você acabou de pagar, aguarde alguns segundos e clique em 'Verificar Novamente'.");
+      }
+    } catch (err: any) {
+      console.error("Erro na verificação do token:", err);
+      setTokenVerified(false);
+      setErrorAlert("Erro ao conectar ao banco de dados para verificar seu token. Por favor, tente novamente.");
+    } finally {
+      setVerifyingToken(false);
+    }
+  };
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const sId = urlParams.get('session_id');
-    const isCadastro = window.location.pathname.startsWith('/cadastro') || !!sId;
+    const tokenParam = urlParams.get('token');
+    const isCadastro = window.location.pathname.startsWith('/cadastro') || !!tokenParam;
     
     if (isCadastro) {
       setIsCadastroMode(true);
-      setShowPitch(false); // Garante que o formulário de cadastro tem prioridade sobre a apresentação de vendas
-      if (!sId) {
-        setSessionVerified(false);
+      setShowPitch(false); // Garante que o formulário de cadastro tem prioridade
+      if (!tokenParam) {
+        setTokenVerified(false);
         setErrorAlert("Bloqueio de Registro: Você não pode criar uma conta premium sem realizar o pagamento de R$ 9,99 antes.");
         return;
       }
-      
-      setSessionId(sId);
-      setVerifyingSession(true);
-      fetch(`/api/stripe/verify-session?session_id=${sId}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.success) {
-            setSessionVerified(true);
-            if (data.email) {
-              setVerifiedEmail(data.email);
-              setEmail(data.email); // Pré-preenche o e-mail cadastrado no checkout
-            }
-          } else {
-            setSessionVerified(false);
-            setErrorAlert("Bloqueio de Registro: A sessão de checkout do Stripe informada é inválida ou o pagamento não foi concluído.");
-          }
-        })
-        .catch(err => {
-          console.error("Erro na verificação da sessão:", err);
-          setSessionVerified(false);
-          setErrorAlert("Falha ao se conectar com os servidores de checkout. Por favor, tente recarregar a página.");
-        })
-        .finally(() => {
-          setVerifyingSession(false);
-        });
+      setToken(tokenParam);
+      verifyToken(tokenParam);
     }
   }, []);
 
@@ -226,8 +234,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
     e.preventDefault();
     setErrorAlert(null);
 
-    if (!sessionId) {
-      setErrorAlert("Bloqueio de Registro: Uma sessão de faturamento válida é necessária para prosseguir.");
+    if (!token) {
+      setErrorAlert("Bloqueio de Registro: Um token de faturamento válido é necessário para prosseguir.");
       setShakeTrigger(prev => prev + 1);
       return;
     }
@@ -246,29 +254,34 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
 
     setLoading(true);
     try {
-      // Verifica se a sessão do Stripe já foi vinculada a um e-mail para evitar fraudes de compartilhamento de link
-      const regDocRef = doc(db, "registrations", sessionId);
-      const regSnap = await getDocFromServer(regDocRef).catch(() => null);
-      if (regSnap && regSnap.exists()) {
-        throw new Error("Bloqueio de Registro: Esta sessão já foi vinculada a uma conta registrada ativa.");
+      // 1. Double check the token in Firestore before registration
+      const tokenDocRef = doc(db, "tokens_pagos", token);
+      const tokenSnap = await getDocFromServer(tokenDocRef).catch(() => null);
+      if (!tokenSnap || !tokenSnap.exists()) {
+        throw new Error("Bloqueio de Registro: O token de pagamento informado é inválido.");
       }
 
-      // Cria a conta do usuário no Firebase Auth
+      const tokenData = tokenSnap.data();
+      if (tokenData.used === true) {
+        throw new Error("Bloqueio de Registro: Este token de pagamento já foi utilizado para criar uma conta.");
+      }
+
+      // 2. Cria a conta do usuário no Firebase Auth (automatic login occurs here)
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const registeredUser = userCredential.user;
 
-      // Registra a reivindicação da sessão no Firestore
-      await setDoc(doc(db, "registrations", sessionId), {
+      // 3. Mark the token as claimed/used associated with the uid
+      await setDoc(doc(db, "tokens_pagos", token), {
+        used: true,
         userId: registeredUser.uid,
-        email: email,
-        claimedAt: new Date().toISOString()
-      });
+        usedAt: new Date().toISOString()
+      }, { merge: true });
 
-      // Vincula a sessão e inicializa os dados básicos do usuário no Firestore
+      // 4. Vincula o token e inicializa os dados básicos do usuário no Firestore
       await setDoc(doc(db, "users", registeredUser.uid), {
         uid: registeredUser.uid,
         email: email,
-        sessionId: sessionId,
+        token: token,
         createdAt: new Date().toISOString()
       }, { merge: true });
 
@@ -359,7 +372,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                   </p>
                 </div>
 
-                {verifyingSession ? (
+                {verifyingToken ? (
                   <div className="py-12 flex flex-col items-center justify-center space-y-4">
                     <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center animate-spin">
                       <TrendingUp className="w-5 h-5 text-emerald-400" />
@@ -368,7 +381,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       Validando faturamento no Stripe...
                     </p>
                   </div>
-                ) : sessionVerified === false ? (
+                ) : tokenVerified === false ? (
                   <div className="space-y-6">
                     {/* Custom Error Alert */}
                     <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-start gap-3">
@@ -381,26 +394,36 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleStripeCheckout}
-                      disabled={checkoutLoading}
-                      className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/15 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      {checkoutLoading ? "Iniciando pagamento..." : "Adquirir Acesso por R$ 9,99"}
-                      {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
-                    </button>
+                    <div className="flex flex-col gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => verifyToken(token)}
+                        className="w-full bg-gradient-to-r from-indigo-650 to-indigo-750 hover:bg-slate-800 text-white font-extrabold py-3 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/5"
+                      >
+                        Verificar Novamente
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsCadastroMode(false);
-                        setShowPitch(true);
-                      }}
-                      className="w-full text-xs text-slate-400 hover:text-white font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-transparent border-none mt-2"
-                    >
-                      ← Voltar para Apresentação
-                    </button>
+                      <button
+                        type="button"
+                        onClick={handleStripeCheckout}
+                        disabled={checkoutLoading}
+                        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 border-none"
+                      >
+                        {checkoutLoading ? "Iniciando pagamento..." : "Adquirir Acesso por R$ 9,99"}
+                        {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCadastroMode(false);
+                          window.location.search = ""; // Limpa os parâmetros
+                        }}
+                        className="w-full text-xs text-slate-450 hover:text-white font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-transparent border-none mt-2"
+                      >
+                        ← Voltar para Acesso Direto
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   /* Formulario de Cadastro Ativo */
@@ -464,138 +487,6 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 )}
               </div>
             </motion.div>
-          ) : showPitch ? (
-            /* ================= VIEW A: PRESENTATION / SALES LANDER ================= */
-            <motion.div
-              key="pitch-view"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.4 }}
-              className="w-full flex flex-col lg:flex-row items-stretch justify-center gap-8 md:gap-12"
-            >
-              {/* Condensed Pitch details */}
-              <div className="w-full lg:w-3/5 flex flex-col justify-center space-y-6 p-2">
-                <div className="space-y-3">
-                  <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full w-max block">
-                    🚀 Apresentação Oficial
-                  </span>
-                  <h1 className="font-display font-black text-3xl md:text-5xl text-white tracking-tight leading-tight">
-                    Tenha as contas mais organizadas do <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">mercado</span>.
-                  </h1>
-                  <p className="text-slate-350 text-sm md:text-base font-light leading-relaxed">
-                    Nossa ferramenta premium foi criada especificamente para centralizar, controlar e prever as contas do seu mês com agilidade absoluta. Sem spam, sem anúncios e com total controle de acesso.
-                  </p>
-                </div>
-
-                {/* Grid summary features */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex gap-3">
-                    <div className="w-8.5 h-8.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0 text-indigo-400">
-                      <ShieldCheck className="w-4.5 h-4.5" />
-                    </div>
-                    <div>
-                      <h4 className="text-[13.5px] font-bold text-slate-100">Contas Fixas & Ganhos</h4>
-                      <p className="text-[11.5px] text-slate-400 leading-normal mt-0.5">Monitore vencimentos recorrentes, margem de lucratividade e fluxo de caixa.</p>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex gap-3">
-                    <div className="w-8.5 h-8.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 text-emerald-400">
-                      <Coins className="w-4.5 h-4.5" />
-                    </div>
-                    <div>
-                      <h4 className="text-[13.5px] font-bold text-slate-100">Gastos Variados & Parcelados</h4>
-                      <p className="text-[11.5px] text-slate-400 leading-normal mt-0.5">Planeje faturas extras, controle parcelas ativas e evite dores de cabeça.</p>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex gap-3">
-                    <div className="w-8.5 h-8.5 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-amber-400">
-                      <BarChart2 className="w-4.5 h-4.5" />
-                    </div>
-                    <div>
-                      <h4 className="text-[13.5px] font-bold text-slate-100">IA Inteligência de Saúde</h4>
-                      <p className="text-[11.5px] text-slate-400 leading-normal mt-0.5">Diagnóstico orçamentário profundo e sugestões táticas de forma automatizada.</p>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-white/3 border border-white/5 flex gap-3">
-                    <div className="w-8.5 h-8.5 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0 text-purple-400">
-                      <Target className="w-4.5 h-4.5 text-purple-400" />
-                    </div>
-                    <div>
-                      <h4 className="text-[13.5px] font-bold text-slate-105">Cofrinhos / Metas CDI</h4>
-                      <p className="text-[11.5px] text-slate-404 leading-normal mt-0.5">Rentabilize e simule projeções fiscais com precisão matemática refinada.</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Activation call-to-action */}
-                <div className="p-5 rounded-3xl bg-[#090e1b] border border-white/5 relative overflow-hidden backdrop-blur-md">
-                  <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest flex items-center gap-1">
-                        <Zap className="w-4.5 h-4.5 text-indigo-400 shrink-0" />
-                        Como obter meu login de acesso?
-                      </span>
-                      <p className="text-xs text-slate-350 leading-relaxed font-semibold">
-                        Garantimos privacidade de alto nível. O registro é liberado imediatamente após a confirmação do pagamento de R$ 9,99 na plataforma do Stripe.
-                      </p>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleStripeCheckout();
-                      }}
-                      className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-5 py-3.5 rounded-2xl text-[10.5px] uppercase tracking-wider transition-all duration-300 cursor-pointer shadow-lg shadow-emerald-500/15 flex items-center justify-center gap-2 shrink-0 border-none"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      Assinar Premium Novo
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sidebar Action Card - Back to Login shortcut */}
-              <div className="w-full lg:w-2/5 flex items-center justify-center p-2">
-                <div className="w-full max-w-md p-6 md:p-8 rounded-3xl bg-[#090e1b] border border-white/5 shadow-2xl text-center space-y-6">
-                  <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto text-indigo-400">
-                    <Lock className="w-5.5 h-5.5" />
-                  </div>
-                  <div>
-                    <h3 className="font-display font-black text-xl text-white tracking-tight">Já possui cadastro premium?</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed mt-1.5 max-w-xs mx-auto">
-                      Se você contratou nosso plano e já possui o e-mail cadastrado, acesse clicando abaixo.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setShowPitch(false);
-                      setErrorAlert(null);
-                    }}
-                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    Ir ao Painel de Acesso
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-
-                  <div className="pt-2">
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleStripeCheckout();
-                      }}
-                      disabled={checkoutLoading}
-                      className="text-[11px] text-emerald-400 font-bold uppercase tracking-wider hover:underline bg-transparent border-none cursor-pointer disabled:opacity-50"
-                    >
-                      {checkoutLoading ? "Iniciando Stripe..." : "Garantir Acesso por R$ 9,99 →"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
           ) : (
             /* ================= VIEW B: CLEAN DIRECT CONNECT (DEFAULT) ================= */
             <motion.div
@@ -618,7 +509,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                   </h2>
                   <p className="text-xs text-slate-400 mt-1.5 font-light leading-relaxed">
                     {isResetMode 
-                      ? 'Insira seu email premium para receber o link de recuperação.' 
+                      ? 'Insira seu email de assinante para receber o link de recuperação.' 
                       : 'Digite seus dados de segurança corporativos abaixo.'}
                   </p>
                 </div>
@@ -711,7 +602,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                     id="auth-submit-btn"
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 border-none"
                   >
                     {loading ? 'Processando...' : isResetMode ? 'Enviar Link' : 'Acessar Meu Painel'}
                     {!loading && <ArrowRight className="w-4 h-4" />}
@@ -721,35 +612,29 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 <div className="mt-5 text-center space-y-4">
                   {isResetMode ? (
                     <button 
+                      type="button"
                       onClick={() => setIsResetMode(false)}
-                      className="text-xs text-slate-450 hover:text-white transition-colors font-bold"
+                      className="text-xs text-slate-450 hover:text-white transition-colors font-bold bg-transparent border-none cursor-pointer"
                     >
                       ← Voltar para Acesso Direto
                     </button>
                   ) : (
-                    <div className="space-y-3.5 pt-1.5 border-t border-white/5">
-                      <div className="text-xs text-slate-400 leading-normal font-semibold">
-                        Ainda não tem acesso cadastrado?
-                        <button
-                          onClick={() => {
-                            setShowPitch(true);
-                            setErrorAlert(null);
-                          }}
-                          className="text-indigo-400 font-extrabold ml-1.5 hover:text-indigo-300 hover:underline cursor-pointer"
-                        >
-                          Ver apresentação & Como Assinar →
-                        </button>
-                      </div>
+                    <div className="pt-5 border-t border-white/5 space-y-4">
+                      <p className="text-xs text-slate-400 leading-normal font-semibold">
+                        Ainda não possui uma assinatura ativa?
+                      </p>
 
                       <button 
+                        type="button"
                         onClick={(e) => {
                           e.preventDefault();
                           handleStripeCheckout();
                         }}
                         disabled={checkoutLoading}
-                        className="text-emerald-400 font-black hover:text-emerald-300 hover:underline transition-all block uppercase tracking-widest text-[9.5px] bg-transparent border-none cursor-pointer mx-auto disabled:opacity-50"
+                        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 border-none"
                       >
-                        {checkoutLoading ? "Iniciando..." : "⚡ Garantir Acesso por R$ 9,99 →"}
+                        {checkoutLoading ? "Iniciando..." : "Quero Assinar"}
+                        {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
                       </button>
                     </div>
                   )}

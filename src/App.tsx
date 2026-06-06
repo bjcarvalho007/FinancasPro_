@@ -410,6 +410,7 @@ export default function App() {
     type: 'fixos' | 'variaveis' | 'parcelas';
     cat: string;
     due: string;
+    total_parcelado?: number;
   }) => {
     if (!user) return;
     const docId = editingTransaction ? editingTransaction.id : `tx_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -454,6 +455,12 @@ export default function App() {
       createdAt: editingTransaction?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
+
+    if (data.total_parcelado !== undefined) {
+      newTx.total_parcelado = data.total_parcelado;
+    } else if (editingTransaction?.total_parcelado !== undefined) {
+      newTx.total_parcelado = editingTransaction.total_parcelado;
+    }
 
     if (inferredMasterId) {
       newTx.masterId = inferredMasterId;
@@ -1436,58 +1443,112 @@ export default function App() {
                               </div>
 
                               {/* Interactive installment planner p/ user escolher valor no mês */}
-                              {tx.type === 'parcelas' && (
-                                <div className={`pt-3 border-t border-dashed ${theme === 'light' ? 'border-slate-150' : 'border-white/5'} flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3`}>
-                                  <div className="space-y-0.5">
-                                    <span className={`text-[10px] font-extrabold uppercase tracking-wider block ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>Definir quanto pagar este mês</span>
-                                    <span className="text-[9px] text-slate-500 font-normal leading-tight block">Modifica o valor a liquidar neste período</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <div className={`relative rounded-xl border ${
-                                      theme === 'light' ? 'bg-slate-50 border-slate-200 focus-within:border-indigo-400' : 'bg-slate-950/40 border-white/5 focus-within:border-indigo-500'
-                                    } transition-all px-3 py-1.5 flex items-center`}>
-                                      <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        placeholder="R$ 0,00"
-                                        value={
-                                          installmentInputs[tx.id] !== undefined
-                                            ? installmentInputs[tx.id]
-                                            : (tx.amount > 0 ? handleMaskMoney(tx.amount.toFixed(2).replace('.', '')) : "R$ 0,00")
-                                        }
-                                        onChange={(e) => {
-                                          const masked = handleMaskMoney(e.target.value);
-                                          setInstallmentInputs(prev => ({ ...prev, [tx.id]: masked }));
-                                        }}
-                                        onBlur={async () => {
-                                          const currentValStr = installmentInputs[tx.id] !== undefined
-                                            ? installmentInputs[tx.id]
-                                            : (tx.amount > 0 ? handleMaskMoney(tx.amount.toFixed(2).replace('.', '')) : "R$ 0,00");
-                                          const newVal = handleParseMoney(currentValStr);
-                                          if (newVal !== tx.amount) {
-                                            const path = `transactions/${tx.id}`;
-                                            const updatedTx = { ...tx, amount: newVal, updatedAt: new Date().toISOString() };
-                                            try {
-                                              await setDoc(doc(db, 'transactions', tx.id), updatedTx);
-                                              triggerToast(`Valor a pagar alterado para ${formatCurrency(newVal)}`, 'success');
-                                            } catch (err) {
-                                              handleFirestoreError(err, OperationType.UPDATE, path);
+                              {tx.type === 'parcelas' && (() => {
+                                // Calculate dynamic remaining debt
+                                const masterId = tx.masterId || tx.id;
+                                const masterTx = transactions.find(t => t.id === masterId) || tx;
+                                const totalOriginal = masterTx.total_parcelado || masterTx.amount || 0;
+                                
+                                // Sum all payments in type 'parcelas' that belong to this system
+                                const totalPaidAcrossMonths = transactions
+                                  .filter(t => t.type === 'parcelas' && (t.id === masterId || t.masterId === masterId))
+                                  .reduce((sum, t) => sum + (t.paid_amount || 0), 0);
+                                  
+                                const totalDevedorRestante = Math.max(0, totalOriginal - totalPaidAcrossMonths);
+                                
+                                return (
+                                  <div className={`pt-3.5 border-t border-dashed ${theme === 'light' ? 'border-slate-150' : 'border-white/5'} flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-1.5 p-4 rounded-2xl ${
+                                    theme === 'light' ? 'bg-indigo-50/20 border border-slate-200' : 'bg-indigo-950/10 border border-white/5'
+                                  }`}>
+                                    <div className="space-y-1">
+                                      <span className={`text-[10px] font-extrabold uppercase tracking-wider block ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>
+                                        💳 Demonstrativo do Parcelamento
+                                      </span>
+                                      <div className="flex flex-col gap-1 text-[11.5px] leading-relaxed">
+                                        <div className="text-slate-400">
+                                          <span>Estimativa da Parcela Mensal: </span>
+                                          <strong className={theme === 'light' ? 'text-slate-700' : 'text-slate-205'}>
+                                            {formatCurrency(tx.amount)} /mês
+                                          </strong>
+                                        </div>
+                                        <div className="text-slate-400">
+                                          <span>Valor Total do Parcelamento: </span>
+                                          <strong className={theme === 'light' ? 'text-slate-700' : 'text-slate-205'}>
+                                            {formatCurrency(totalOriginal)}
+                                          </strong>
+                                        </div>
+                                        <div className="text-slate-400 flex items-center gap-1">
+                                          <span>📉 Saldo Devedor Restante Global: </span>
+                                          <strong className="text-rose-400 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/10">
+                                            {formatCurrency(totalDevedorRestante)}
+                                          </strong>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-3.5">
+                                      <div className="space-y-0.5">
+                                        <span className={`text-[10px] uppercase tracking-wider font-extrabold block ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>
+                                          Quanto deseja pagar este mês?
+                                        </span>
+                                        <span className="text-[9.5px] text-slate-500 leading-tight block">
+                                          Digite o valor e tecle Enter ou clique fora
+                                        </span>
+                                      </div>
+                                      
+                                      <div className={`relative rounded-xl border ${
+                                        theme === 'light' ? 'bg-slate-50 border-slate-200 focus-within:border-indigo-400' : 'bg-slate-950/40 border-white/5 focus-within:border-indigo-500'
+                                      } transition-all px-3.5 py-2 flex items-center shadow-inner`}>
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          placeholder="R$ 0,00"
+                                          value={
+                                            installmentInputs[tx.id] !== undefined
+                                              ? installmentInputs[tx.id]
+                                              : (tx.paid_amount > 0 ? handleMaskMoney(tx.paid_amount.toFixed(2).replace('.', '')) : "R$ 0,00")
+                                          }
+                                          onChange={(e) => {
+                                            const masked = handleMaskMoney(e.target.value);
+                                            setInstallmentInputs(prev => ({ ...prev, [tx.id]: masked }));
+                                          }}
+                                          onBlur={async () => {
+                                            const currentValStr = installmentInputs[tx.id] !== undefined
+                                              ? installmentInputs[tx.id]
+                                              : (tx.paid_amount > 0 ? handleMaskMoney(tx.paid_amount.toFixed(2).replace('.', '')) : "R$ 0,00");
+                                            const newVal = handleParseMoney(currentValStr);
+                                            
+                                            if (newVal !== (tx.paid_amount || 0)) {
+                                              const finishedPaying = newVal >= tx.amount;
+                                              const updatedTx = { 
+                                                ...tx, 
+                                                paid_amount: newVal, 
+                                                paid_at: finishedPaying ? new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+                                                updatedAt: new Date().toISOString() 
+                                              };
+                                              const path = `transactions/${tx.id}`;
+                                              try {
+                                                await setDoc(doc(db, 'transactions', tx.id), updatedTx);
+                                                triggerToast(`Pagamento do mês ajustado para ${formatCurrency(newVal)}. Saldo devedor global atualizado!`, 'success');
+                                              } catch (err) {
+                                                handleFirestoreError(err, OperationType.UPDATE, path);
+                                              }
                                             }
-                                          }
-                                        }}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') {
-                                            (e.currentTarget as HTMLInputElement).blur();
-                                          }
-                                        }}
-                                        className={`w-28 bg-transparent text-right font-mono font-bold text-xs focus:outline-none p-0 leading-none ${
-                                          theme === 'light' ? 'text-slate-800' : 'text-slate-100'
-                                        }`}
-                                      />
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              (e.currentTarget as HTMLInputElement).blur();
+                                            }
+                                          }}
+                                          className={`w-32 bg-transparent text-right font-mono font-bold text-xs focus:outline-none p-0 leading-none ${
+                                            theme === 'light' ? 'text-slate-800' : 'text-slate-150'
+                                          }`}
+                                        />
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              )}
+                                );
+                              })()}
                             </div>
                           );
                         })}

@@ -10,6 +10,7 @@ export interface Transaction {
   paid_at?: string;
   masterId?: string;
   monthKey: string; // YYYY-MM
+  total_parcelado?: number;
   createdAt?: string;
   updatedAt?: string;
 }

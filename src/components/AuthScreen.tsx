@@ -1,5 +1,4 @@
 import { useState, FormEvent, useEffect } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -77,92 +76,29 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
   const [verifiedEmail, setVerifiedEmail] = useState<string>('');
   const [isCadastroMode, setIsCadastroMode] = useState<boolean>(false);
 
-  const verifyToken = async (tokenValue: string) => {
-    setVerifyingToken(true);
-    setErrorAlert(null);
-    try {
-      const tokenDocRef = doc(db, "tokens_pagos", tokenValue);
-      const docSnap = await getDocFromServer(tokenDocRef);
-      if (docSnap && docSnap.exists()) {
-        const tokenData = docSnap.data();
-        if (tokenData.used === true) {
-          setTokenVerified(false);
-          setErrorAlert("Bloqueio de Registro: Este token de pagamento já foi utilizado para criar uma conta.");
-        } else {
-          setTokenVerified(true);
-          if (tokenData.email) {
-            setVerifiedEmail(tokenData.email);
-            setEmail(tokenData.email); // Pré-preenche o e-mail cadastrado no checkout
-          }
-        }
-      } else {
-        setTokenVerified(false);
-        setErrorAlert("Buscando confirmação... Seu pagamento está sendo processado pelo Stripe. Se você acabou de pagar, aguarde alguns segundos e clique em 'Verificar Novamente'.");
-      }
-    } catch (err: any) {
-      console.error("Erro na verificação do token:", err);
-      setTokenVerified(false);
-      setErrorAlert("Erro ao conectar ao banco de dados para verificar seu token. Por favor, tente novamente.");
-    } finally {
-      setVerifyingToken(false);
-    }
+  const handleMercadoPagoCheckout = () => {
+    window.open("https://mpago.la/1SfRUJ2", "_blank");
   };
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const tokenParam = urlParams.get('token');
-    const isCadastro = window.location.pathname.startsWith('/cadastro') || !!tokenParam;
+    const hasStatusAprovado = urlParams.get('status') === 'aprovado';
+    const isCadastro = window.location.pathname.startsWith('/cadastro') || urlParams.has('status');
     
     if (isCadastro) {
       setIsCadastroMode(true);
       setShowPitch(false); // Garante que o formulário de cadastro tem prioridade
-      if (!tokenParam) {
+      if (!hasStatusAprovado) {
         setTokenVerified(false);
-        setErrorAlert("Bloqueio de Registro: Você não pode criar uma conta premium sem realizar o pagamento de R$ 9,99 antes.");
+        setErrorAlert("Acesso negado. Por favor, realize o pagamento para liberar o seu cadastro.");
         return;
       }
-      setToken(tokenParam);
-      verifyToken(tokenParam);
+      
+      setTokenVerified(true);
+      const uniqueToken = urlParams.get('payment_id') || urlParams.get('collection_id') || urlParams.get('preference_id') || `mp_${Date.now()}`;
+      setToken(uniqueToken);
     }
   }, []);
-
-  const handleStripeCheckout = async () => {
-    setCheckoutLoading(true);
-    setErrorAlert(null);
-    try {
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      if (!response.ok) {
-        let errMsg = 'Falha ao iniciar o fluxo de pagamento do Stripe.';
-        try {
-          const errData = await response.json();
-          if (errData && errData.error) {
-            errMsg = errData.error;
-          }
-        } catch (_) {}
-        throw new Error(errMsg);
-      }
-      const data = await response.json();
-      
-      // REDIRECIONAMENTO MODERNO ATUALIZADO:
-      // Se o servidor retornar a URL gerada pelo Stripe, redireciona o navegador de forma nativa e segura
-      if (data && data.url) {
-        window.location.href = data.url;
-        return;
-      } else {
-        throw new Error("URL de checkout não foi encontrada na resposta do servidor.");
-      }
-    } catch (err: any) {
-      console.error("Erro ao iniciar faturamento do Stripe:", err);
-      setErrorAlert(err.message || 'Erro ao conectar ao servidor de faturamento.');
-    } finally {
-      setCheckoutLoading(false);
-    }
-  };
 
   const getAuthErrorMessage = (err: any): string => {
     const code = err?.code || '';
@@ -259,16 +195,31 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
 
     setLoading(true);
     try {
-      // 1. Double check the token in Firestore before registration
-      const tokenDocRef = doc(db, "tokens_pagos", token);
-      const tokenSnap = await getDocFromServer(tokenDocRef).catch(() => null);
-      if (!tokenSnap || !tokenSnap.exists()) {
-        throw new Error("Bloqueio de Registro: O token de pagamento informado é inválido.");
-      }
+      const urlParams = new URLSearchParams(window.location.search);
+      const isMPApproved = urlParams.get('status') === 'aprovado';
 
-      const tokenData = tokenSnap.data();
-      if (tokenData.used === true) {
-        throw new Error("Bloqueio de Registro: Este token de pagamento já foi utilizado para criar uma conta.");
+      if (isMPApproved) {
+        // Double check if this payment ID was already used for signup
+        const tokenDocRef = doc(db, "tokens_pagos", token);
+        const tokenSnap = await getDocFromServer(tokenDocRef).catch(() => null);
+        if (tokenSnap && tokenSnap.exists()) {
+          const tokenData = tokenSnap.data();
+          if (tokenData.used === true) {
+            throw new Error("Bloqueio de Registro: Este pagamento do Mercado Pago já foi utilizado para criar uma conta.");
+          }
+        }
+      } else {
+        // Normal token checking split
+        const tokenDocRef = doc(db, "tokens_pagos", token);
+        const tokenSnap = await getDocFromServer(tokenDocRef).catch(() => null);
+        if (!tokenSnap || !tokenSnap.exists()) {
+          throw new Error("Bloqueio de Registro: O token de pagamento informado é inválido.");
+        }
+
+        const tokenData = tokenSnap.data();
+        if (tokenData.used === true) {
+          throw new Error("Bloqueio de Registro: Este token de pagamento já foi utilizado para criar uma conta.");
+        }
       }
 
       // 2. Cria a conta do usuário no Firebase Auth (automatic login occurs here)
@@ -279,7 +230,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       await setDoc(doc(db, "tokens_pagos", token), {
         used: true,
         userId: registeredUser.uid,
-        usedAt: new Date().toISOString()
+        usedAt: new Date().toISOString(),
+        paymentSystem: 'MercadoPago'
       }, { merge: true });
 
       // 4. Vincula o token e inicializa os dados básicos do usuário no Firestore
@@ -287,6 +239,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         uid: registeredUser.uid,
         email: email,
         token: token,
+        paymentSystem: 'MercadoPago',
         createdAt: new Date().toISOString()
       }, { merge: true });
 
@@ -377,45 +330,27 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                   </p>
                 </div>
 
-                {verifyingToken ? (
-                  <div className="py-12 flex flex-col items-center justify-center space-y-4">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center animate-spin">
-                      <TrendingUp className="w-5 h-5 text-emerald-400" />
-                    </div>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider animate-pulse font-mono">
-                      Validando faturamento no Stripe...
-                    </p>
-                  </div>
-                ) : tokenVerified === false ? (
+                {tokenVerified === false ? (
                   <div className="space-y-6">
                     {/* Custom Error Alert */}
                     <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-300 flex items-start gap-3">
                       <div className="w-5 h-5 rounded-lg bg-rose-500/20 flex items-center justify-center shrink-0 text-rose-400 mt-0.5 animate-pulse">
                         <AlertCircle className="w-3.5 h-3.5" />
                       </div>
-                      <div className="flex-1 text-[11px] leading-relaxed font-semibold">
+                      <div className="flex-1 text-xs leading-relaxed font-semibold">
                         <span className="font-extrabold text-rose-200 block mb-0.5 uppercase tracking-wide text-[8.5px]">Acesso de Cadastro Bloqueado</span>
-                        {errorAlert || "Você não pode criar uma conta premium sem antes realizar o pagamento."}
+                        Acesso negado. Por favor, realize o pagamento para liberar o seu cadastro.
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-2.5">
                       <button
                         type="button"
-                        onClick={() => verifyToken(token)}
-                        className="w-full bg-gradient-to-r from-indigo-650 to-indigo-750 hover:bg-slate-800 text-white font-extrabold py-3 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer border border-white/5"
+                        onClick={handleMercadoPagoCheckout}
+                        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
                       >
-                        Verificar Novamente
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleStripeCheckout}
-                        disabled={checkoutLoading}
-                        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 border-none"
-                      >
-                        {checkoutLoading ? "Iniciando pagamento..." : "Adquirir Acesso por R$ 9,99"}
-                        {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
+                        Realizar Pagamento (R$ 9,99)
+                        <ArrowRight className="w-4 h-4" />
                       </button>
 
                       <button
@@ -424,7 +359,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                           setIsCadastroMode(false);
                           window.location.search = ""; // Limpa os parâmetros
                         }}
-                        className="w-full text-xs text-slate-450 hover:text-white font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-transparent border-none mt-2"
+                        className="w-full text-xs text-slate-455 hover:text-white font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-transparent border-none mt-2"
                       >
                         ← Voltar para Acesso Direto
                       </button>
@@ -572,12 +507,11 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                     </div>
                     <button
                       type="button"
-                      onClick={handleStripeCheckout}
-                      disabled={checkoutLoading}
-                      className="shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3 px-5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border-none"
+                      onClick={handleMercadoPagoCheckout}
+                      className="shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3 px-5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer border-none"
                     >
-                      {checkoutLoading ? "Iniciando..." : "Quero Assinar por R$ 9,99"}
-                      {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
+                      Quero Assinar por R$ 9,99
+                      <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
 
@@ -723,13 +657,12 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         type="button"
                         onClick={(e) => {
                           e.preventDefault();
-                          handleStripeCheckout();
+                          handleMercadoPagoCheckout();
                         }}
-                        disabled={checkoutLoading}
-                        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 border-none"
+                        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
                       >
-                        {checkoutLoading ? "Iniciando..." : "Quero Assinar por R$ 9,99"}
-                        {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
+                        Quero Assinar por R$ 9,99
+                        <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
                   )}

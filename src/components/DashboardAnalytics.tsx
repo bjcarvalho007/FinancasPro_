@@ -211,29 +211,29 @@ export default function DashboardAnalytics({
       ? Math.max(15, rawMonthHealthScore - 15) // Penalize slightly for deficit
       : rawMonthHealthScore;
 
-  let activeMonthLabel = 'Organização Excelente';
+  let activeMonthLabel = 'Tudo Certo';
   let activeMonthColor = 'text-emerald-400';
   let activeStrokeColor = '#10b981';
 
   if (leftover > 0) {
-    activeMonthLabel = 'Boa Gestão (Saldo Positivo)';
+    activeMonthLabel = 'Superavit (Sobrou Dinheiro)';
     activeMonthColor = 'text-emerald-400';
     activeStrokeColor = '#10b981';
   } else if (leftover < 0) {
-    activeMonthLabel = 'Gestão Deficitária (Gastos Altos)';
+    activeMonthLabel = 'Atenção (Gasto Alto)';
     activeMonthColor = 'text-rose-400';
     activeStrokeColor = '#f43f5e';
   } else {
     if (activeMonthHealthScore < 50) {
-      activeMonthLabel = 'Atenção Necessária';
+      activeMonthLabel = 'Precisa de Atenção';
       activeMonthColor = 'text-rose-400';
       activeStrokeColor = '#f43f5e';
     } else if (activeMonthHealthScore < 75) {
-      activeMonthLabel = 'Equilibrado (Zero Sobras)';
+      activeMonthLabel = 'Contas no Limite';
       activeMonthColor = 'text-amber-400';
       activeStrokeColor = '#f59e0b';
     } else {
-      activeMonthLabel = 'Organização Muito Boa';
+      activeMonthLabel = 'Muito Organizado';
       activeMonthColor = 'text-emerald-400';
       activeStrokeColor = '#10b981';
     }
@@ -247,22 +247,22 @@ export default function DashboardAnalytics({
     monthAlerts.push({
       id: 'month-leftover-management-success',
       type: 'success',
-      text: `Excelente Gestão! Sobrou ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(leftover)}`,
-      details: `Você realizou uma boa gestão financeira neste mês de ${formatMonthKey(currentMonthKey)}! Suas entradas superaram os gastos totais em ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(leftover)} livres para poupar ou atingir suas metas.`
+      text: `Muito bem! Sobrou ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(leftover)} no mês`,
+      details: `Você gastou menos do que tinha disponível neste mês de ${formatMonthKey(currentMonthKey)}! Esse dinheiro que sobrou livre pode ser guardado, investido ou usado para realizar suas metas.`
     });
   } else if (leftover < 0) {
     monthAlerts.push({
       id: 'month-leftover-management-deficit',
       type: 'error',
-      text: `Déficit de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(leftover))}`,
-      details: `Atenção: Suas faturas e despesas fixas/variáveis superaram seus ganhos de ${formatMonthKey(currentMonthKey)} em ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(leftover))}. Tente limitar gastos supérfluos no cotidiano.`
+      text: `Gasto acima do orçamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(leftover))}`,
+      details: `Seus gastos e contas neste mês foram maiores que sua renda disponível. Tente reduzir as despesas extras nas próximas semanas.`
     });
   } else if (totalAvailable > 0) {
     monthAlerts.push({
       id: 'month-leftover-management-even',
       type: 'warning',
-      text: 'Gestão no Limite: Sem sobras de dinheiro',
-      details: 'Não há déficit, mas também não sobrou saldo livre após pagar suas obrigações deste mês.'
+      text: 'Contas no limite (zero sobras)',
+      details: 'Você conseguiu pagar tudo em dia, mas não sobrou nenhum dinheirinho livre após quitar as contas deste mês.'
     });
   }
 
@@ -270,8 +270,8 @@ export default function DashboardAnalytics({
     monthAlerts.push({
       id: 'month-overdue',
       type: 'error',
-      text: `${overdueMonthTransactions.length} contas aguardando pagamento neste mês`,
-      details: `Lembre-se de verificar suas contas agendadas e marcar como pagas para manter seu controle perfeito: ${overdueMonthTransactions.map(t => `'${t.name}'`).join(', ')}.`
+      text: `${overdueMonthTransactions.length} contas atrasadas neste mês`,
+      details: `Por favor, lembre-se de conferir e marcar como pagas as seguintes contas: ${overdueMonthTransactions.map(t => `'${t.name}'`).join(', ')}.`
     });
   }
 
@@ -280,15 +280,15 @@ export default function DashboardAnalytics({
     monthAlerts.push({
       id: 'month-overspending',
       type: 'error',
-      text: 'Limite de gastos quase atingido (mais de 85% do planejado)',
-      details: `Você já comprometeu ${Math.round(activeMonthSpentRatio)}% do seu saldo total planejado para despesas.`
+      text: 'Atenção: Quase todo o seu dinheiro já foi usado (mais de 85% comprometido)',
+      details: `Você já comprometeu ${Math.round(activeMonthSpentRatio)}% da sua grana neste mês com despesas.`
     });
   } else if (activeMonthSpentRatio > 65) {
     monthAlerts.push({
       id: 'month-warning-limit',
       type: 'warning',
-      text: 'Seus gastos estão tomando uma boa parte do orçamento',
-      details: `Consumo estável, representando ${Math.round(activeMonthSpentRatio)}% do seu limite. Resta apenas R$ ${leftover.toFixed(2)} disponíveis.`
+      text: 'Seus gastos estão tomando boa parte da sua renda',
+      details: `Suas despesas consomem ${Math.round(activeMonthSpentRatio)}% de toda a sua renda disponível neste ciclo.`
     });
   }
 
@@ -300,8 +300,8 @@ export default function DashboardAnalytics({
       monthAlerts.push({
         id: `month-leak-${c.value}`,
         type: 'warning',
-        text: `Concentração de gastos em: ${c.label}`,
-        details: `A categoria ${c.icon} ${c.label} representa ${Math.round(catRatio)}% do seu consumo total deste mês.`
+        text: `Gasto concentrado em: ${c.label}`,
+        details: `A categoria ${c.icon} ${c.label} representa ${Math.round(catRatio)}% de tudo que você gastou neste mês.`
       });
     }
   });
@@ -310,8 +310,8 @@ export default function DashboardAnalytics({
     monthAlerts.push({
       id: 'month-success',
       type: 'success',
-      text: 'Tudo perfeito! Suas contas estão em total conformidade e organizadas',
-      details: 'Disponibilidade financeira ideal, sem transações com data pendente e com consumo planejado sob controle!'
+      text: 'Tudo excelente! Suas contas estão organizadas e em dia',
+      details: 'Nenhuma conta atrasada e gastos dentro do planejado. Excelente trabalho!'
     });
   }
 
@@ -344,15 +344,15 @@ export default function DashboardAnalytics({
     alavancagemScoreAll * 0.20
   );
 
-  let globalLabel = 'Organização Perfeita';
+  let globalLabel = 'Tudo Pago no Passado!';
   let globalColor = 'text-emerald-400';
   let globalStrokeColor = '#10b981';
   if (globalHealthScore < 50) {
-    globalLabel = 'Ajustes no Histórico Requeridos';
+    globalLabel = 'Ficou Conta Pendente';
     globalColor = 'text-rose-400';
     globalStrokeColor = '#f43f5e';
   } else if (globalHealthScore < 75) {
-    globalLabel = 'Bons Resultados Gerais';
+    globalLabel = 'Bons Resultados';
     globalColor = 'text-amber-400';
     globalStrokeColor = '#f59e0b';
   }
@@ -365,8 +365,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-legacy-unpaid',
       type: 'error',
-      text: `${legacyPending.length} contas pendentes em meses anteriores`,
-      details: `Dica amigável: Navegue para os meses passados no topo do painel e marque-as como pagas se já foram concluídas.`
+      text: `${legacyPending.length} conta(s) pendente(s) em meses passados`,
+      details: `Dica amigável: Mude para os meses anteriores no menu superior e marque essas contas como pagas se você já pagou elas.`
     });
   }
 
@@ -374,8 +374,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-excessive-card',
       type: 'warning',
-      text: `Uso considerável de compras parceladas (${Math.round(installmentRatio)}% do histórico)`,
-      details: `Suas parcelas pendentes somam ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalParcelasAll)}. Controlar novas parcelizações ajuda a manter as sobras sempre altas.`
+      text: `Muitas parcelas no cartão (${Math.round(installmentRatio)}% do total)`,
+      details: `Suas faturas parceladas somam ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalParcelasAll)}. Evitar novos parcelamentos ajuda a ter mais dinheiro livre todo mês.`
     });
   }
 
@@ -398,7 +398,7 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-deficit-warning',
       type: 'warning',
-      text: `Meses em que seus gastos superaram sua renda base: ${deficitMonthsCount} ocorrência(s)`,
+      text: `Meses em que gastou mais do que ganhou: ${deficitMonthsCount} ocorrência(s)`,
       details: `Em alguns meses anteriores, seu consumo superou a renda padrão cadastrada nas configurações.`
     });
   }
@@ -407,8 +407,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-clean-success',
       type: 'success',
-      text: 'Histórico impecável: Tudo em dia nos meses anteriores!',
-      details: 'Parabéns pela persistência e organização! Todos os seus meses passados estão fechados e concluídos.'
+      text: 'Tudo certinho nos meses passados!',
+      details: 'Parabéns pela organização! Todas as suas faturas dos meses anteriores já foram pagas.'
     });
   }
 
@@ -420,9 +420,9 @@ export default function DashboardAnalytics({
         colorClass: activeMonthColor,
         stroke: activeStrokeColor,
         metrics: [
-          { name: 'Sobras Financeiras', val: liquidezScoreMonth, desc: 'Dinheiro livre em relação aos ganhos' },
-          { name: 'Contas Pagas', val: adimplenciaScoreMonth, desc: 'Porcentagem do que já foi quitado' },
-          { name: 'Organização de Prazos', val: pontualidadeScoreMonth, desc: 'Verifica se restam pendências para hoje' }
+          { name: 'Dinheiro Livre', val: liquidezScoreMonth, desc: 'Dinheiro que sobrou em relação aos ganhos' },
+          { name: 'Contas Pagas', val: adimplenciaScoreMonth, desc: 'Porcentagem de contas que já foram quitadas' },
+          { name: 'Contas em Dia', val: pontualidadeScoreMonth, desc: 'Verifica se restam contas vencidas sem pagar' }
         ],
         alerts: monthAlerts,
         totalSpent: totalSpentMonth,
@@ -436,9 +436,9 @@ export default function DashboardAnalytics({
         colorClass: globalColor,
         stroke: globalStrokeColor,
         metrics: [
-          { name: 'Consistência de Pagamento', val: quitacaoScoreAll, desc: 'Porcentagem consolidada de contas pagas' },
-          { name: 'Acompanhamento', val: conciliacaoScoreAll, desc: 'Controle de fechamento de meses antigos' },
-          { name: 'Uso de Parcelas', val: alavancagemScoreAll, desc: 'Porcentagem de custos em formato parcelado' }
+          { name: 'Contas Pagas', val: quitacaoScoreAll, desc: 'Porcentagem de todas as contas que você já pagou' },
+          { name: 'Verificação Mensal', val: conciliacaoScoreAll, desc: 'Garantia de que os meses anteriores terminaram pagos' },
+          { name: 'Nível de Parcelas', val: alavancagemScoreAll, desc: 'Quanto de parcelamentos você tem no total' }
         ],
         alerts: historyAlerts,
         totalSpent: totalSpentAll,
@@ -600,38 +600,38 @@ export default function DashboardAnalytics({
     let negativeCount = 0;
     
     if (inflowDiff > 0) {
-      text += `Seus ingressos de caixa cresceram em **${fmt(inflowDiff)}** (+${inflowPct.toFixed(1)}%) comparado ao mês de ${formatMonthKey(prevMonthKey)}. `;
+      text += `Você recebeu **${fmt(inflowDiff)}** a mais (+${inflowPct.toFixed(1)}%) do que no mês de ${formatMonthKey(prevMonthKey)}. `;
       positiveCount++;
     } else if (inflowDiff < 0) {
-      text += `Identificamos uma redução de **${fmt(Math.abs(inflowDiff))}** (-${Math.abs(inflowPct).toFixed(1)}%) na renda total disponível. `;
+      text += `Sua renda total disponível encolheu em **${fmt(Math.abs(inflowDiff))}** (-${Math.abs(inflowPct).toFixed(1)}%). `;
       negativeCount++;
     } else {
-      text += `A entrada disponível de recursos manteve-se idêntica à do mês passado. `;
+      text += `Sua renda disponível se manteve idêntica à do mês passado. `;
     }
 
     if (spentDiff > 0) {
-      text += `Paralelamente, os gastos consolidados aumentaram em **${fmt(spentDiff)}** (+${spentPct.toFixed(1)}%). `;
+      text += `Por outro lado, as contas e gastos consolidaram um aumento de **${fmt(spentDiff)}** (+${spentPct.toFixed(1)}%). `;
       if (inflowDiff > 0) {
-        text += `Isso indica que o influxo de novos recursos foi parcialmente consumido pelas novas despesas. `;
+        text += `Isso significa que o dinheiro extra obtido acabou indo para despesas novas. `;
       } else {
-        text += `A redução de receitas concomitante ao aumento de despesas exige moderação de gastos imediatos para resguardar o índice de sobras. `;
+        text += `Como você ganhou menos e gastou mais, recomendamos evitar novas compras até reequilibrar seu saldo. `;
       }
       negativeCount++;
     } else if (spentDiff < 0) {
-      text += `Como ponto forte, as despesas diminuíram em **${fmt(Math.abs(spentDiff))}** (-${Math.abs(spentPct).toFixed(1)}%), demonstrando maior rigidez e eficácia no seu controle de orçamento! `;
+      text += `Que boa notícia! Seus gastos diminuíram em **${fmt(Math.abs(spentDiff))}** (-${Math.abs(spentPct).toFixed(1)}%), mostrando ótimo controle das suas faturas! `;
       positiveCount++;
     } else {
-      text += `O volume total de saídas permaneceu estável neste ciclo. `;
+      text += `Você gastou a mesma quantia que no mês correspondente anterior. `;
     }
 
     if (leftoverDiff > 0) {
-      text += `Como resultado, sua sobra estimada livre cresceu em **${fmt(leftoverDiff)}** comparado a ${formatMonthKey(prevMonthKey)}. Excelente evolução! Continue operando nesse nível de controle de sobras estimadas.`;
+      text += `Dessa forma, a sobra de dinheiro livre cresceu em **${fmt(leftoverDiff)}** comparado a ${formatMonthKey(prevMonthKey)}. Continue operando com essa incrível disciplina!`;
       positiveCount++;
     } else if (leftoverDiff < 0) {
-      text += `Devido a isso, seu saldo residual de caixa livre encolheu em **${fmt(Math.abs(leftoverDiff))}**. Recomendamos revisar despesas variáveis recentes ou faturas de cartão parceladas para otimizar suas sobras e retomar margem financeira segura de sobrevivência.`;
+      text += `Com isso, o saldo que sobrou na carteira diminuiu em **${fmt(Math.abs(leftoverDiff))}**. Dica: revise pequenos desvios em faturas e economize para voltar a ter uma sobra maior.`;
       negativeCount++;
     } else {
-      text += `Sua sobra financeira de caixa se estabilizou. Continue monitorando suas despesas para obter margem ideal no fechamento do seu mês!`;
+      text += `Sua sobra mensal de dinheiro permaneceu equilibrada. Continue monitorando para acumular um dinheirinho livre!`;
     }
 
     return { 
@@ -696,16 +696,16 @@ export default function DashboardAnalytics({
               </span>
             </div>
             <h3 className="font-display font-black text-sm text-slate-100 tracking-tight leading-tight">
-              Desempenho do Mês
+              Como você foi no mês
             </h3>
             <p className="text-[11.5px] text-slate-400 leading-normal font-light">
-              Mede o quanto sobrou no seu bolso e o progresso dos pagamentos registrados para o mês de {formatMonthKey(currentMonthKey)}.
+              Mede quanto sobrou do seu dinheiro e se as suas contas do mês de {formatMonthKey(currentMonthKey)} já foram pagas.
             </p>
 
             {/* Sub-metrics progress tracks */}
             <div className="space-y-1 pt-1 opacity-90">
               <div className="flex justify-between text-[9px] font-bold text-slate-400">
-                <span>Liquidez</span>
+                <span>Dinheiro que sobrou</span>
                 <span>{liquidezScoreMonth}%</span>
               </div>
               <div className="h-1 w-full bg-slate-950/45 rounded-full overflow-hidden">
@@ -765,16 +765,16 @@ export default function DashboardAnalytics({
               </span>
             </div>
             <h3 className="font-display font-black text-sm text-slate-100 tracking-tight leading-tight">
-              Planejamento Geral
+              Resumo de todas as contas
             </h3>
             <p className="text-[11.5px] text-slate-400 leading-normal font-light">
-              Mede seu controle geral de contas ao longo do tempo, o fechamento correto dos meses anteriores e o peso de parcelas futuras.
+              Mede o controle das suas contas ao longo do tempo, se tem parcelas futuras acumuladas e se os meses passados terminaram pagos.
             </p>
 
             {/* Sub-metrics progress tracks */}
             <div className="space-y-1 pt-1 opacity-90">
               <div className="flex justify-between text-[9px] font-bold text-slate-400">
-                <span>Adimplência Global</span>
+                <span>Total de contas pagas</span>
                 <span>{quitacaoScoreAll}%</span>
               </div>
               <div className="h-1 w-full bg-slate-950/45 rounded-full overflow-hidden">
@@ -794,198 +794,37 @@ export default function DashboardAnalytics({
         <Lightbulb className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
         <div className="space-y-1.5 flex-1 select-none">
           <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1">
-            ⚡ Recomendação Inteligente (IA FinançasPro: {activeDashboardMode === 'current' ? 'Mês Focado' : 'Histórico Geral'})
+            ⚡ Dica do assistente ({activeDashboardMode === 'current' ? 'Mês Atual' : 'Geral'})
           </h4>
           <p className="text-[12.5px] text-slate-350 leading-relaxed font-light">
             {activeDashboardMode === 'current' ? (
               // Active Month Advice
               transactions.length === 0 ? (
-                <span><strong>Pronto para monitorar:</strong> Adicione suas contas e despesas para acompanhar seu planejamento financeiro de {formatMonthKey(currentMonthKey)}.</span>
+                <span><strong>Pronto para começar:</strong> Adicione suas contas e ganhos para ver como está seu planejamento financeiro de {formatMonthKey(currentMonthKey)}.</span>
               ) : leftover > 0 ? (
-                <span>💎 <strong>Excelente Gestão Mensal!</strong> Sobrou <strong>{fmt(leftover)}</strong> livre no seu bolso após o abatimento de suas despesas fixas e variáveis deste mês. Você realizou um controle eficaz dos recursos de {formatMonthKey(currentMonthKey)}! Esse saldo positivo é perfeito para acelerar suas metas financeiras ou aplicar em investimentos seguros.</span>
+                <span>💎 <strong>Excelente resultado!</strong> Sobrou <strong>{fmt(leftover)}</strong> livre no seu bolso após o pagamento das despesas planejadas para este mês. Você fez um ótimo controle do dinheiro em {formatMonthKey(currentMonthKey)}! Esse saldo é excelente para poupar ou realizar metas.</span>
               ) : leftover < 0 ? (
-                <span>🚨 <strong>Gestão em Alerta (Déficit Mensal):</strong> Suas despesas fixas e variáveis superaram a renda disponível deste mês em <strong>{fmt(Math.abs(leftover))}</strong>. Suas saídas estão acima do planejado. Recomendamos priorizar a quitação dos fixos e cortar gastos cotidianos extras para reequilibrar as contas.</span>
+                <span>🚨 <strong>Atenção (Gasto um pouco alto):</strong> Seus gastos e contas superaram o dinheiro disponível deste mês em <strong>{fmt(Math.abs(leftover))}</strong>. No momento, você gastou mais do que ganhou. Recomendamos priorizar contas básicas e evitar compras extras até equilibrar o saldo.</span>
               ) : (
-                <span>⚠️ <strong>Saldo no Limite Perfeito:</strong> Você fechou o mês de {formatMonthKey(currentMonthKey)} equilibrado em <strong>R$ 0,00</strong>. Não há endividamento imediato, mas você não obteve sobras livres para poupar. Tente rastrear pequenos custos supérfluos para gerar margem de segurança.</span>
+                <span>⚠️ <strong>Saldo no limite perfeito:</strong> Você fechou o mês de {formatMonthKey(currentMonthKey)} equilibrado em <strong>R$ 0,00</strong>. Não há saldo negativo, mas também não sobrou nenhuma quantia livre para poupar. Tente controlar pequenas despesas extras para fazer sobrar dinheiro no próximo mês.</span>
               )
             ) : (
               // Historical Long-Term Advice / Planejamento Geral
               allTransactions.length === 0 ? (
-                <span><strong>Sem histórico suficiente:</strong> Ao cadastrar suas transações ao longo do tempo, você verá insights completos de evolução e controle de gastos históricos aqui.</span>
+                <span><strong>Sem histórico suficiente:</strong> Cadastre as contas do seu dia a dia e logo você verá dicas de evolução detalhadas aqui.</span>
               ) : pastUnreconciledTx.length > 0 ? (
-                <span>🔴 <strong>Aviso de Contas Anteriores Pendentes:</strong> Foram encontradas <strong>{pastUnreconciledTx.length} contas de meses anteriores</strong> que ainda não constam como pagas. Para garantir um bom planejamento e evitar juros acumulados, navegue pelos meses passados e registre a quitação de todas as pendências.</span>
+                <span>🔴 <strong>Lembrete de contas pendentes:</strong> Encontramos <strong>{pastUnreconciledTx.length} conta(s) de meses anteriores</strong> que ainda não foram marcadas como pagas. Para manter seu controle em ordem, mude para os meses passados no topo da tela e registre a quitação delas se já tiver pago.</span>
               ) : installmentRatio > 40 ? (
-                <span>⚠️ <strong>Cuidado com o Peso dos Parcelamentos:</strong> Seus parcelamentos contratados comprometem <strong>{Math.round(installmentRatio)}%</strong> do seu histórico financeiro acumulado ({fmt(totalParcelasAll)}). Muitas parcelas reduzem sua liquidez e engessam sua renda futura. Evite novas parcelas até aliviar esse percentual.</span>
+                <span>⚠️ <strong>Cuidado com o peso de parcelas:</strong> Seus parcelamentos no cartão comprometem <strong>{Math.round(installmentRatio)}%</strong> do seu histórico financeiro ({fmt(totalParcelasAll)}). Muitas compras parceladas prendem sua renda futura. Evite novos parcelamentos até aliviar essa porcentagem!</span>
               ) : globalHealthScore >= 75 ? (
-                <span>💎 <strong>Desempenho Geral de Destaque!</strong> Seu planejamento geral obteve nota excelente de <strong>{globalHealthScore} pontos</strong>. Suas faturas antigas estão organizadas e livres de pendências, e seus parcelamentos comprometem apenas <strong>{Math.round(installmentRatio)}%</strong> de seus meses futuros — uma margem perfeitamente saudável de segurança!</span>
+                <span>💎 <strong>Organização brilhante!</strong> Suas faturas antigas estão pagas, você não tem nenhuma pendência pendente e seus parcelamentos comprometem apenas <strong>{Math.round(installmentRatio)}%</strong> do seu orçamento — uma margem perfeitamente saudável de segurança!</span>
               ) : (
-                <span>📈 <strong>Rumo ao Equilíbrio Global:</strong> Seu nível consolidado de planejamento geral está em <strong>{globalHealthScore} pontos</strong>. Concentre-se em gerar sobras contínuas mês a mês e evite acumular novos parcelados pesados de longo prazo para elevar gradativamente sua nota global.</span>
+                <span>📈 <strong>Rumo ao equilíbrio!:</strong> O seu nível geral de controle está em <strong>{globalHealthScore} pontos</strong>. Concentre-se em fazer sobrar um dinheirinho mês a mês para subir sua nota.</span>
               )
             )}
           </p>
         </div>
       </motion.div>
-
-      {/* SECTION 1.5: COMPARATIVE TEMPORAL ANALYSIS (PREVIOUS MONTH VS CURRENT MONTH) */}
-      <div className={`p-6 rounded-3xl border transition-all duration-355 ${
-        isLight 
-          ? 'bg-white border-slate-205/90 shadow-md shadow-slate-100/35 text-slate-800' 
-          : 'glass-panel border-white/5 shadow-2xl text-slate-100'
-      }`}>
-        <div className="flex items-center justify-between mb-5 flex-wrap gap-2 select-none">
-          <div className="flex items-center gap-2">
-            <Activity className="w-4.5 h-4.5 text-indigo-400" />
-            <h4 className={`font-display font-black text-sm uppercase tracking-wider ${isLight ? 'text-slate-900 bg-slate-100/50 px-2.5 py-1 rounded-xl border border-slate-200/40' : 'text-slate-200'}`}>
-              Comparativo Mensal ({prevMonthLabel} vs. {currentMonthLabel})
-            </h4>
-          </div>
-          <span className={`text-[9.5px] font-black uppercase px-2.5 py-1 rounded-md tracking-wider ${
-            isLight ? 'bg-slate-100 text-slate-700 font-black' : 'bg-white/5 text-slate-400'
-          }`}>
-            Análise de Tendência
-          </span>
-        </div>
-
-        <p className={`text-[12px] font-normal leading-relaxed mb-6 ${isLight ? 'text-slate-700' : 'text-slate-400 font-light'}`}>
-          Acompanhe como suas finanças evoluíram em relação ao ciclo anterior. O controle mensal inteligente ajuda a identificar se você está poupando mais ou expandindo despesas desnecessárias.
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* Card 1: Ganhos & Entrada */}
-          <div className={`p-4 rounded-2xl border transition-colors ${
-            isLight ? 'bg-slate-50/55 border-slate-200/60' : 'bg-white/2 border-white/5'
-          }`}>
-            <div className="flex items-center justify-between mb-3">
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-600' : 'text-slate-450'}`}>
-                Recursos Totais
-              </span>
-              {availableDelta > 0 ? (
-                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
-                  +{availablePercentSelect.toFixed(1)}% ▲
-                </span>
-              ) : availableDelta < 0 ? (
-                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-0.5">
-                  {availablePercentSelect.toFixed(1)}% ▼
-                </span>
-              ) : (
-                <span className={`text-[10px] font-bold ${isLight ? 'text-slate-600' : 'text-slate-500'}`}>
-                  Estável
-                </span>
-              )}
-            </div>
-            
-            <div className="space-y-2 select-none font-sans">
-              <div className="flex items-baseline justify-between">
-                <span className={`text-[11px] ${isLight ? 'text-slate-650 font-bold' : 'text-slate-400'}`}>{prevMonthLabel}:</span>
-                <span className={`text-xs font-mono font-bold ${isLight ? 'text-slate-900' : 'text-slate-300'}`}>{fmt(prevTotalAvailable)}</span>
-              </div>
-              <div className={`flex items-baseline justify-between border-t border-dashed pt-1.5 ${isLight ? 'border-slate-200' : 'border-white/10'}`}>
-                <span className={`text-[11px] font-black ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{currentMonthLabel}:</span>
-                <span className={`text-sm font-mono font-black ${isLight ? 'text-indigo-650 font-extrabold' : 'text-indigo-400'}`}>{fmt(currTotalAvailable)}</span>
-              </div>
-            </div>
-            
-            <div className={`mt-3 pt-2 border-t text-[11px] ${isLight ? 'border-slate-250/50 text-slate-700 font-medium' : 'border-white/5 text-slate-450'}`}>
-              <span>
-                {availableDelta >= 0 ? 'Houve um aumento de ' : 'Houve uma queda de '}
-                <strong className={availableDelta >= 0 ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : 'text-rose-600 dark:text-rose-400 font-extrabold'}>
-                  {fmt(Math.abs(availableDelta))}
-                </strong> no caixa disponível para obrigações.
-              </span>
-            </div>
-          </div>
-
-          {/* Card 2: Despesas Totais */}
-          <div className={`p-4 rounded-2xl border transition-colors ${
-            isLight ? 'bg-slate-50/55 border-slate-200/60' : 'bg-white/2 border-white/5'
-          }`}>
-            <div className="flex items-center justify-between mb-3">
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-600' : 'text-slate-450'}`}>
-                Despesas Registradas
-              </span>
-              {spentDelta < 0 ? (
-                <span className="text-[10px] font-bold text-emerald-650 dark:text-emerald-400 flex items-center gap-0.5" title="Redução de despesas é benéfica!">
-                  {spentPercentSelect.toFixed(1)}% ▼ (Econômico)
-                </span>
-              ) : spentDelta > 0 ? (
-                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
-                  +{spentPercentSelect.toFixed(1)}% ▲
-                </span>
-              ) : (
-                <span className={`text-[10px] font-bold ${isLight ? 'text-slate-600' : 'text-slate-500'}`}>
-                  Estável
-                </span>
-              )}
-            </div>
-
-            <div className="space-y-2 select-none font-sans">
-              <div className="flex items-baseline justify-between">
-                <span className={`text-[11px] ${isLight ? 'text-slate-650 font-bold' : 'text-slate-400'}`}>{prevMonthLabel}:</span>
-                <span className={`text-xs font-mono font-bold ${isLight ? 'text-slate-900' : 'text-slate-300'}`}>{fmt(prevSpent)}</span>
-              </div>
-              <div className={`flex items-baseline justify-between border-t border-dashed pt-1.5 ${isLight ? 'border-slate-200' : 'border-white/10'}`}>
-                <span className={`text-[11px] font-black ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{currentMonthLabel}:</span>
-                <span className={`text-sm font-mono font-black ${isLight ? 'text-rose-650 font-extrabold' : 'text-rose-400'}`}>{fmt(currSpent)}</span>
-              </div>
-            </div>
-
-            <div className={`mt-3 pt-2 border-t text-[11px] ${isLight ? 'border-slate-250/50 text-slate-700 font-medium' : 'border-white/5 text-slate-450'}`}>
-              <span>
-                {spentDelta <= 0 ? (
-                  <span>Economizou <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold">{fmt(Math.abs(spentDelta))}</strong> em gastos em relação ao ciclo passado!</span>
-                ) : (
-                  <span>Gastou <strong className="text-amber-600 dark:text-amber-400 font-extrabold">{fmt(spentDelta)}</strong> a mais que no ciclo passado.</span>
-                )}
-              </span>
-            </div>
-          </div>
-
-          {/* Card 3: Margem Real / Sobras */}
-          <div className={`p-4 rounded-2xl border transition-colors ${
-            isLight ? 'bg-slate-50/55 border-slate-200/60' : 'bg-white/2 border-white/5'
-          }`}>
-            <div className="flex items-center justify-between mb-3">
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${isLight ? 'text-slate-660' : 'text-slate-450'}`}>
-                Índice de Sobras Líquidas
-              </span>
-              {leftoverDelta > 0 ? (
-                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
-                  +{leftoverPercentSelect.toFixed(1)}% ▲ (Melhorou)
-                </span>
-              ) : leftoverDelta < 0 ? (
-                <span className="text-[10px] font-bold text-rose-650 dark:text-rose-400 flex items-center gap-0.5">
-                  {leftoverPercentSelect.toFixed(1)}% ▼
-                </span>
-              ) : (
-                <span className={`text-[10px] font-bold ${isLight ? 'text-slate-600' : 'text-slate-500'}`}>
-                  Sem alteração
-                </span>
-              )}
-            </div>
-
-            <div className="space-y-2 select-none font-sans">
-              <div className="flex items-baseline justify-between">
-                <span className={`text-[11px] ${isLight ? 'text-slate-650 font-bold' : 'text-slate-400'}`}>{prevMonthLabel}:</span>
-                <span className={`text-xs font-mono font-bold ${isLight ? 'text-slate-900' : 'text-slate-300'}`}>{fmt(prevLeftover)}</span>
-              </div>
-              <div className={`flex items-baseline justify-between border-t border-dashed pt-1.5 ${isLight ? 'border-slate-200' : 'border-white/10'}`}>
-                <span className={`text-[11px] font-black ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{currentMonthLabel}:</span>
-                <span className={`text-sm font-mono font-black ${isLight ? 'text-emerald-600 font-extrabold' : 'text-emerald-400'}`}>{fmt(currLeftover)}</span>
-              </div>
-            </div>
-
-            <div className={`mt-3 pt-2 border-t text-[11px] ${isLight ? 'border-slate-250/50 text-slate-700 font-medium' : 'border-white/5 text-slate-450'}`}>
-              <span>
-                {leftoverDelta >= 0 ? (
-                  <span>Sua margem aumentou em <strong className="text-emerald-650 dark:text-emerald-400 font-extrabold">{fmt(leftoverDelta)}</strong>! Ótimo ritmo.</span>
-                ) : (
-                  <span>Redução de <strong className="text-rose-600 dark:text-rose-400 font-extrabold">{fmt(Math.abs(leftoverDelta))}</strong> na sua capacidade de sobras de caixa.</span>
-                )}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* SECTION 2: COMPARATIVE ALERTS (ALERTA EM TODAS AS CONTAS INTELIGENTES SEPARADOS) */}
       <div className={`p-6 rounded-3xl border transition-colors duration-300 ${

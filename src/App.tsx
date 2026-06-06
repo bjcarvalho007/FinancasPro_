@@ -1474,13 +1474,13 @@ export default function App() {
                                         </span>
                                         <div className="flex flex-col gap-1 text-[11.5px] leading-relaxed">
                                           <div className="text-slate-400">
-                                            <span>Valor Total do Parcelamento: </span>
+                                            <span>Valor inicial devido: </span>
                                             <strong className={theme === 'light' ? 'text-slate-700' : 'text-slate-205'}>
                                               {formatCurrency(totalOriginalBase)}
                                             </strong>
                                           </div>
                                           <div className="text-slate-400 flex items-center gap-1">
-                                            <span>📉 Saldo Devedor Restante Global: </span>
+                                            <span>📉 Saldo devedor atual: </span>
                                             <strong className="text-rose-400 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/10">
                                               {formatCurrency(totalDevedorRestante)}
                                             </strong>

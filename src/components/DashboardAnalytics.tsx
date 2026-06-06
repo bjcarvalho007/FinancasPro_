@@ -19,7 +19,8 @@ import {
   Calendar,
   Activity,
   ChevronRight,
-  Info
+  Info,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -52,6 +53,7 @@ export default function DashboardAnalytics({
 }: DashboardAnalyticsProps) {
   // Toggle between active month 'current' or total lifetime records 'history'
   const [activeDashboardMode, setActiveDashboardMode] = useState<'current' | 'history'>('current');
+  const [showAssistantTip, setShowAssistantTip] = useState(false);
   const [hoveredBar, setHoveredBar] = useState<string | null>(null);
 
   const isLight = currentTheme === 'light';
@@ -648,7 +650,10 @@ export default function DashboardAnalytics({
         
         {/* BENTO CARD A: ACTIVE MONTH SCORE (CLICKABLE TOGGLE) */}
         <button
-          onClick={() => setActiveDashboardMode('current')}
+          onClick={() => {
+            setActiveDashboardMode('current');
+            setShowAssistantTip(true);
+          }}
           className={`w-full text-left p-6 rounded-3xl transition-all duration-300 relative overflow-hidden border flex flex-col sm:flex-row items-center gap-6 cursor-pointer ${
             activeDashboardMode === 'current'
               ? isLight 
@@ -717,7 +722,10 @@ export default function DashboardAnalytics({
 
         {/* BENTO CARD B: GLOBAL LFETIME AUDIT SCORE (CLICKABLE TOGGLE) */}
         <button
-          onClick={() => setActiveDashboardMode('history')}
+          onClick={() => {
+            setActiveDashboardMode('history');
+            setShowAssistantTip(true);
+          }}
           className={`w-full text-left p-6 rounded-3xl transition-all duration-300 relative overflow-hidden border flex flex-col sm:flex-row items-center gap-6 cursor-pointer ${
             activeDashboardMode === 'history'
               ? isLight 
@@ -786,45 +794,112 @@ export default function DashboardAnalytics({
 
       </div>
 
-      {/* INTELLIGENCE RECOMMENDATIONS BOX BASED ON SELECTED MODE */}
-      <motion.div
-        layout
-        className="p-5 rounded-r-3xl border-l-[4px] border-indigo-500 bg-indigo-500/5 flex items-start gap-4 animate-in fade-in duration-300"
-      >
-        <Lightbulb className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
-        <div className="space-y-1.5 flex-1 select-none">
-          <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1">
-            ⚡ Dica do assistente ({activeDashboardMode === 'current' ? 'Mês Atual' : 'Geral'})
-          </h4>
-          <p className="text-[12.5px] text-slate-350 leading-relaxed font-light">
-            {activeDashboardMode === 'current' ? (
-              // Active Month Advice
-              transactions.length === 0 ? (
-                <span><strong>Pronto para começar:</strong> Adicione suas contas e ganhos para ver como está seu planejamento financeiro de {formatMonthKey(currentMonthKey)}.</span>
-              ) : leftover > 0 ? (
-                <span>💎 <strong>Excelente resultado!</strong> Sobrou <strong>{fmt(leftover)}</strong> livre no seu bolso após o pagamento das despesas planejadas para este mês. Você fez um ótimo controle do dinheiro em {formatMonthKey(currentMonthKey)}! Esse saldo é excelente para poupar ou realizar metas.</span>
-              ) : leftover < 0 ? (
-                <span>🚨 <strong>Atenção (Gasto um pouco alto):</strong> Seus gastos e contas superaram o dinheiro disponível deste mês em <strong>{fmt(Math.abs(leftover))}</strong>. No momento, você gastou mais do que ganhou. Recomendamos priorizar contas básicas e evitar compras extras até equilibrar o saldo.</span>
-              ) : (
-                <span>⚠️ <strong>Saldo no limite perfeito:</strong> Você fechou o mês de {formatMonthKey(currentMonthKey)} equilibrado em <strong>R$ 0,00</strong>. Não há saldo negativo, mas também não sobrou nenhuma quantia livre para poupar. Tente controlar pequenas despesas extras para fazer sobrar dinheiro no próximo mês.</span>
-              )
-            ) : (
-              // Historical Long-Term Advice / Planejamento Geral
-              allTransactions.length === 0 ? (
-                <span><strong>Sem histórico suficiente:</strong> Cadastre as contas do seu dia a dia e logo você verá dicas de evolução detalhadas aqui.</span>
-              ) : pastUnreconciledTx.length > 0 ? (
-                <span>🔴 <strong>Lembrete de contas pendentes:</strong> Encontramos <strong>{pastUnreconciledTx.length} conta(s) de meses anteriores</strong> que ainda não foram marcadas como pagas. Para manter seu controle em ordem, mude para os meses passados no topo da tela e registre a quitação delas se já tiver pago.</span>
-              ) : installmentRatio > 40 ? (
-                <span>⚠️ <strong>Cuidado com o peso de parcelas:</strong> Seus parcelamentos no cartão comprometem <strong>{Math.round(installmentRatio)}%</strong> do seu histórico financeiro ({fmt(totalParcelasAll)}). Muitas compras parceladas prendem sua renda futura. Evite novos parcelamentos até aliviar essa porcentagem!</span>
-              ) : globalHealthScore >= 75 ? (
-                <span>💎 <strong>Organização brilhante!</strong> Suas faturas antigas estão pagas, você não tem nenhuma pendência pendente e seus parcelamentos comprometem apenas <strong>{Math.round(installmentRatio)}%</strong> do seu orçamento — uma margem perfeitamente saudável de segurança!</span>
-              ) : (
-                <span>📈 <strong>Rumo ao equilíbrio!:</strong> O seu nível geral de controle está em <strong>{globalHealthScore} pontos</strong>. Concentre-se em fazer sobrar um dinheirinho mês a mês para subir sua nota.</span>
-              )
-            )}
-          </p>
-        </div>
-      </motion.div>
+      {/* FLOATING ANIMATED ASSISTANT TIP MODAL (OPENS ON CARD CLICK) */}
+      <AnimatePresence>
+        {showAssistantTip && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop with blur */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAssistantTip(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 15 }}
+              transition={{ type: "spring", damping: 24, stiffness: 280 }}
+              className={`relative w-full max-w-lg overflow-hidden rounded-3xl border p-6 shadow-2xl select-none z-10 ${
+                isLight 
+                  ? 'bg-white border-slate-200 text-slate-800' 
+                  : 'bg-[#0a0f24] border-indigo-500/20 text-slate-100'
+              }`}
+            >
+              {/* Top border decorative accent */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500" />
+
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 sm:p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-400">
+                    <Lightbulb className="w-5 h-5 animate-pulse text-indigo-400" />
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block leading-tight">
+                      🤖 FinançasPro Assistente
+                    </span>
+                    <h3 className={`font-display font-black text-sm sm:text-base tracking-tight leading-none mt-1 ${
+                      isLight ? 'text-slate-900' : 'text-white'
+                    }`}>
+                      Dica: {activeDashboardMode === 'current' ? 'Como você foi no Mês' : 'Resumo de todas as contas'}
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAssistantTip(false)}
+                  className={`p-1.5 rounded-xl transition-all cursor-pointer border-none hover:rotate-90 hover:scale-105 active:scale-95 ${
+                    isLight 
+                      ? 'text-slate-400 hover:bg-slate-100 hover:text-slate-700' 
+                      : 'text-slate-500 hover:bg-white/5 hover:text-white'
+                  }`}
+                  aria-label="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Content body */}
+              <div className="my-5 leading-relaxed font-sans">
+                <div className={`p-4 rounded-2xl border ${
+                  isLight ? 'bg-indigo-50/20 border-slate-200/50' : 'bg-indigo-950/10 border-white/5'
+                }`}>
+                  <p className={`text-[12.5px] leading-relaxed font-light ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                    {activeDashboardMode === 'current' ? (
+                      // Active Month Advice
+                      transactions.length === 0 ? (
+                        <span><strong>Pronto para começar:</strong> Adicione suas contas e ganhos para ver como está seu planejamento financeiro de {formatMonthKey(currentMonthKey)}.</span>
+                      ) : leftover > 0 ? (
+                        <span>💎 <strong>Excelente resultado!</strong> Sobrou <strong>{fmt(leftover)}</strong> livre no seu bolso após o pagamento das despesas planejadas para este mês. Você fez um ótimo controle do dinheiro em {formatMonthKey(currentMonthKey)}! Esse saldo é excelente para poupar ou realizar metas.</span>
+                      ) : leftover < 0 ? (
+                        <span>🚨 <strong>Atenção (Gasto um pouco alto):</strong> Seus gastos e contas superaram o dinheiro disponível deste mês em <strong>{fmt(Math.abs(leftover))}</strong>. No momento, você gastou mais do que ganhou. Recomendamos priorizar contas básicas e evitar compras extras até equilibrar o saldo.</span>
+                      ) : (
+                        <span>⚠️ <strong>Saldo no limite perfeito:</strong> Você fechou o mês de {formatMonthKey(currentMonthKey)} equilibrado em <strong>R$ 0,00</strong>. Não há saldo negativo, mas também não sobrou nenhuma quantia livre para poupar. Tente controlar pequenas despesas extras para fazer sobrar dinheiro no próximo mês.</span>
+                      )
+                    ) : (
+                      // Historical Long-Term Advice / Planejamento Geral
+                      allTransactions.length === 0 ? (
+                        <span><strong>Sem histórico suficiente:</strong> Cadastre as contas do seu dia a dia e logo você verá dicas de evolução detalhadas aqui.</span>
+                      ) : pastUnreconciledTx.length > 0 ? (
+                        <span>🔴 <strong>Lembrete de contas pendentes:</strong> Encontramos <strong>{pastUnreconciledTx.length} conta(s) de meses anteriores</strong> que ainda não foram marcadas como pagas. Para manter seu controle em ordem, mude para os meses passados no topo da tela e registre a quitação delas se já tiver pago.</span>
+                      ) : installmentRatio > 40 ? (
+                        <span>⚠️ <strong>Cuidado com o peso de parcelas:</strong> Seus parcelamentos no cartão comprometem <strong>{Math.round(installmentRatio)}%</strong> do seu histórico financeiro ({fmt(totalParcelasAll)}). Muitas compras parceladas prendem sua renda futura. Evite novos parcelamentos até aliviar essa porcentagem!</span>
+                      ) : globalHealthScore >= 75 ? (
+                        <span>💎 <strong>Organização brilhante!</strong> Suas faturas antigas estão pagas, você não tem nenhuma pendência pendente e seus parcelamentos comprometem apenas <strong>{Math.round(installmentRatio)}%</strong> do seu orçamento — uma margem perfeitamente saudável de segurança!</span>
+                      ) : (
+                        <span>📈 <strong>Rumo ao equilíbrio!:</strong> O seu nível geral de controle está em <strong>{globalHealthScore} pontos</strong>. Concentre-se em fazer sobrar um dinheirinho mês a mês para subir sua nota.</span>
+                      )
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Close Button Footer */}
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={() => setShowAssistantTip(false)}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-lg shadow-indigo-600/15 hover:shadow-indigo-500/20 active:scale-95 border-none"
+                >
+                  Entendi, obrigado!
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* SECTION 2: COMPARATIVE ALERTS (ALERTA EM TODAS AS CONTAS INTELIGENTES SEPARADOS) */}
       <div className={`p-6 rounded-3xl border transition-colors duration-300 ${

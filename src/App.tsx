@@ -959,7 +959,7 @@ export default function App() {
   const totalSpentFixoAndVariavel = activeMonthTransactions
     .filter(t => t.type === 'fixos' || t.type === 'variaveis')
     .reduce((sum, t) => sum + t.amount, 0);
-  const leftoverCash = totalInflowsSum - totalSpentFixoAndVariavel;
+  const leftoverCash = totalInflowsSum - totalSpentInMonth;
 
   // Unpaid total estimate for fixed and variables of the month only
   const activeMonthFixAndVar = activeMonthTransactions.filter(t => t.type === 'fixos' || t.type === 'variaveis');

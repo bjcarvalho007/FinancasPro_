@@ -23,6 +23,7 @@ import GoalsPanel from './components/GoalsPanel';
 import SettingsPanel from './components/SettingsPanel';
 import OnboardingTutorial from './components/OnboardingTutorial';
 import ExtraEarningsManager from './components/ExtraEarningsManager';
+import AdminDashboard from './components/AdminDashboard';
 import { 
   TrendingUp, 
   Plus, 
@@ -43,7 +44,8 @@ import {
   LayoutDashboard,
   Receipt,
   Coins,
-  CreditCard
+  CreditCard,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -88,7 +90,7 @@ export default function App() {
   const currentMonthKey = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, '0')}`;
 
   // Tabs context
-  const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings'>('contas');
+  const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings' | 'admin'>('contas');
   
   // Custom Toasts and Alerts
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -1357,7 +1359,7 @@ export default function App() {
 
 
           {/* Grid Layout that splits screen on PC, but rolls standard single col on Mobile */}
-          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' ? (
+          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Main lists column */}
               <div className="lg:col-span-8 space-y-4">
@@ -1602,6 +1604,12 @@ export default function App() {
                     onCreateGoal={handleCreateGoal}
                     onUpdateGoalProgress={handleUpdateGoalProgress}
                     onDeleteGoal={handleDeleteGoal}
+                  />
+                ) : activeTab === 'admin' ? (
+                  <AdminDashboard
+                    onBack={() => setActiveTab('dashboard')}
+                    triggerToast={triggerToast}
+                    currentTheme={theme}
                   />
                 ) : (
                   <SettingsPanel
@@ -2079,14 +2087,20 @@ export default function App() {
           : 'bg-[#090d1af5] border-white/5 shadow-[0_-8px_30px_rgb(0,0,0,0.4)] text-slate-100'
       } px-1.5 pb-safe pt-2 flex items-center justify-around h-16`}>
         <div className="max-w-4xl w-full mx-auto flex items-center justify-around h-full">
-          {[
-            { id: 'dashboard', val: 'Dashboard', icon: LayoutDashboard },
-            { id: 'contas', val: 'Fixas', icon: Receipt },
-            { id: 'variaveis', val: 'Variados', icon: Coins },
-            { id: 'parcelas', val: 'Parcelados', icon: CreditCard },
-            { id: 'goals', val: 'Metas', icon: Target },
-            { id: 'settings', val: 'Ajustes', icon: Settings }
-          ].map((tab) => {
+          {( () => {
+            const tabs = [
+              { id: 'dashboard', val: 'Dashboard', icon: LayoutDashboard },
+              { id: 'contas', val: 'Fixas', icon: Receipt },
+              { id: 'variaveis', val: 'Variados', icon: Coins },
+              { id: 'parcelas', val: 'Parcelados', icon: CreditCard },
+              { id: 'goals', val: 'Metas', icon: Target },
+              { id: 'settings', val: 'Ajustes', icon: Settings }
+            ];
+            if (user && user.email === 'bjcarvalho07@gmail.com') {
+              tabs.push({ id: 'admin', val: 'Painel Admin', icon: ShieldCheck });
+            }
+            return tabs;
+          })().map((tab) => {
             const isSelected = activeTab === tab.id;
             const Icon = tab.icon;
             return (

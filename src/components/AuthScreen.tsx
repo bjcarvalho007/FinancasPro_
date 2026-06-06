@@ -495,14 +495,104 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
           ) : (
             /* ================= VIEW B: CLEAN DIRECT CONNECT (DEFAULT) ================= */
             <motion.div
-              key="login-view"
+              key={showPitch ? "grid-view" : "login-view"}
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
               transition={{ duration: 0.35 }}
-              className="w-full max-w-md"
+              className={`w-full ${showPitch ? 'max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-start' : 'max-w-md'}`}
             >
-              <div className="p-6 md:p-8 rounded-3xl bg-[#090e1b] border border-white/5 shadow-2xl relative">
+              {showPitch && (
+                <div className="lg:col-span-7 space-y-6 p-6 md:p-8 rounded-3xl bg-[#090e1b]/95 border border-white/5 shadow-2xl backdrop-blur-md">
+                  {/* Pitch Header */}
+                  <div>
+                    <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
+                      ⚡ Plataforma Profissional
+                    </span>
+                    <h3 className="font-display font-black text-2xl md:text-3xl text-white tracking-tight leading-tight">
+                      Domine Suas Finanças com Inteligência Real
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-2 font-normal leading-relaxed">
+                      Diga adeus às planilhas complexas e anotações perdidas. O FinançasPro é um ecossistema projetado para quem busca precisão cirúrgica e clareza no fluxo de caixa.
+                    </p>
+                  </div>
+
+                  {/* Highlights Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                        <BarChart2 className="w-5 h-5 text-indigo-400" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Analytics Completo</h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">Visão global e por categoria automatizada e rica em detalhes.</p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                        <Coins className="w-5 h-5 text-emerald-400" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Gestão de Parcelas</h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">Abatimento progressivo do saldo devedor sem juros ocultos selvagens.</p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                        <Target className="w-5 h-5 text-amber-400" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Metas Inteligentes</h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">Defina objetivos e acompanhe suas conquistas mês a mês.</p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-5 h-5 text-sky-450" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Segurança Máxima</h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">Dados criptografados na nuvem do Firebase para total privacidade.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Call to action card inside pitch */}
+                  <div className="p-5 md:p-6 rounded-2xl bg-emerald-950/20 border border-emerald-500/15 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1 max-w-sm">
+                      <h4 className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" /> Oferta Premium Vitalícia
+                      </h4>
+                      <p className="text-xs text-slate-300 leading-relaxed font-light">
+                        Tenha acesso definitivo para gerenciar suas despesas fixas, variáveis e parcelas sem estresse ou mensalidades futuras.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleStripeCheckout}
+                      disabled={checkoutLoading}
+                      className="shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3 px-5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border-none"
+                    >
+                      {checkoutLoading ? "Iniciando..." : "Quero Assinar por R$ 9,99"}
+                      {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  {/* Trust Badge */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 border-t border-white/5 text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">
+                    <span>Taxa Única: R$ 9,99 (Sem Mensalidades)</span>
+                    <span className="flex items-center gap-1.5 text-emerald-450">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /> Pagamento 100% Protegido
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className={showPitch ? "lg:col-span-5 w-full" : "w-full"}>
+                <div className="p-6 md:p-8 rounded-3xl bg-[#090e1b] border border-white/5 shadow-2xl relative">
                 <div className="absolute top-4 right-4 text-emerald-400 animate-pulse">
                   <Sparkles className="w-4 h-4" />
                 </div>
@@ -638,12 +728,13 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         disabled={checkoutLoading}
                         className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 border-none"
                       >
-                        {checkoutLoading ? "Iniciando..." : "Quero Assinar"}
+                        {checkoutLoading ? "Iniciando..." : "Quero Assinar por R$ 9,99"}
                         {!checkoutLoading && <ArrowRight className="w-4 h-4" />}
                       </button>
                     </div>
                   )}
                 </div>
+              </div>
               </div>
             </motion.div>
           )}

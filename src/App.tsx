@@ -1479,33 +1479,6 @@ export default function App() {
                                               {formatCurrency(totalOriginalBase)}
                                             </strong>
                                           </div>
-                                          {totalExtraGasto > 0 && (
-                                            <div className="text-slate-400 flex items-center gap-1.5">
-                                              <span>📈 Gasto Extra Acumulado: </span>
-                                              <strong className="text-amber-400 font-bold px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/10">
-                                                + {formatCurrency(totalExtraGasto)}
-                                              </strong>
-                                              <button
-                                                onClick={async () => {
-                                                  const path = `transactions/${masterId}`;
-                                                  try {
-                                                    const docRef = doc(db, 'transactions', masterId);
-                                                    await updateDoc(docRef, {
-                                                      extra_gasto: 0,
-                                                      updatedAt: new Date().toISOString()
-                                                    });
-                                                    triggerToast('Gasto extra reiniciado para R$ 0,00.', 'warning');
-                                                  } catch (err) {
-                                                    handleFirestoreError(err, OperationType.UPDATE, path);
-                                                  }
-                                                }}
-                                                className="text-[9px] font-black uppercase text-rose-450 hover:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 px-1.5 py-0.5 rounded transition-all cursor-pointer border-none"
-                                                title="Limpar gasto extra acumulado"
-                                              >
-                                                Zerar
-                                              </button>
-                                            </div>
-                                          )}
                                           <div className="text-slate-400 flex items-center gap-1">
                                             <span>📉 Saldo Devedor Restante Global: </span>
                                             <strong className="text-rose-400 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/10">

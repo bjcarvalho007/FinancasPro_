@@ -77,7 +77,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
   const [isCadastroMode, setIsCadastroMode] = useState<boolean>(false);
 
   const handleMercadoPagoCheckout = () => {
-    window.open("https://mpago.la/1SfRUJ2", "_blank");
+    window.location.href = "https://mpago.la/24ukKJM";
   };
 
   useEffect(() => {

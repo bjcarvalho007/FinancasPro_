@@ -11,6 +11,7 @@ export interface Transaction {
   masterId?: string;
   monthKey: string; // YYYY-MM
   total_parcelado?: number;
+  extra_gasto?: number;
   createdAt?: string;
   updatedAt?: string;
 }

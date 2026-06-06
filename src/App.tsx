@@ -13,7 +13,8 @@ import {
   onSnapshot,
   setDoc,
   deleteDoc,
-  getDocFromServer
+  getDocFromServer,
+  updateDoc
 } from 'firebase/firestore';
 import { Transaction, Category, Goal, Setting, AppNotification, ExtraEarning } from './types';
 import AuthScreen from './components/AuthScreen';
@@ -122,6 +123,7 @@ export default function App() {
   const [confirmValueStr, setConfirmValueStr] = useState<string>('');
   const [isPendingDebtListOpen, setIsPendingDebtListOpen] = useState<boolean>(false);
   const [installmentInputs, setInstallmentInputs] = useState<Record<string, string>>({});
+  const [extraGastoInputs, setExtraGastoInputs] = useState<Record<string, string>>({});
 
   // Income parameters custom configuration trigger modal
   const [isIncomeOpen, setIsIncomeOpen] = useState<boolean>(false);
@@ -1450,7 +1452,9 @@ export default function App() {
                                 // Calculate dynamic remaining debt
                                 const masterId = tx.masterId || tx.id;
                                 const masterTx = transactions.find(t => t.id === masterId) || tx;
-                                const totalOriginal = masterTx.total_parcelado || masterTx.amount || 0;
+                                const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+                                const totalExtraGasto = masterTx.extra_gasto || 0;
+                                const totalOriginal = totalOriginalBase + totalExtraGasto;
                                 
                                 // Sum all payments in type 'parcelas' that belong to this system
                                 const totalPaidAcrossMonths = transactions
@@ -1460,30 +1464,133 @@ export default function App() {
                                 const totalDevedorRestante = Math.max(0, totalOriginal - totalPaidAcrossMonths);
                                 
                                 return (
-                                  <div className={`pt-3.5 border-t border-dashed ${theme === 'light' ? 'border-slate-150' : 'border-white/5'} flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-1.5 p-4 rounded-2xl ${
+                                  <div className={`pt-3.5 border-t border-dashed ${theme === 'light' ? 'border-slate-150' : 'border-white/5'} flex flex-col gap-4 mt-1.5 p-4 rounded-2xl ${
                                     theme === 'light' ? 'bg-indigo-50/20 border border-slate-200' : 'bg-indigo-950/10 border border-white/5'
                                   }`}>
-                                    <div className="space-y-1">
-                                      <span className={`text-[10px] font-extrabold uppercase tracking-wider block ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>
-                                        💳 Demonstrativo do Parcelamento
-                                      </span>
-                                      <div className="flex flex-col gap-1 text-[11.5px] leading-relaxed">
-                                        <div className="text-slate-400">
-                                          <span>Valor Total do Parcelamento: </span>
-                                          <strong className={theme === 'light' ? 'text-slate-700' : 'text-slate-205'}>
-                                            {formatCurrency(totalOriginal)}
-                                          </strong>
+                                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                      <div className="space-y-1">
+                                        <span className={`text-[10px] font-extrabold uppercase tracking-wider block ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>
+                                          💳 Demonstrativo do Parcelamento
+                                        </span>
+                                        <div className="flex flex-col gap-1 text-[11.5px] leading-relaxed">
+                                          <div className="text-slate-400">
+                                            <span>Valor Total do Parcelamento: </span>
+                                            <strong className={theme === 'light' ? 'text-slate-700' : 'text-slate-205'}>
+                                              {formatCurrency(totalOriginalBase)}
+                                            </strong>
+                                          </div>
+                                          {totalExtraGasto > 0 && (
+                                            <div className="text-slate-400 flex items-center gap-1.5">
+                                              <span>📈 Gasto Extra Acumulado: </span>
+                                              <strong className="text-amber-400 font-bold px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/10">
+                                                + {formatCurrency(totalExtraGasto)}
+                                              </strong>
+                                              <button
+                                                onClick={async () => {
+                                                  const path = `transactions/${masterId}`;
+                                                  try {
+                                                    const docRef = doc(db, 'transactions', masterId);
+                                                    await updateDoc(docRef, {
+                                                      extra_gasto: 0,
+                                                      updatedAt: new Date().toISOString()
+                                                    });
+                                                    triggerToast('Gasto extra reiniciado para R$ 0,00.', 'warning');
+                                                  } catch (err) {
+                                                    handleFirestoreError(err, OperationType.UPDATE, path);
+                                                  }
+                                                }}
+                                                className="text-[9px] font-black uppercase text-rose-450 hover:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 px-1.5 py-0.5 rounded transition-all cursor-pointer border-none"
+                                                title="Limpar gasto extra acumulado"
+                                              >
+                                                Zerar
+                                              </button>
+                                            </div>
+                                          )}
+                                          <div className="text-slate-400 flex items-center gap-1">
+                                            <span>📉 Saldo Devedor Restante Global: </span>
+                                            <strong className="text-rose-400 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/10">
+                                              {formatCurrency(totalDevedorRestante)}
+                                            </strong>
+                                          </div>
                                         </div>
-                                        <div className="text-slate-400 flex items-center gap-1">
-                                          <span>📉 Saldo Devedor Restante Global: </span>
-                                          <strong className="text-rose-400 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/10">
-                                            {formatCurrency(totalDevedorRestante)}
-                                          </strong>
+                                      </div>
+
+                                      {/* Input to add extra spending */}
+                                      <div className={`p-3 rounded-2xl border flex flex-col gap-1.5 sm:min-w-[220px] ${
+                                        theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-slate-950/40 border-white/5'
+                                      }`}>
+                                        <span className={`text-[9.5px] uppercase tracking-wider font-extrabold block ${theme === 'light' ? 'text-amber-600' : 'text-amber-400'}`}>
+                                          ➕ Adicionar Gasto Extra
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                          <div className={`relative rounded-xl border ${
+                                            theme === 'light' ? 'bg-white border-slate-300 focus-within:border-amber-400' : 'bg-slate-950/50 border-white/5 focus-within:border-amber-500'
+                                          } transition-all px-2.5 py-1.5 flex items-center shadow-inner`}>
+                                            <input
+                                              type="text"
+                                              inputMode="numeric"
+                                              placeholder="R$ 0,00"
+                                              value={extraGastoInputs[tx.id] || ''}
+                                              onChange={(e) => {
+                                                const masked = handleMaskMoney(e.target.value);
+                                                setExtraGastoInputs(prev => ({ ...prev, [tx.id]: masked }));
+                                              }}
+                                              onKeyDown={async (e) => {
+                                                if (e.key === 'Enter') {
+                                                  e.preventDefault();
+                                                  const valStr = extraGastoInputs[tx.id];
+                                                  if (!valStr || valStr === 'R$ 0,00') return;
+                                                  const valueToAdd = handleParseMoney(valStr);
+                                                  if (valueToAdd <= 0) return;
+
+                                                  const path = `transactions/${masterId}`;
+                                                  try {
+                                                    const docRef = doc(db, 'transactions', masterId);
+                                                    await updateDoc(docRef, {
+                                                      extra_gasto: totalExtraGasto + valueToAdd,
+                                                      updatedAt: new Date().toISOString()
+                                                    });
+                                                    setExtraGastoInputs(prev => ({ ...prev, [tx.id]: '' }));
+                                                    triggerToast(`Gasto extra de ${formatCurrency(valueToAdd)} adicionado com sucesso!`, 'success');
+                                                  } catch (err) {
+                                                    handleFirestoreError(err, OperationType.UPDATE, path);
+                                                  }
+                                                }
+                                              }}
+                                              className={`w-20 bg-transparent font-mono font-bold text-xs focus:outline-none p-0 leading-none ${
+                                                theme === 'light' ? 'text-slate-800' : 'text-slate-150'
+                                              }`}
+                                            />
+                                          </div>
+                                          <button
+                                            onClick={async () => {
+                                              const valStr = extraGastoInputs[tx.id];
+                                              if (!valStr || valStr === 'R$ 0,00') return;
+                                              const valueToAdd = handleParseMoney(valStr);
+                                              if (valueToAdd <= 0) return;
+
+                                              const path = `transactions/${masterId}`;
+                                              try {
+                                                const docRef = doc(db, 'transactions', masterId);
+                                                await updateDoc(docRef, {
+                                                  extra_gasto: totalExtraGasto + valueToAdd,
+                                                  updatedAt: new Date().toISOString()
+                                                });
+                                                setExtraGastoInputs(prev => ({ ...prev, [tx.id]: '' }));
+                                                triggerToast(`Gasto extra de ${formatCurrency(valueToAdd)} adicionado com sucesso!`, 'success');
+                                              } catch (err) {
+                                                handleFirestoreError(err, OperationType.UPDATE, path);
+                                              }
+                                            }}
+                                            className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md shadow-amber-500/10 active:scale-95 border-none shrink-0"
+                                          >
+                                            Somar
+                                          </button>
                                         </div>
                                       </div>
                                     </div>
                                     
-                                    <div className="flex flex-col sm:flex-row sm:items-center gap-3.5">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 border-t border-dashed border-white/5 pt-3">
                                       <div className="space-y-0.5">
                                         <span className={`text-[10px] uppercase tracking-wider font-extrabold block ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>
                                           Quanto deseja pagar este mês?

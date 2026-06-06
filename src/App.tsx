@@ -920,7 +920,7 @@ export default function App() {
           id: virtualId,
           userId: masterTx.userId,
           name: masterTx.name,
-          amount: masterTx.amount,
+          amount: masterTx.type === 'parcelas' ? 0 : masterTx.amount,
           type: masterTx.type, // Keeps original type: 'fixos' or 'parcelas'
           cat: masterTx.cat,
           due: masterTx.due,
@@ -928,6 +928,7 @@ export default function App() {
           paid_at: '',
           masterId: masterTx.masterId || masterTx.id,
           monthKey: currentMonthKey,
+          total_parcelado: masterTx.type === 'parcelas' ? (masterTx.total_parcelado || masterTx.amount) : undefined,
           createdAt: masterTx.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
@@ -1466,12 +1467,6 @@ export default function App() {
                                       </span>
                                       <div className="flex flex-col gap-1 text-[11.5px] leading-relaxed">
                                         <div className="text-slate-400">
-                                          <span>Estimativa da Parcela Mensal: </span>
-                                          <strong className={theme === 'light' ? 'text-slate-700' : 'text-slate-205'}>
-                                            {formatCurrency(tx.amount)} /mês
-                                          </strong>
-                                        </div>
-                                        <div className="text-slate-400">
                                           <span>Valor Total do Parcelamento: </span>
                                           <strong className={theme === 'light' ? 'text-slate-700' : 'text-slate-205'}>
                                             {formatCurrency(totalOriginal)}
@@ -1519,9 +1514,10 @@ export default function App() {
                                             const newVal = handleParseMoney(currentValStr);
                                             
                                             if (newVal !== (tx.paid_amount || 0)) {
-                                              const finishedPaying = newVal >= tx.amount;
+                                              const finishedPaying = newVal > 0;
                                               const updatedTx = { 
                                                 ...tx, 
+                                                amount: newVal,
                                                 paid_amount: newVal, 
                                                 paid_at: finishedPaying ? new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
                                                 updatedAt: new Date().toISOString() 

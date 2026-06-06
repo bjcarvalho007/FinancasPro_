@@ -31,7 +31,6 @@ export default function TransactionFormModal({
 }: TransactionFormModalProps) {
   const [name, setName] = useState<string>('');
   const [amountStr, setAmountStr] = useState<string>('');
-  const [totalParceladoStr, setTotalParceladoStr] = useState<string>('');
   const [type, setType] = useState<'fixos' | 'variaveis' | 'parcelas'>('fixos');
   const [cat, setCat] = useState<string>('moradia');
   const [due, setDue] = useState<string>('');
@@ -48,18 +47,16 @@ export default function TransactionFormModal({
       setError(null);
       if (initialData) {
         setName(initialData.name);
-        setAmountStr(formatMoney(initialData.amount));
+        setAmountStr(formatMoney(initialData.type === 'parcelas' ? (initialData.total_parcelado || initialData.amount) : initialData.amount));
         setType(initialData.type);
         setCat(initialData.cat);
         setDue(initialData.due || '');
-        setTotalParceladoStr(initialData.total_parcelado ? formatMoney(initialData.total_parcelado) : '');
       } else {
         setName('');
         setAmountStr('');
         setType(defaultType);
         setCat('moradia');
         setDue('Dia 10');
-        setTotalParceladoStr('');
       }
       setShowCatDropdown(false);
       setShowAddCustomCat(false);
@@ -81,16 +78,6 @@ export default function TransactionFormModal({
     setAmountStr(formatMoney(valFloat));
   };
 
-  const handleTotalParceladoInput = (val: string) => {
-    let numeric = val.replace(/\D/g, "");
-    if (!numeric) {
-      setTotalParceladoStr("");
-      return;
-    }
-    const valFloat = parseFloat(numeric) / 100;
-    setTotalParceladoStr(formatMoney(valFloat));
-  };
-
   const parseMoney = (str: string): number => {
     if (!str) return 0;
     const clean = str.replace(/[^\d,]/g, "").replace(",", ".");
@@ -109,11 +96,11 @@ export default function TransactionFormModal({
       return;
     }
 
-    const totalVal = type === 'parcelas' ? parseMoney(totalParceladoStr) : undefined;
+    const totalVal = type === 'parcelas' ? amountVal : undefined;
 
     onSave({
       name,
-      amount: amountVal,
+      amount: type === 'parcelas' ? (initialData ? (initialData.amount || 0) : 0) : amountVal,
       type,
       cat,
       due: due || 'Dia 10',
@@ -313,7 +300,7 @@ export default function TransactionFormModal({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> {type === 'parcelas' ? 'Parcela Mensal (R$)' : 'Valor (R$)'}
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> {type === 'parcelas' ? 'Valor Total Parcelado (R$)' : 'Valor (R$)'}
                 </label>
                 <input
                   id="modal-amount-input"
@@ -340,30 +327,6 @@ export default function TransactionFormModal({
                 />
               </div>
             </div>
-
-            {type === 'parcelas' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="pt-2 space-y-1.5"
-              >
-                <label className="block text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                  <DollarSign className="w-3.5 h-3.5 text-indigo-450" /> Valor Total Parcelado (Saldo Inicial)
-                </label>
-                <input
-                  id="modal-total-parcelado-input"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="Ex: R$ 2.400,00"
-                  value={totalParceladoStr}
-                  onChange={(e) => handleTotalParceladoInput(e.target.value)}
-                  className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-white text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold"
-                />
-                <p className="text-[10.5px] text-slate-400 leading-normal">
-                  Insira o valor total devido desta compra/fatura. Os pagamentos realizados mês a mês serão deduzidos deste saldo devedor consolidado.
-                </p>
-              </motion.div>
-            )}
           </div>
 
           {/* Action buttons */}

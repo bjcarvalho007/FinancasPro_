@@ -349,7 +349,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         onClick={handleMercadoPagoCheckout}
                         className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
                       >
-                        Realizar Pagamento (R$ 9,99)
+                        Realizar Pagamento
                         <ArrowRight className="w-4 h-4" />
                       </button>
 
@@ -510,14 +510,14 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       onClick={handleMercadoPagoCheckout}
                       className="shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3 px-5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer border-none"
                     >
-                      Quero Assinar por R$ 9,99
+                      Quero Assinar
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
 
                   {/* Trust Badge */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 border-t border-white/5 text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">
-                    <span>Taxa Única: R$ 9,99 (Sem Mensalidades)</span>
+                    <span>Acesso Vitalício (Sem Mensalidades)</span>
                     <span className="flex items-center gap-1.5 text-emerald-450">
                       <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /> Pagamento 100% Protegido
                     </span>
@@ -661,7 +661,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         }}
                         className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
                       >
-                        Quero Assinar por R$ 9,99
+                        Quero Assinar
                         <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>

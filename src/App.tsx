@@ -96,6 +96,10 @@ export default function App() {
   // Tabs context
   const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings' | 'admin'>('dashboard');
   
+  // Layout and sorting settings for transactions categories (fixos, variaveis, parcelas)
+  const [tabLayout, setTabLayout] = useState<'detalhado' | 'lista'>('detalhado');
+  const [tabSortBy, setTabSortBy] = useState<'cadastro' | 'nome' | 'valor' | 'vencimento'>('cadastro');
+  
   // Custom Toasts and Alerts
   const [toastMessage, setToastMessage] = useState<string>('');
   const [toastType, setToastType] = useState<'success' | 'error' | 'warning'>('success');
@@ -1063,11 +1067,29 @@ export default function App() {
   }, [transactions, currentMonthKey]);
 
   const activeTabTransactions = useMemo(() => {
+    let filtered: Transaction[] = [];
     if (activeTab === 'contas') {
-      return activeMonthTransactions.filter(t => t.type === 'fixos');
+      filtered = activeMonthTransactions.filter(t => t.type === 'fixos');
+    } else {
+      filtered = activeMonthTransactions.filter(t => t.type === activeTab);
     }
-    return activeMonthTransactions.filter(t => t.type === activeTab);
-  }, [activeMonthTransactions, activeTab]);
+
+    const parseDueDay = (dueStr: string): number => {
+      if (!dueStr) return 99;
+      const num = parseInt(dueStr.replace(/\D/g, ''), 10);
+      return isNaN(num) ? 99 : num;
+    };
+
+    const sorted = [...filtered];
+    if (tabSortBy === 'nome') {
+      sorted.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    } else if (tabSortBy === 'valor') {
+      sorted.sort((a, b) => b.amount - a.amount);
+    } else if (tabSortBy === 'vencimento') {
+      sorted.sort((a, b) => parseDueDay(a.due) - parseDueDay(b.due));
+    }
+    return sorted;
+  }, [activeMonthTransactions, activeTab, tabSortBy]);
 
   // Summaries Calculations
   const inc = settings?.monthlyIncome?.[currentMonthKey] ?? 0;
@@ -1720,6 +1742,83 @@ export default function App() {
               {/* Main lists column */}
               <div className="lg:col-span-8 space-y-4">
                 <main className="space-y-4 pt-1">
+                  {/* Controls Bar for layout style and sorting */}
+                  <div className={`p-3 rounded-2xl border flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 ${
+                    theme === 'light' 
+                      ? 'bg-slate-50/50 border-slate-200/60 shadow-xs' 
+                      : 'bg-white/2 border-white/5'
+                  }`}>
+                    {/* Left: layout switcher */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-[10px] font-black uppercase tracking-wider mr-1 shrink-0 ${
+                        theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                      }`}>
+                        Layout:
+                      </span>
+                      <button
+                        onClick={() => setTabLayout('detalhado')}
+                        className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                          tabLayout === 'detalhado' 
+                            ? theme === 'light' 
+                              ? 'bg-indigo-600 text-white shadow-sm' 
+                              : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                            : theme === 'light' 
+                              ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200' 
+                              : 'bg-white/3 hover:bg-white/8 text-slate-400'
+                        }`}
+                      >
+                        📊 Detalhado
+                      </button>
+                      <button
+                        onClick={() => setTabLayout('lista')}
+                        className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                          tabLayout === 'lista' 
+                            ? theme === 'light' 
+                              ? 'bg-indigo-600 text-white shadow-sm' 
+                              : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                            : theme === 'light' 
+                              ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200' 
+                              : 'bg-white/3 hover:bg-white/8 text-slate-400'
+                        }`}
+                      >
+                        📋 Lista Simples
+                      </button>
+                    </div>
+
+                    {/* Right: sorting options */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-[10px] font-black uppercase tracking-wider mr-1 shrink-0 ${
+                        theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                      }`}>
+                        Ordenar:
+                      </span>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {([
+                          { id: 'cadastro', label: '⭐ Padrão' },
+                          { id: 'nome', label: '🔤 Nome' },
+                          { id: 'valor', label: '💰 Valor' },
+                          { id: 'vencimento', label: '📅 Dia' }
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => setTabSortBy(opt.id)}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                              tabSortBy === opt.id 
+                                ? theme === 'light'
+                                  ? 'bg-indigo-50 text-indigo-600 font-extrabold border border-indigo-200'
+                                  : 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/25'
+                                : theme === 'light' 
+                                  ? 'bg-transparent border border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-150/50' 
+                                  : 'bg-transparent border border-transparent text-slate-400 hover:text-white hover:bg-white/5'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="space-y-3">
                     {activeTabTransactions.length === 0 ? (
                       <div className={`p-12 text-center border border-dashed rounded-3xl text-xs select-none ${
@@ -1734,6 +1833,93 @@ export default function App() {
                           const remDue = tx.amount - (tx.paid_amount || 0);
                           const isPaid = remDue <= 0;
 
+                          if (tabLayout === 'lista') {
+                            return (
+                              <div
+                                key={tx.id}
+                                className={`p-3 rounded-2xl border flex flex-col gap-2 transition-all ${
+                                  theme === 'light' 
+                                    ? 'bg-white border-slate-200/80 hover:border-indigo-155 hover:shadow-xs' 
+                                    : 'bg-white/2 border border-white/5 hover:border-white/10'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-3 w-full animate-fadeIn">
+                                  <div className="flex items-center gap-3 min-w-0 cursor-pointer" onClick={() => handleOpenEdit(tx)}>
+                                    <div className={`w-8 h-8 rounded-lg border flex items-center justify-center text-base shadow-sm shrink-0 ${
+                                      theme === 'light' ? 'bg-slate-50 border-slate-100' : 'bg-slate-900 border border-white/5'
+                                    }`}>
+                                      {categoryObj.icon}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <h4 className={`font-display font-bold text-[13.5px] truncate flex items-center gap-1.5 leading-none ${
+                                        theme === 'light' ? 'text-slate-800' : 'text-white'
+                                      }`}>
+                                        {tx.name} {isPaid && <span className="text-emerald-450 font-sans font-black">✓</span>}
+                                        {tx.type === 'fixos' && (
+                                          <span className="text-[8.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/10">Fixo</span>
+                                        )}
+                                        {tx.type === 'variaveis' && (
+                                          <span className="text-[8.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/10">Variável</span>
+                                        )}
+                                      </h4>
+                                      <p className="text-[10px] text-slate-550/90 font-medium truncate mt-0.5">
+                                        {categoryObj.label} • {formatCurrency(tx.amount)}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                      onClick={() => handleOpenPay(tx.id)}
+                                      className={`px-2.5 py-1 rounded-md text-[9.5px] font-black tracking-wider uppercase cursor-pointer transition-all ${
+                                        isPaid 
+                                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                          : theme === 'light'
+                                            ? 'bg-slate-100 hover:bg-slate-205 border border-slate-200 text-slate-705'
+                                            : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/5'
+                                      }`}
+                                    >
+                                      {isPaid ? 'PAGO' : 'PAGAR'}
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleDeleteTransaction(tx.id)}
+                                      className="w-7 h-7 rounded-md bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/5 text-rose-400 flex items-center justify-center cursor-pointer transition-colors text-[10px]"
+                                      title="Deletar lançamento"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Legend underneath paid accounts */}
+                                <div className={`pt-1.5 border-t border-dashed ${
+                                  theme === 'light' ? 'border-slate-100' : 'border-white/5'
+                                } flex items-center justify-between gap-1.5`}>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px]">{isPaid ? '🟢' : '🟡'}</span>
+                                    <span className={`text-[9.5px] font-extrabold uppercase tracking-wider ${
+                                      isPaid 
+                                        ? theme === 'light' ? 'text-emerald-700/90' : 'text-emerald-400'
+                                        : theme === 'light' ? 'text-amber-600/90' : 'text-amber-500'
+                                    }`}>
+                                      {isPaid 
+                                        ? tx.paid_at ? `Pago no dia ${tx.paid_at}` : 'Pago (Liquidado)'
+                                        : `Aguardando • Vencimento: ${tx.due || 'Sem data'}`
+                                      }
+                                    </span>
+                                  </div>
+                                  {tx.paid_amount > 0 && !isPaid && (
+                                    <span className="text-[9.5px] font-black uppercase text-amber-500">
+                                      Parcial: {formatCurrency(tx.paid_amount)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // DETALHADO (Detailed style)
                           return (
                             <div
                               key={tx.id}
@@ -1783,7 +1969,7 @@ export default function App() {
                                         isPaid 
                                           ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                                           : theme === 'light'
-                                            ? 'bg-slate-100 hover:bg-slate-205 border border-slate-200 text-slate-700'
+                                            ? 'bg-slate-100 hover:bg-slate-205 border border-slate-200 text-slate-707'
                                             : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/5'
                                       }`}
                                     >
@@ -1799,6 +1985,32 @@ export default function App() {
                                     </button>
                                   </div>
                                 </div>
+                              </div>
+
+                              {/* Detailed payment status legend */}
+                              <div className={`pt-2 border-t border-dashed ${
+                                theme === 'light' ? 'border-slate-150' : 'border-white/5'
+                              } flex flex-wrap items-center justify-between gap-2`}>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs shrink-0">{isPaid ? '🟢' : '🟡'}</span>
+                                  <span className={`text-[10.5px] font-bold uppercase tracking-wider ${
+                                    isPaid 
+                                      ? theme === 'light' ? 'text-emerald-700/95' : 'text-emerald-400'
+                                      : theme === 'light' ? 'text-amber-600/95' : 'text-amber-500/90'
+                                  }`}>
+                                    {isPaid 
+                                      ? tx.paid_at ? `Pago no dia ${tx.paid_at}` : 'Pago (Liquidado)'
+                                      : `Aguardando Pagamento • Vencimento: ${tx.due || 'Sem data'}`
+                                    }
+                                  </span>
+                                </div>
+                                {tx.paid_amount > 0 && !isPaid && (
+                                  <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded uppercase ${
+                                    theme === 'light' ? 'bg-amber-100 text-amber-800' : 'bg-amber-500/10 text-amber-400 border border-amber-500/10'
+                                  }`}>
+                                    Pago Parcial: {formatCurrency(tx.paid_amount)}
+                                  </span>
+                                )}
                               </div>
 
                               {/* Interactive installment planner p/ user escolher valor no mês */}
@@ -1928,7 +2140,7 @@ export default function App() {
                                       </div>
                                       
                                       <div className={`relative rounded-xl border ${
-                                        theme === 'light' ? 'bg-slate-50 border-slate-200 focus-within:border-indigo-400' : 'bg-slate-950/40 border-white/5 focus-within:border-indigo-500'
+                                        theme === 'light' ? 'bg-slate-50 border-slate-205 focus-within:border-indigo-400' : 'bg-slate-950/40 border-white/5 focus-within:border-indigo-500'
                                       } transition-all px-3.5 py-2 flex items-center shadow-inner`}>
                                         <input
                                           type="text"

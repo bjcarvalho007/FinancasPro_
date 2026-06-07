@@ -55,6 +55,7 @@ export default function DashboardAnalytics({
   const [activeDashboardMode, setActiveDashboardMode] = useState<'current' | 'history'>('current');
   const [showAssistantTip, setShowAssistantTip] = useState(false);
   const [hoveredBar, setHoveredBar] = useState<string | null>(null);
+  const [showIntelligentAlertsModal, setShowIntelligentAlertsModal] = useState(false);
 
   const isLight = currentTheme === 'light';
   const todayStr = '2026-05-29'; // Dynamic reference baseline for overdue liabilities
@@ -483,6 +484,16 @@ export default function DashboardAnalytics({
   // Projeção Próxima e Médio custo
   const averageItemCost = currentModeTransactions.length > 0 ? (modeTotalSpent / currentModeTransactions.length) : 0;
 
+  // Deduplicate and combine all system alerts to meet "e que nada se repita" requirement
+  const allSystemAlerts = [...historyAlerts, ...monthAlerts];
+  const uniqueSystemAlerts = allSystemAlerts.reduce((acc, current) => {
+    const isDuplicate = acc.some(item => item.text.trim().toLowerCase() === current.text.trim().toLowerCase());
+    if (!isDuplicate) {
+      acc.push(current);
+    }
+    return acc;
+  }, [] as typeof monthAlerts);
+
   // Render variables helper
   const fmt = (v: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -901,62 +912,216 @@ export default function DashboardAnalytics({
         )}
       </AnimatePresence>
 
-      {/* SECTION 2: COMPARATIVE ALERTS (ALERTA EM TODAS AS CONTAS INTELIGENTES SEPARADOS) */}
-      <div className={`p-6 rounded-3xl border transition-colors duration-300 ${
-        isLight ? 'bg-white border-slate-200' : 'bg-[#090d1c]/45 border-white/5'
-      }`}>
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4.5 h-4.5 text-rose-400 animate-pulse" />
-            <h4 className={`font-display font-black text-sm uppercase tracking-wider ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
-              Avisos & Alertas Importantes ({activeDashboardMode === 'current' ? 'Mês Atual' : 'Histórico Geral'})
-            </h4>
-          </div>
-          <span className={`text-[9px] font-black uppercase text-slate-500 bg-white/5 px-2.5 py-1 rounded-md tracking-wider ${
-            isLight ? 'bg-slate-150 text-slate-850 font-black' : ''
-          }`}>
-            {activeScores.alerts.length} Notificações Ativas
-          </span>
-        </div>
-
-        <div className="space-y-3">
-          <AnimatePresence mode="wait">
-            {activeScores.alerts.map((alert) => (
-              <motion.div
-                key={alert.id}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                className={`p-4 rounded-2xl border flex items-start gap-3.5 ${
-                  alert.type === 'error'
-                    ? 'bg-rose-500/5 border-rose-500/10 text-rose-300'
-                    : alert.type === 'warning'
-                      ? 'bg-amber-500/5 border-amber-500/10 text-amber-300'
-                      : 'bg-emerald-500/5 border-emerald-500/10 text-emerald-300'
-                }`}
-              >
-                <div className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center font-bold text-xs ${
-                  alert.type === 'error'
-                    ? 'bg-rose-500/10 text-rose-450'
-                    : alert.type === 'warning'
-                      ? 'bg-amber-500/10 text-amber-400'
-                      : 'bg-emerald-500/10 text-emerald-400'
+      {/* SECTION 2: COMPARATIVE ALERTS (INTERACTIVE TRIGGER CARD) */}
+      <motion.button
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        onClick={() => setShowIntelligentAlertsModal(true)}
+        className={`w-full text-left p-6 rounded-3xl border transition-all duration-300 relative overflow-hidden group shadow-lg cursor-pointer ${
+          isLight 
+            ? 'bg-white hover:bg-slate-50 border-slate-200/80 shadow-slate-100/35 hover:shadow-slate-250/50 text-slate-800' 
+            : 'bg-gradient-to-br from-[#0a0f1d] to-[#060a15] hover:to-[#080d1d] border-white/5 shadow-black/25 text-slate-100'
+        }`}
+      >
+        {/* Animated sheen effect */}
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo-500/40 to-transparent" />
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 relative z-10">
+          <div className="flex items-start gap-4">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${
+              isLight 
+                ? 'bg-indigo-50 border-indigo-150 text-indigo-600' 
+                : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 glow-indigo'
+            }`}>
+              <ShieldAlert className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full ${
+                  isLight ? 'bg-indigo-50 text-indigo-700' : 'bg-indigo-500/15 text-indigo-400'
                 }`}>
-                  {alert.type === 'error' ? '🔴' : alert.type === 'warning' ? '⚠️' : '💚'}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h5 className="text-[12.5px] font-black tracking-tight text-slate-100 leading-tight">
-                    {alert.text}
-                  </h5>
-                  <p className="text-[11.5px] text-slate-400 font-light leading-relaxed mt-1">
-                    {alert.details}
-                  </p>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+                  🧠 Diagnóstico Exclusivo
+                </span>
+                {uniqueSystemAlerts.length > 0 && (
+                  <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full animate-pulse ${
+                    isLight ? 'bg-rose-50 text-rose-700' : 'bg-rose-500/15 text-rose-450'
+                  }`}>
+                    {uniqueSystemAlerts.length} Notificações de Saúde
+                  </span>
+                )}
+              </div>
+              <h4 className={`font-display font-black text-base tracking-tight mt-1.5 ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                Avisos & Alertas Importantes (Histórico Geral)
+              </h4>
+              <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'} font-light mt-1`}>
+                Toque para abrir seu painel inteligente com feed de evolução comparativo, desvios e diagnósticos.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-[11px] uppercase tracking-wider px-4.5 py-3 rounded-xl transition-all shadow-md group-hover:shadow-indigo-500/15 shrink-0 self-start md:self-center border-none">
+            Analisar Painel
+            <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+          </div>
         </div>
-      </div>
+      </motion.button>
+
+      {/* INTELLIGENT ALERTS MODAL CENTER */}
+      <AnimatePresence>
+        {showIntelligentAlertsModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+              onClick={() => setShowIntelligentAlertsModal(false)}
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 30 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 30 }}
+              className={`w-full max-w-lg rounded-3xl p-6 shadow-2xl relative z-10 flex flex-col space-y-5 ${
+                isLight ? 'bg-white border border-slate-200 text-slate-800' : 'bg-[#0a0f1d] border border-white/10 text-slate-100'
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between pb-3 border-b border-white/5">
+                <div>
+                  <div className="flex items-center gap-1.5 text-indigo-400 font-extrabold text-[9.5px] uppercase tracking-wider">
+                    <Sparkles className="w-3.5 h-3.5" /> IA de Diagnóstico FinançasPro
+                  </div>
+                  <h4 className={`font-display font-black text-lg tracking-tight mt-1 ${isLight ? 'text-slate-955' : 'text-white'}`}>
+                    Avisos & Alertas Importantes
+                  </h4>
+                </div>
+                <button
+                  onClick={() => setShowIntelligentAlertsModal(false)}
+                  className={`p-1.5 rounded-lg border text-xs cursor-pointer ${
+                    isLight 
+                      ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-500' 
+                      : 'bg-slate-900 hover:bg-slate-850 border-white/10 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Scrollable Area */}
+              <div className="max-h-[60vh] overflow-y-auto space-y-4 pr-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                
+                {/* 1. Feed de Evolução Inteligente Section */}
+                <div className="space-y-2">
+                  <h5 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Mostrando Feed de Evolução Inteligente
+                  </h5>
+                  {hasPrevData ? (
+                    <div className={`p-4 rounded-2xl border-l-4 flex items-start gap-3.5 leading-relaxed text-[12px] font-light ${
+                      moMAnalysisNarrative.status === 'positive'
+                        ? isLight ? 'bg-emerald-50/65 border-emerald-500 text-slate-900 font-medium' : 'bg-emerald-500/5 border-emerald-500 text-emerald-250'
+                        : moMAnalysisNarrative.status === 'negative'
+                          ? isLight ? 'bg-rose-50/65 border-rose-500 text-slate-900 font-medium' : 'bg-rose-500/5 border-rose-500 text-rose-250'
+                          : isLight ? 'bg-slate-50 border-slate-400 text-slate-900 font-medium' : 'bg-white/2 border-indigo-400/50 text-slate-200'
+                    }`}>
+                      <Sparkles className={`w-4.5 h-4.5 shrink-0 mt-0.5 ${
+                        moMAnalysisNarrative.status === 'positive' ? 'text-emerald-500' : 'text-rose-500'
+                      }`} />
+                      <div className="space-y-1 flex-1 text-left">
+                        <h6 className={`text-[10px] font-black uppercase tracking-widest ${
+                          moMAnalysisNarrative.status === 'positive' 
+                            ? isLight ? 'text-emerald-700 font-bold' : 'text-emerald-400' 
+                            : isLight ? 'text-rose-700 font-bold' : 'text-rose-450'
+                        }`}>
+                          Feed de Evolução Inteligente ({moMAnalysisNarrative.status === 'positive' ? 'Avanço Saudável' : moMAnalysisNarrative.status === 'negative' ? 'Necessita Ajustes' : 'Paridade de Caixa'})
+                        </h6>
+                        <p className={`leading-relaxed text-[11.5px] ${isLight ? 'text-slate-800' : 'text-slate-305'}`}>
+                          {moMAnalysisNarrative.text.split('**').map((item, idx) => idx % 2 === 1 ? <strong key={idx} className={isLight ? 'text-slate-950 font-black' : 'text-white'}>{item}</strong> : item)}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`p-4 rounded-2xl border flex items-start gap-3.5 leading-relaxed text-[11.5px] font-light ${
+                      isLight ? 'bg-slate-50 border-slate-200' : 'bg-white/2 border-white/5 text-slate-400'
+                    }`}>
+                      <Sparkles className="w-4.5 h-4.5 shrink-0 mt-0.5 text-indigo-400" />
+                      <div className="space-y-1 flex-1 text-left">
+                        <h6 className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
+                          Histórico de Meses Não Encontrado
+                        </h6>
+                        <p className="mt-1">
+                          Adicione transações em mais de um ciclo mensal para habilitar a geração de seu Feed Comparativo Inteligente.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. List of Deduplicated Alerts */}
+                <div className="space-y-2">
+                  <h5 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    ⚠️ Alertas de Caixa & Faturas
+                  </h5>
+                  {uniqueSystemAlerts.length === 0 ? (
+                    <div className={`p-4 rounded-2xl border text-center ${
+                      isLight ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-emerald-500/5 border-emerald-500/15 text-emerald-400'
+                    }`}>
+                      <p className="text-xs font-bold uppercase tracking-wider">🎉 Saúde financeira está excelente!</p>
+                      <p className="text-[10.5px] text-slate-400 mt-1">Nenhum desvio foi detectado no balanceamento das suas despesas.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {uniqueSystemAlerts.map((alert) => (
+                        <div
+                          key={alert.id}
+                          className={`p-4 rounded-2xl border flex items-start gap-3.5 ${
+                            alert.type === 'error'
+                              ? 'bg-rose-500/5 border-rose-500/10 text-rose-300'
+                              : alert.type === 'warning'
+                                ? 'bg-amber-500/5 border-amber-500/10 text-amber-300'
+                                : 'bg-emerald-500/5 border-emerald-500/10 text-emerald-300'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center font-bold text-xs ${
+                            alert.type === 'error'
+                              ? 'bg-rose-500/10 text-rose-450'
+                              : alert.type === 'warning'
+                                ? 'bg-amber-500/10 text-amber-400'
+                                : 'bg-emerald-500/10 text-emerald-400'
+                          }`}>
+                            {alert.type === 'error' ? '🔴' : alert.type === 'warning' ? '⚠️' : '💚'}
+                          </div>
+                          <div className="min-w-0 flex-1 text-left">
+                            <h6 className={`text-xs font-black tracking-tight leading-tight ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                              {alert.text}
+                            </h6>
+                            {alert.details && (
+                              <p className={`text-[11px] ${isLight ? 'text-slate-650' : 'text-slate-400'} font-light leading-relaxed mt-1`}>
+                                {alert.details}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Close Button footer modal */}
+              <div className="flex justify-end pt-2 border-t border-white/5">
+                <button
+                  onClick={() => setShowIntelligentAlertsModal(false)}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10.5px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-lg shadow-indigo-600/15 hover:shadow-indigo-500/20 active:scale-95 border-none"
+                >
+                  Entendi, Obrigado!
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* SECTION 3: KEY METRICS GRID */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -972,7 +1137,7 @@ export default function DashboardAnalytics({
         </div>
 
         <div className="p-4 rounded-2xl bg-white/2 border border-white/5">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Média por Contrato</span>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Média por gastos</span>
           <span className="text-base font-mono font-extrabold text-slate-200 block mb-0.5">
             {fmt(averageItemCost)}
           </span>
@@ -1232,30 +1397,8 @@ export default function DashboardAnalytics({
               </div>
             </div>
 
-            {/* Smart evolution review narrative */}
-            <div className={`p-4 rounded-2xl border-l-4 flex items-start gap-3.5 leading-relaxed text-[12px] font-light ${
-              moMAnalysisNarrative.status === 'positive'
-                ? isLight ? 'bg-emerald-50/65 border-emerald-500 text-slate-900 font-medium' : 'bg-emerald-500/5 border-emerald-500 text-emerald-250'
-                : moMAnalysisNarrative.status === 'negative'
-                  ? isLight ? 'bg-rose-50/65 border-rose-500 text-slate-900 font-medium' : 'bg-rose-500/5 border-rose-500 text-rose-250'
-                  : isLight ? 'bg-slate-50 border-slate-400 text-slate-900 font-medium' : 'bg-white/2 border-indigo-400/50 text-slate-200'
-            }`}>
-              <Sparkles className={`w-4.5 h-4.5 shrink-0 mt-0.5 ${
-                moMAnalysisNarrative.status === 'positive' ? 'text-emerald-500' : 'text-rose-500'
-              }`} />
-              <div className="space-y-1 flex-1">
-                <h5 className={`text-[10px] font-black uppercase tracking-widest ${
-                  moMAnalysisNarrative.status === 'positive' 
-                    ? isLight ? 'text-emerald-700 font-bold' : 'text-emerald-400' 
-                    : isLight ? 'text-rose-700 font-bold' : 'text-rose-450'
-                }`}>
-                  Feed de Evolução Inteligente ({moMAnalysisNarrative.status === 'positive' ? 'Avanço Saudável' : moMAnalysisNarrative.status === 'negative' ? 'Necessita Ajustes' : 'Paridade de Caixa'})
-                </h5>
-                <p className={`leading-relaxed text-[11.5px] ${isLight ? 'text-slate-800' : 'text-slate-350'}`}>
-                  {moMAnalysisNarrative.text.split('**').map((item, idx) => idx % 2 === 1 ? <strong key={idx} className={isLight ? 'text-slate-950 font-black' : 'text-white'}>{item}</strong> : item)}
-                </p>
-              </div>
-            </div>
+
+            {/* O Feed de Evolução Inteligente foi consolidado na área de Alertas Inteligentes no topo */}
 
           </div>
         )}
@@ -1526,48 +1669,6 @@ export default function DashboardAnalytics({
             ))}
           </div>
         )}
-      </div>
-
-      {/* COMPOSITION PROGRESS TRACK */}
-      <div className="p-5 rounded-3xl glass-panel border-white/5">
-        <h4 className="font-display font-extrabold text-sm text-slate-200 mb-4 uppercase tracking-wider">
-          Composição Proporcional de Saídas ({activeDashboardMode === 'current' ? 'Mês Focado' : 'Tudo'})
-        </h4>
-        
-        {(() => {
-          const sumSplits = activeScores.splits.fixos + activeScores.splits.variaveis + activeScores.splits.parcelas;
-          const pctFix = sumSplits > 0 ? Math.round((activeScores.splits.fixos / sumSplits) * 100) : 0;
-          const pctVar = sumSplits > 0 ? Math.round((activeScores.splits.variaveis / sumSplits) * 100) : 0;
-          const pctPar = sumSplits > 0 ? Math.round((activeScores.splits.parcelas / sumSplits) * 100) : 0;
-
-          return (
-            <div>
-              <div className="h-2 w-full rounded-full bg-white/5 overflow-hidden flex">
-                <div style={{ width: `${pctFix}%` }} className="bg-indigo-505 bg-indigo-500 h-full" title="Fixos"></div>
-                <div style={{ width: `${pctVar}%` }} className="bg-emerald-500 h-full" title="Variáveis"></div>
-                <div style={{ width: `${pctPar}%` }} className="bg-amber-500 h-full" title="Parcelamentos"></div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mt-4 text-center select-none">
-                <div>
-                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-indigo-500 mr-1.5" />
-                  <span className="text-[10px] font-bold text-slate-400">Fixos: {pctFix}%</span>
-                  <span className="block text-[10px] font-mono font-semibold text-slate-500">{fmt(activeScores.splits.fixos)}</span>
-                </div>
-                <div>
-                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 mr-1.5" />
-                  <span className="text-[10px] font-bold text-slate-400">Variáveis: {pctVar}%</span>
-                  <span className="block text-[10px] font-mono font-semibold text-slate-500">{fmt(activeScores.splits.variaveis)}</span>
-                </div>
-                <div>
-                  <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 mr-1.5" />
-                  <span className="text-[10px] font-bold text-slate-400">Parcelados: {pctPar}%</span>
-                  <span className="block text-[10px] font-mono font-semibold text-slate-500">{fmt(activeScores.splits.parcelas)}</span>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
       </div>
 
       {/* SECTION 5: EVOLUTION TIMELINE (SÓ APARECE EM HISTÓRICO GERAL PARA AUMENTAR INTELIGENCIA) */}

@@ -14,6 +14,7 @@ export interface Transaction {
   extra_gasto?: number;
   createdAt?: string;
   updatedAt?: string;
+  is_skipped?: boolean;
 }
 
 export interface Category {

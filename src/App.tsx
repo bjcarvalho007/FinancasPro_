@@ -129,6 +129,10 @@ export default function App() {
     confirmText?: string;
     cancelText?: string;
     classNameConfirm?: string;
+    showThreeButtons?: boolean;
+    confirmText2?: string;
+    classNameConfirm2?: string;
+    onConfirm2?: () => void;
   }>({
     isOpen: false,
     title: '',
@@ -613,34 +617,111 @@ export default function App() {
   };
 
   const handleDeleteTransaction = (id: string) => {
-    let confirmMessage = "Deseja mesmo remover permanentemente esse gasto?";
     const isVirtual = id.startsWith('v_');
-    let realIdToDelete = id;
-
+    let realIdToTarget = id;
+    
     if (isVirtual) {
-      confirmMessage = "Esta é uma despesa fixa recorrente. Ao confirmar, ela será removida de todos os meses. Deseja prosseguir?";
       const lastUnderscore = id.lastIndexOf('_');
-      realIdToDelete = id.substring(2, lastUnderscore);
+      realIdToTarget = id.substring(2, lastUnderscore);
     }
 
-    setConfirmModal({
-      isOpen: true,
-      title: 'Excluir Lançamento Recorrente',
-      message: confirmMessage,
-      confirmText: 'Confirmar Exclusão',
-      cancelText: 'Manter Lançamento',
-      classNameConfirm: 'bg-rose-600 hover:bg-rose-700 text-white font-bold',
-      onConfirm: async () => {
-        setConfirmModal(prev => ({ ...prev, isOpen: false }));
-        const path = `transactions/${realIdToDelete}`;
-        try {
-          await deleteDoc(doc(db, 'transactions', realIdToDelete));
-          triggerToast('Lançamento excluído com sucesso!', 'success');
-        } catch (e) {
-          handleFirestoreError(e, OperationType.DELETE, path);
+    // Find local reference
+    const tx = transactions.find(t => t.id === realIdToTarget || (t.masterId === realIdToTarget && t.monthKey === currentMonthKey));
+    const finalTx = tx || (transactions.find(t => t.id === realIdToTarget));
+    
+    const isRecurringOrInstallment = isVirtual || 
+      (finalTx && (finalTx.type === 'fixos' || finalTx.type === 'parcelas' || !!finalTx.masterId));
+
+    if (isRecurringOrInstallment) {
+      const masterId = finalTx?.masterId || realIdToTarget;
+      const txName = finalTx?.name || 'este lançamento';
+      const isInstallment = finalTx?.type === 'parcelas' || (finalTx?.masterId && transactions.find(t => t.id === finalTx.masterId)?.type === 'parcelas');
+      const typeLabel = isInstallment ? 'parcelada' : 'fixa recorrente';
+
+      setConfirmModal({
+        isOpen: true,
+        title: 'Excluir Despesa Recorrente',
+        message: `A despesa "${txName}" é uma conta ${typeLabel}. Como você deseja excluí-la?`,
+        showThreeButtons: true,
+        confirmText: 'Apenas deste mês',
+        classNameConfirm: 'bg-indigo-600 hover:bg-indigo-700 text-white font-bold',
+        confirmText2: 'Toda a série (Geral)',
+        classNameConfirm2: 'bg-rose-600 hover:bg-rose-700 text-white font-bold',
+        cancelText: 'Cancelar',
+        onConfirm: async () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          if (!user) return;
+          
+          // Save a skip record for this master in this month
+          const skipId = `skip_${masterId}_${currentMonthKey}`;
+          const skipTx = {
+            id: skipId,
+            userId: user.uid,
+            name: txName,
+            amount: 0,
+            paid_amount: 0,
+            type: finalTx?.type || 'fixos',
+            cat: finalTx?.cat || 'outros',
+            due: finalTx?.due || '',
+            masterId: masterId,
+            monthKey: currentMonthKey,
+            is_skipped: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          const path = `transactions/${skipId}`;
+          try {
+            // Delete any existing real doc this month referencing this masterId
+            const existingRealDocThisMonth = transactions.find(t => t.monthKey === currentMonthKey && (t.id === masterId || t.masterId === masterId) && t.id !== skipId);
+            if (existingRealDocThisMonth) {
+              await deleteDoc(doc(db, 'transactions', existingRealDocThisMonth.id));
+            }
+            
+            await setDoc(doc(db, 'transactions', skipId), skipTx);
+            triggerToast('Despesa removida apenas para este mês.', 'success');
+          } catch (e) {
+            handleFirestoreError(e, OperationType.WRITE, path);
+          }
+        },
+        onConfirm2: async () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          if (!user) return;
+          // Delete master & all instances of this masterId
+          const toDelete = transactions.filter(t => t.id === masterId || t.masterId === masterId);
+          try {
+            for (const docToDelete of toDelete) {
+              await deleteDoc(doc(db, 'transactions', docToDelete.id));
+            }
+            triggerToast('Toda a série e lançamentos recorrentes foram removidos com sucesso.', 'success');
+          } catch (e) {
+            handleFirestoreError(e, OperationType.DELETE, `transactions/${masterId}`);
+          }
         }
-      }
-    });
+      });
+    } else {
+      // Normal variable transaction (type === 'variaveis')
+      const txName = finalTx?.name || 'este lançamento';
+      const txAmount = finalTx ? finalTx.amount : 0;
+      setConfirmModal({
+        isOpen: true,
+        title: 'Excluir Gasto Variável',
+        message: `Deseja mesmo remover permanentemente a despesa "${txName}" de R$ ${txAmount.toFixed(2).replace('.', ',')}?`,
+        confirmText: 'Confirmar Exclusão',
+        cancelText: 'Manter Gasto',
+        classNameConfirm: 'bg-rose-600 hover:bg-rose-700 text-white font-bold',
+        onConfirm: async () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          const path = `transactions/${realIdToTarget}`;
+          try {
+            await deleteDoc(doc(db, 'transactions', realIdToTarget));
+            triggerToast('Gasto excluído com sucesso!', 'success');
+          } catch (e) {
+            handleFirestoreError(e, OperationType.DELETE, path);
+          }
+        }
+      });
+    }
   };
 
   const handleOpenEdit = (tx: Transaction) => {
@@ -1073,7 +1154,7 @@ export default function App() {
       }
     });
 
-    return enrichedTransactions;
+    return enrichedTransactions.filter(t => !t.is_skipped);
   }, [transactions, currentMonthKey]);
 
   const activeTabTransactions = useMemo(() => {
@@ -2690,26 +2771,61 @@ export default function App() {
                 </p>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                <button
-                  id="confirm-modal-exec-btn"
-                  onClick={confirmModal.onConfirm}
-                  className={`w-full py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg active:scale-[0.98] rounded-xl ${
-                    confirmModal.classNameConfirm || 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                  }`}
-                >
-                  {confirmModal.confirmText || 'Confirmar'}
-                </button>
-                <button
-                  onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
-                  className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer border transition-all duration-200 ${
-                    theme === 'light'
-                      ? 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
-                      : 'bg-slate-900 border-white/10 hover:bg-slate-850 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {confirmModal.cancelText || 'Cancelar'}
-                </button>
+              <div className="flex flex-col gap-2 pt-2">
+                {confirmModal.showThreeButtons ? (
+                  <>
+                    <button
+                      onClick={confirmModal.onConfirm}
+                      className={`w-full py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg active:scale-[0.98] rounded-xl ${
+                        confirmModal.classNameConfirm || 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                      }`}
+                    >
+                      {confirmModal.confirmText || 'Apenas este mês'}
+                    </button>
+                    {confirmModal.onConfirm2 && (
+                      <button
+                        onClick={confirmModal.onConfirm2}
+                        className={`w-full py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg active:scale-[0.98] rounded-xl ${
+                          confirmModal.classNameConfirm2 || 'bg-rose-600 hover:bg-rose-700 text-white'
+                        }`}
+                      >
+                        {confirmModal.confirmText2 || 'Toda a série'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                      className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer border transition-all duration-200 ${
+                        theme === 'light'
+                          ? 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-500'
+                          : 'bg-slate-900 border-white/10 hover:bg-slate-850 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {confirmModal.cancelText || 'Cancelar'}
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-2 w-full">
+                    <button
+                      id="confirm-modal-exec-btn"
+                      onClick={confirmModal.onConfirm}
+                      className={`w-full py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg active:scale-[0.98] rounded-xl ${
+                        confirmModal.classNameConfirm || 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                      }`}
+                    >
+                      {confirmModal.confirmText || 'Confirmar'}
+                    </button>
+                    <button
+                      onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                      className={`w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer border transition-all duration-200 ${
+                        theme === 'light'
+                          ? 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
+                          : 'bg-slate-900 border-white/10 hover:bg-slate-850 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {confirmModal.cancelText || 'Cancelar'}
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>

@@ -1095,7 +1095,7 @@ export default function App() {
   const variableSum = activeMonthTransactions.filter(t => t.type === 'variaveis').reduce((sum, t) => sum + t.amount, 0);
   const parcelasSum = activeMonthTransactions.filter(t => t.type === 'parcelas').reduce((sum, t) => sum + t.amount, 0);
   const renderSummaryCardsMobile = () => {
-    if (activeTab === 'dashboard' || activeTab === 'goals' || activeTab === 'settings') {
+    if (activeTab === 'goals' || activeTab === 'settings' || activeTab === 'admin') {
       return null;
     }
     return (
@@ -1648,12 +1648,27 @@ export default function App() {
 
 
           {/* Grid Layout that splits screen on PC, but rolls standard single col on Mobile */}
-          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
+          {activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Main lists column */}
               <div className="lg:col-span-8 space-y-4">
                 <main className="space-y-4 pt-1">
-                  <div className="space-y-3">
+                  {activeTab === 'dashboard' ? (
+                    <DashboardAnalytics
+                      transactions={activeMonthTransactions}
+                      allTransactions={transactions}
+                      currentMonthKey={currentMonthKey}
+                      categoriesList={activeMonthCategoryList}
+                      totalAvailable={totalInflowsSum}
+                      leftover={leftoverCash}
+                      income={inc}
+                      balance={bal}
+                      extra={ext}
+                      currentTheme={theme}
+                      settings={settings}
+                    />
+                  ) : (
+                    <div className="space-y-3">
                     {activeTabTransactions.length === 0 ? (
                       <div className={`p-12 text-center border border-dashed rounded-3xl text-xs select-none ${
                         theme === 'light' ? 'border-slate-300 text-slate-500 bg-white' : 'border-white/5 text-slate-500'
@@ -1919,7 +1934,8 @@ export default function App() {
                         })}
                       </div>
                     )}
-                  </div>
+                    </div>
+                  )}
                 </main>
               </div>
 
@@ -1948,24 +1964,10 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* Dashboard, Goals, Settings screens occupy the full 12 column grid */
+            /* Goals, Settings screens occupy the full 12 column grid */
             <div className="w-full">
               <main className="space-y-4 pt-1">
-                {activeTab === 'dashboard' ? (
-                  <DashboardAnalytics
-                    transactions={activeMonthTransactions}
-                    allTransactions={transactions}
-                    currentMonthKey={currentMonthKey}
-                    categoriesList={activeMonthCategoryList}
-                    totalAvailable={totalInflowsSum}
-                    leftover={leftoverCash}
-                    income={inc}
-                    balance={bal}
-                    extra={ext}
-                    currentTheme={theme}
-                    settings={settings}
-                  />
-                ) : activeTab === 'goals' ? (
+                {activeTab === 'goals' ? (
                   <GoalsPanel
                     goals={goals}
                     onCreateGoal={handleCreateGoal}

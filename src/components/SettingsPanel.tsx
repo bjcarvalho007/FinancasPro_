@@ -3,7 +3,7 @@ import { Transaction } from '../types';
 import { auth, db } from '../firebase';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
-import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle } from 'lucide-react';
+import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportPremiumPDF, exportPremiumSpreadsheet } from '../utils/reportGenerator';
 
@@ -362,6 +362,37 @@ export default function SettingsPanel({
             Salvar Padrões de Caixa
           </button>
         </div>
+      </div>
+
+      {/* Support Panel Card */}
+      <div className="p-6 rounded-3xl glass-panel border-emerald-500/10 hover:border-emerald-500/20 transition-all bg-emerald-950/5">
+        <div className="flex items-center gap-3.5 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <MessageCircle className="w-5 h-5" />
+          </div>
+          <div>
+            <h5 className="font-display font-black text-white text-sm leading-none">
+              Central de Ajuda & Suporte
+            </h5>
+            <p className="text-[10px] text-slate-400 mt-1">
+              Fale com nosso atendimento humano ou tire dúvidas no WhatsApp.
+            </p>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-350 leading-relaxed font-light mb-4">
+          Dúvidas sobre o funcionamento, faturas ou precisa de suporte técnico? Nosso atendimento via WhatsApp está sempre pronto para te ajudar a manter as finanças sob total controle.
+        </p>
+
+        <a
+          href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all shadow-md active:translate-y-0.5 cursor-pointer no-underline"
+        >
+          <MessageCircle className="w-4 h-4" />
+          Falar com Suporte no WhatsApp
+        </a>
       </div>
 
       {/* Action panel for Exportation and Credentials */}

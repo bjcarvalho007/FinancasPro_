@@ -13,7 +13,8 @@ import {
   LayoutDashboard, 
   Target, 
   CheckCircle2,
-  Bell
+  Bell,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -43,9 +44,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
     localStorage.setItem('finançaspro_tutorial_seen_v2', 'true');
     setCurrentStep(0);
     onClose();
-  };
-
-  const steps = [
+  };  const steps = [
     {
       title: "Boas-vindas ao FinançasPro!",
       subtitle: "Seu cockpit financeiro premium",
@@ -60,7 +59,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       icon: <Calendar className="w-10 h-10 text-indigo-400" />,
       description: "Aqui ficam suas contas fixas (aluguel, condomínio, internet, assinaturas). O nosso motor projeta essas contas automaticamente para todos os meses futuros! Basta cadastrá-las uma única vez e elas aparecerão todo mês aguardando seu clique de quitação.",
       color: "from-indigo-500/20 to-indigo-600/5",
-      badge: "Passo 1 de 6"
+      badge: "Passo 1 de 7"
     },
     {
       title: "📊 Gastos do Cotidiano (Variados)",
@@ -68,7 +67,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       icon: <Receipt className="w-10 h-10 text-amber-500" />,
       description: "São as suas despesas variáveis que acontecem apenas no mês atual (restaurantes, transporte, farmácia, lazer). Registre esses gastos rápidos para mapear furos de orçamento e entender seu padrão de consumo mensal sem mistérios.",
       color: "from-amber-500/20 to-orange-500/5",
-      badge: "Passo 2 de 6"
+      badge: "Passo 2 de 7"
     },
     {
       title: "💳 Compras Parceladas (Parcelados)",
@@ -76,7 +75,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       icon: <CreditCard className="w-10 h-10 text-sky-400" />,
       description: "Ideal para quando você parcela uma compra no cartão de crédito. Você insere o valor total e o histórico de parcelados monitora quanto ainda resta pagar nos devedores e o peso acumulado disso no seu saldo disponível de longo prazo.",
       color: "from-sky-500/20 to-blue-500/5",
-      badge: "Passo 3 de 6"
+      badge: "Passo 3 de 7"
     },
     {
       title: "💵 Rendas, Saldo e Sobras",
@@ -84,15 +83,15 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       icon: <DollarSign className="w-10 h-10 text-emerald-400" />,
       description: "No botão 'Ganhos', configure seu Salário/Renda padrão, as sobras do mês anterior (Saldo Inicial) e eventuais rendimentos Extras. O FinançasPro abate todas as suas contas cadastradas de forma cumulativa, te dando a sobra exata estimada para poupar livremente.",
       color: "from-teal-500/20 to-green-500/5",
-      badge: "Passo 4 de 6"
+      badge: "Passo 4 de 7"
     },
     {
       title: "💎 Dashboard & Metas Reais",
-      subtitle: "Govemança de caixa e metas",
+      subtitle: "Governança de caixa e metas",
       icon: <LayoutDashboard className="w-10 h-10 text-violet-400" />,
       description: "Na aba 'Dashboard', consulte sua nota de controle e ganhe orientações automáticas de como policiar seus limites. Use a aba de 'Metas' para criar objetivos de poupança (metas de investimento, cofrinhos) e adicione fundos conforme economiza para realizar seus sonhos passo a passo.",
       color: "from-violet-500/20 to-fuchsia-500/5",
-      badge: "Passo 5 de 6"
+      badge: "Passo 5 de 7"
     },
     {
       title: "🔔 Lembretes de Vencimento",
@@ -100,7 +99,15 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       icon: <Bell className="w-10 h-10 text-rose-450 text-rose-400" />,
       description: "Nunca mais atrase suas faturas! O FinançasPro monitora ativamente as datas de vencimento das suas contas pendentes e cria lembretes automáticos na tela. Você escolhe quantos dias de antecedência para os alertas na aba de 'Configurações' e pode ativar notificações nativas de desktop direto no navegador.",
       color: "from-rose-500/20 to-rose-600/5",
-      badge: "Passo 6 de 6"
+      badge: "Passo 6 de 7"
+    },
+    {
+      title: "📞 Suporte & Central de Ajuda",
+      subtitle: "Atendimento no WhatsApp",
+      icon: <MessageCircle className="w-10 h-10 text-emerald-400" />,
+      description: "Precisa de ajuda com o aplicativo ou quer tirar alguma dúvida? Nós oferecemos suporte humano rápido para você. Além de poder tirar suas dúvidas aqui, você pode falar diretamente com nossa equipe no WhatsApp a qualquer momento acessando a aba 'Ajustes' no menu de navegação e clicando em 'Falar com Suporte'.",
+      color: "from-emerald-500/20 to-teal-500/10",
+      badge: "Passo 7 de 7"
     }
   ];
 
@@ -121,7 +128,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
   return (
     <>
       {/* Floating Action Button - Always available to user to trigger description review */}
-      <div className="fixed bottom-20 right-19 z-45">
+      <div className="fixed bottom-20 right-6 z-45">
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -257,11 +264,23 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                   )}
 
                   {currentStep === steps.length - 1 && (
-                    <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
-                      theme === 'light' ? 'bg-violet-50/50 border-violet-100 text-violet-750' : 'bg-violet-950/15 border-violet-500/10 text-violet-300'
-                    } flex items-center gap-2 font-medium`}>
-                      <Sparkles className="w-4 h-4 text-violet-400 animate-pulse shrink-0" />
-                      <span>Seu onboarding está completo! Pronto para usufruir de ferramentas financeiras premium.</span>
+                    <div className="space-y-3">
+                      <a
+                        href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all shadow-md hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                      >
+                        <MessageCircle className="w-4.5 h-4.5" />
+                        Chamar no WhatsApp
+                      </a>
+
+                      <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
+                        theme === 'light' ? 'bg-violet-50/50 border-violet-100 text-violet-750' : 'bg-violet-950/15 border-violet-500/10 text-violet-300'
+                      } flex items-center gap-2 font-medium`}>
+                        <Sparkles className="w-4 h-4 text-violet-400 animate-pulse shrink-0" />
+                        <span>Seu onboarding está completo! Pronto para usufruir de ferramentas financeiras premium.</span>
+                      </div>
                     </div>
                   )}
                 </motion.div>

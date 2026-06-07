@@ -573,7 +573,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 {/* Compact brand marker */}
                 <div className="text-center mb-6">
                   <h2 className="font-display font-black text-2xl md:text-3xl text-white tracking-tight">
-                    {isResetMode ? 'Recuperar Senha' : 'Acesse seu Workspace'}
+                    {isResetMode ? 'Recuperar Senha' : 'Acesse sua Conta'}
                   </h2>
                   <p className="text-xs text-slate-400 mt-1.5 font-light leading-relaxed">
                     {isResetMode 

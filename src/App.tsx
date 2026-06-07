@@ -24,7 +24,6 @@ import GoalsPanel from './components/GoalsPanel';
 import SettingsPanel from './components/SettingsPanel';
 import OnboardingTutorial from './components/OnboardingTutorial';
 import ExtraEarningsManager from './components/ExtraEarningsManager';
-import AdminDashboard from './components/AdminDashboard';
 import { 
   TrendingUp, 
   Plus, 
@@ -1506,29 +1505,75 @@ export default function App() {
               <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center glow-emerald shrink-0">
                 <TrendingUp className="w-5.5 h-5.5 text-emerald-400" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h2 className={`font-display font-black text-[17px] sm:text-lg tracking-tight leading-none ${
                   theme === 'light' ? 'text-slate-900' : 'text-white'
                 }`}>
                   FINANÇAS<span className="text-emerald-400 font-extrabold ml-0.5">PRO</span>
                 </h2>
-                <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest block mt-1">Sistema de Gestão Segura</span>
+                {isVIP ? (
+                  <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-1">
+                    <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
+                  </span>
+                ) : hasActiveSubscription ? (
+                  <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-1">
+                    <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
+                    </span>
+                    <a
+                      href="https://mpago.la/1SfRUJ2"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 no-underline ml-1"
+                    >
+                      Assinar
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Top Right Controls - Pro visual layout */}
             <div className="flex items-center gap-3">
+              {/* Hot button to subscribe for desktop trial accounts */}
+              {isWithinTwoDaysTrial && !isVIP && !hasActiveSubscription && (
+                <a
+                  href="https://mpago.la/1SfRUJ2"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hidden md:flex px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white items-center gap-2 cursor-pointer border border-emerald-500/25 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 no-underline shrink-0"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> Ativar Premium (PRO)
+                </a>
+              )}
+
               {/* User profile details (hidden on mobile, ultra elegant on desktop) */}
               <div className={`hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-2xl border ${
                 theme === 'light' ? 'bg-slate-50 border-slate-200/60 text-slate-705' : 'bg-white/3 border-white/5 text-slate-300'
               }`}>
                 <div className={`w-7.5 h-7.5 rounded-xl flex items-center justify-center font-bold text-[11px] shrink-0 select-none ${
-                  theme === 'light' ? 'bg-indigo-50 text-indigo-700' : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/10'
+                  isVIP 
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : hasActiveSubscription
+                    ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                    : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
                 }`}>
                   {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
                 </div>
                 <div className="min-w-0 pr-1 text-left">
-                  <span className="text-[8.5px] uppercase font-bold tracking-wider text-slate-500 block leading-tight">Membro Premium</span>
+                  <span className={`text-[8.5px] uppercase font-black tracking-wider block leading-tight ${
+                    isVIP 
+                      ? 'text-emerald-400' 
+                      : hasActiveSubscription
+                      ? 'text-indigo-400'
+                      : 'text-amber-500'
+                  }`}>
+                    {isVIP ? '👑 Membro VIP' : hasActiveSubscription ? '⭐ Assinante PRO' : '⚡ Conta Grátis'}
+                  </span>
                   <p className="text-xs font-semibold truncate leading-tight max-w-[150px]" title={user.email || ''}>
                     {user.email || 'Conectado'}
                   </p>
@@ -1931,12 +1976,6 @@ export default function App() {
                     onCreateGoal={handleCreateGoal}
                     onUpdateGoalProgress={handleUpdateGoalProgress}
                     onDeleteGoal={handleDeleteGoal}
-                  />
-                ) : activeTab === 'admin' ? (
-                  <AdminDashboard
-                    onBack={() => setActiveTab('dashboard')}
-                    triggerToast={triggerToast}
-                    currentTheme={theme}
                   />
                 ) : (
                   <SettingsPanel
@@ -2384,29 +2423,6 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
-
-      {/* UNIFIED FLOATING CHAT / SUPPORT SYSTEM - COMPACT DIRECT ACTION */}
-      <div className="fixed bottom-20 right-6 z-45">
-        {/* Compact Support Icon Element */}
-        <a
-          href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-11 h-11 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-lg cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95 relative border border-emerald-400/20"
-          title="Falar com Suporte no WhatsApp"
-        >
-          <span className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping opacity-60 scale-105" />
-          <svg 
-            className="w-5.5 h-5.5 text-white relative z-10" 
-            fill="currentColor" 
-            viewBox="0 0 24 24" 
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.625 1.45 5.4 0 9.794-4.394 9.797-9.797.002-2.618-1.015-5.08-2.87-6.935C16.3 2.016 13.834 1 11.207 1 5.801 1 1.405 5.395 1.4 10.799c-.001 1.517.41 3.003 1.192 4.316l-.1.365-.79 2.883 2.95-.773.355-.109zM17.51 14.1c-.322-.162-1.92-.95-2.217-1.058-.297-.107-.514-.162-.73.162-.217.324-.838 1.056-1.027 1.274-.19.216-.378.243-.7.08-.322-.162-1.36-.5-2.593-1.6-.957-.852-1.6-1.9-1.79-2.222-.19-.324-.02-.5-.18-.66-.145-.145-.323-.377-.485-.566-.16-.19-.214-.323-.32-.54-.108-.217-.054-.405-.027-.567.027-.162.217-.514.324-.73.108-.216.162-.351.243-.513.08-.162.04-.324.02-.486-.02-.162-.217-.514-.297-.7-.08-.194-.163-.167-.225-.17a6.3 6.3 0 0 0-.42-.01c-.135 0-.352.05-.536.25-.184.2-.705.69-.705 1.68 0 .99.72 1.94.82 2.072.1.13 1.414 2.16 3.428 3.03.48.207.854.33 1.145.424.482.153.92.13 1.267.08.386-.056 1.18-.48 1.346-.943.165-.46.165-.856.115-.94-.05-.08-.18-.135-.5-.297z"/>
-          </svg>
-        </a>
-      </div>
-
       {/* UNIFIED FULLY-RESPONSIVE DOCKED BOTTOM BAR (BOTH PC & MOBILE) */}
       <div className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl transition-all duration-300 ${
         theme === 'light' 
@@ -2423,9 +2439,6 @@ export default function App() {
               { id: 'goals', val: 'Metas', icon: Target },
               { id: 'settings', val: 'Ajustes', icon: Settings }
             ];
-            if (user && user.email === 'bjcarvalho07@gmail.com') {
-              tabs.push({ id: 'admin', val: 'Painel Admin', icon: ShieldCheck });
-            }
             return tabs;
           })().map((tab) => {
             const isSelected = activeTab === tab.id;

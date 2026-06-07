@@ -1601,10 +1601,10 @@ export default function App() {
           </header>
 
           {/* Render Mobile summary cards */}
-          {activeTab !== 'dashboard' && renderSummaryCardsMobile()}
+          {activeTab !== 'dashboard' && activeTab !== 'contas' && activeTab !== 'variaveis' && activeTab !== 'parcelas' && activeTab !== 'fixos' && renderSummaryCardsMobile()}
 
-          {/* If on dashboard tab, render the two cards side-by-side above the month selector */}
-          {activeTab === 'dashboard' && (
+          {/* If on dashboard or transaction list tabs, render the two cards side-by-side above the month selector */}
+          {(activeTab === 'dashboard' || activeTab === 'contas' || activeTab === 'variaveis' || activeTab === 'parcelas' || activeTab === 'fixos') && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               {/* Card 1: Sobra Estimada de Caixa */}
               <motion.div
@@ -1669,7 +1669,7 @@ export default function App() {
             theme === 'light' ? 'bg-white border-slate-205 shadow-sm text-slate-900' : 'bg-white/3 border-white/5 text-white'
           } mb-4`}>
             {/* Centered Month Navigator alignment */}
-            <div className={`flex items-center gap-3 ${activeTab === 'dashboard' ? 'mx-auto md:translate-x-[48px]' : ''}`}>
+            <div className={`flex items-center gap-3 ${(activeTab === 'dashboard' || activeTab === 'contas' || activeTab === 'variaveis' || activeTab === 'parcelas' || activeTab === 'fixos') ? 'mx-auto md:translate-x-[48px]' : ''}`}>
               <button
                 onClick={() => handleMonthTurn(-1)}
                 className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
@@ -1698,7 +1698,7 @@ export default function App() {
             </div>
 
             {/* Novo button showing only for lists or offset container */}
-            {activeTab !== 'dashboard' ? (
+            {(activeTab === 'contas' || activeTab === 'variaveis' || activeTab === 'parcelas' || activeTab === 'fixos') ? (
               <button
                 onClick={() => {
                   setEditingTransaction(null);
@@ -1992,8 +1992,7 @@ export default function App() {
 
               {/* Sidebar metrics persistent column for PC view */}
               <div className="hidden lg:flex flex-col gap-4 lg:col-span-4 sticky top-6">
-                {renderSummaryCardsPC()}
-
+                
                 {/* Local Advisory / Quick guidance on PC */}
                 <div className={`p-5 rounded-3xl border ${
                   theme === 'light' 

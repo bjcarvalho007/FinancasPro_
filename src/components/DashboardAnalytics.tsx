@@ -1124,49 +1124,96 @@ export default function DashboardAnalytics({
       </AnimatePresence>
 
       {/* SECTION 3: KEY METRICS GRID */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        <div className="p-4 rounded-2xl bg-white/2 border border-white/5">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Custo Crítico / Maior</span>
-          <span className="text-base font-mono font-extrabold text-rose-400 truncate block mb-0.5" title={highestExpenseItem.name}>
-            {fmt(highestExpenseItem.amount)}
-          </span>
-          <span className="text-[10px] text-slate-500 truncate block font-bold uppercase tracking-wider">
-            {highestExpenseItem.name}
-          </span>
-        </div>
+      {(() => {
+        const historicalTotalInflow = uniqueMonths.reduce((sum, mKey) => {
+          const mIncome = settings?.monthlyIncome?.[mKey] ?? 0;
+          const mBalance = settings?.monthlyBalance?.[mKey] ?? 0;
+          const mExtra = settings?.extras?.[mKey] ?? 0;
+          return sum + mIncome + mBalance + mExtra;
+        }, 0);
+        const historicalLeftover = historicalTotalInflow - totalSpentAll;
+        const estimatedSurplus = activeDashboardMode === 'current' ? leftover : historicalLeftover;
 
-        <div className="p-4 rounded-2xl bg-white/2 border border-white/5">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Média por gastos</span>
-          <span className="text-base font-mono font-extrabold text-slate-200 block mb-0.5">
-            {fmt(averageItemCost)}
-          </span>
-          <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
-            Total {currentModeTransactions.length} registros
-          </span>
-        </div>
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            
+            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Custo Crítico / Maior</span>
+                <span className="text-base font-mono font-extrabold text-rose-400 truncate block mb-0.5" title={highestExpenseItem.name}>
+                  {fmt(highestExpenseItem.amount)}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 truncate block font-bold uppercase tracking-wider">
+                {highestExpenseItem.name}
+              </span>
+            </div>
 
-        <div className="p-4 rounded-2xl bg-white/2 border border-white/5">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Relação Comprometida</span>
-          <span className="text-base font-mono font-extrabold text-amber-400 block mb-0.5">
-            {fmt(activeScores.totalSpent)}
-          </span>
-          <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
-            Total de obrigações registradas
-          </span>
-        </div>
+            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Média por gastos</span>
+                <span className="text-base font-mono font-extrabold text-slate-200 block mb-0.5">
+                  {fmt(averageItemCost)}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
+                Total {currentModeTransactions.length} registros
+              </span>
+            </div>
 
-        <div className="p-4 rounded-2xl bg-white/2 border border-white/5">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Saldo Liquidado Real</span>
-          <span className="text-base font-mono font-extrabold text-emerald-400 block mb-0.5">
-            {fmt(activeScores.totalPaid)}
-          </span>
-          <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
-            Amortizado até agora
-          </span>
-        </div>
+            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Relação Comprometida</span>
+                <span className="text-base font-mono font-extrabold text-amber-400 block mb-0.5">
+                  {fmt(activeScores.totalSpent)}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
+                Obrigações registradas
+              </span>
+            </div>
 
-      </div>
+            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Saldo Liquidado Real</span>
+                <span className="text-base font-mono font-extrabold text-emerald-400 block mb-0.5">
+                  {fmt(activeScores.totalPaid)}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
+                Quitado até o momento
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">A Pagar Pendente</span>
+                <span className="text-base font-mono font-extrabold text-orange-400 block mb-0.5">
+                  {fmt(activeScores.totalUnpaid)}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
+                Pendente de quitação
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 font-black">Sobra Estimada</span>
+                <span className={`text-base font-mono font-extrabold block mb-0.5 ${
+                  estimatedSurplus >= 0 ? 'text-emerald-400' : 'text-rose-450'
+                }`}>
+                  {fmt(estimatedSurplus)}
+                </span>
+              </div>
+              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
+                Saldo livre projetado
+              </span>
+            </div>
+
+          </div>
+        );
+      })()}
 
       {/* COMPARATIVO INTERMENSAL (MÊS ANTERIOR VS MÊS ATUAL) */}
       <div className={`p-6 rounded-3xl transition-all duration-300 border ${

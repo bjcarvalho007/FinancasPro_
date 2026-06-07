@@ -1269,7 +1269,7 @@ export default function App() {
               </h2>
               
               <p className="text-xs text-slate-400 mt-2.5 font-light leading-relaxed max-w-md mx-auto">
-                Não perca a organização e as projeções automatizadas de fluxo do seu caixa. Ative sua assinatura corporativa premium e garanta acesso vitalício ou mensal contínuo.
+                Não perca a organização e as projeções automatizadas de fluxo do seu caixa. Ative sua assinatura corporativa premium e garanta seu acesso contínuo.
               </p>
             </div>
 

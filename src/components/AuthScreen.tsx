@@ -538,10 +538,10 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                   <div className="p-5 md:p-6 rounded-2xl bg-emerald-950/20 border border-emerald-500/15 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-1 max-w-sm">
                       <h4 className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" /> Oferta Premium Vitalícia
+                        <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" /> Oferta Premium
                       </h4>
                       <p className="text-xs text-slate-300 leading-relaxed font-light">
-                        Tenha acesso definitivo para gerenciar suas despesas fixas, variáveis e parcelas sem estresse ou mensalidades futuras.
+                        Tenha acesso completo para gerenciar suas despesas fixas, variáveis e parcelas sem estresse ou complicações.
                       </p>
                     </div>
                     <button
@@ -556,7 +556,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
 
                   {/* Trust Badge */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 border-t border-white/5 text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">
-                    <span>Acesso Vitalício (Sem Mensalidades)</span>
+                    <span>Acesso Corporativo Completo</span>
                     <span className="flex items-center gap-1.5 text-emerald-450">
                       <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /> Pagamento 100% Protegido
                     </span>

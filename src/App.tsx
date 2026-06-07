@@ -135,6 +135,7 @@ export default function App() {
   const [tempBalanceStr, setTempBalanceStr] = useState<string>('');
   const [tempExtraStr, setTempExtraStr] = useState<string>('');
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
+  const [showPaymentInfoModal, setShowPaymentInfoModal] = useState<boolean>(false);
 
   // Pull to refresh support variables
   const [startY, setStartY] = useState<number>(0);
@@ -1311,15 +1312,13 @@ export default function App() {
 
             {/* CTA action buttons */}
             <div className="space-y-3">
-              <a
-                href="https://mpago.la/1SfRUJ2"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full bg-gradient-to-r from-emerald-600 to-emerald-750 hover:from-emerald-500 hover:to-emerald-650 text-white font-extrabold py-4 px-4 rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/15 transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer no-underline border-none"
+              <button
+                onClick={() => setShowPaymentInfoModal(true)}
+                className="w-full bg-gradient-to-r from-emerald-600 to-emerald-750 hover:from-emerald-500 hover:to-emerald-650 text-white font-extrabold py-4 px-4 rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/15 transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
               >
                 Ativar Meu Acesso Premium
                 <ArrowRight className="w-4 h-4" />
-              </a>
+              </button>
 
               <button
                 onClick={executeLogout}
@@ -1524,14 +1523,12 @@ export default function App() {
                     <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
                       <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
                     </span>
-                    <a
-                      href="https://mpago.la/1SfRUJ2"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 no-underline ml-1"
+                    <button
+                      onClick={() => setShowPaymentInfoModal(true)}
+                      className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
                     >
                       Assinar
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1541,14 +1538,12 @@ export default function App() {
             <div className="flex items-center gap-3">
               {/* Hot button to subscribe for desktop trial accounts */}
               {isWithinTwoDaysTrial && !isVIP && !hasActiveSubscription && (
-                <a
-                  href="https://mpago.la/1SfRUJ2"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hidden md:flex px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white items-center gap-2 cursor-pointer border border-emerald-500/25 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 no-underline shrink-0"
+                <button
+                  onClick={() => setShowPaymentInfoModal(true)}
+                  className="hidden md:flex px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white items-center gap-2 cursor-pointer border border-emerald-500/25 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shrink-0"
                 >
                   <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> Ativar Premium (PRO)
-                </a>
+                </button>
               )}
 
               {/* User profile details (hidden on mobile, ultra elegant on desktop) */}
@@ -2472,6 +2467,89 @@ export default function App() {
           })}
         </div>
       </div>
+      {showPaymentInfoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-45"
+            onClick={() => setShowPaymentInfoModal(false)}
+          />
+          
+          <motion.div
+            initial={{ scale: 0.95, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            className="bg-[#0f1524] border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative z-50 flex flex-col space-y-4 text-left"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <span className="text-[9px] text-amber-450 font-extrabold uppercase tracking-widest bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse">
+                  <Sparkles className="w-3 h-3 text-amber-450" /> Vagas Limitadas
+                </span>
+                <h4 className="font-display font-black text-base text-white tracking-tight leading-snug mt-1.5">
+                  Oferta de Lançamento Limitada
+                </h4>
+              </div>
+              <button
+                onClick={() => setShowPaymentInfoModal(false)}
+                className="p-1 px-2 rounded-lg bg-slate-900 border border-white/10 text-slate-450 hover:text-white text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 space-y-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-450 shrink-0">
+                  <Zap className="w-4 h-4" />
+                </div>
+                <div>
+                  <h5 className="text-[10.5px] font-black uppercase text-amber-400 tracking-wider leading-none">
+                    Lote Promocional de Estreia
+                  </h5>
+                  <p className="text-[9.5px] text-amber-300 font-semibold mt-1">
+                    Primeiros 10 acessos por apenas R$ 11,99!
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-0.5 bg-slate-950/50 p-2.5 rounded-xl border border-white/5 text-center">
+                <p className="text-[9.5px] text-slate-500 font-black uppercase tracking-wider">Você garante o valor de:</p>
+                <div className="flex items-center justify-center gap-1.5 mt-0.5">
+                  <span className="text-[11px] text-slate-450 line-through font-bold">R$ 32,99</span>
+                  <span className="text-lg font-black text-emerald-400">R$ 11,99</span>
+                  <span className="text-[9.5px] text-slate-400 font-semibold">/ mês</span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-300 leading-normal font-light">
+                Os <strong className="font-bold text-white">10 primeiros acessos</strong> saem por apenas <strong className="font-bold text-emerald-400">R$ 11,99/mês</strong>. Após estas 10 assinaturas serem preenchidas, novas inscrições obrigatoriamente pagarão o valor padrão de <strong className="font-bold text-slate-200">R$ 32,99/mês</strong>.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5 text-center text-xs">
+              <button
+                type="button"
+                onClick={() => setShowPaymentInfoModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/10 text-slate-400 font-bold uppercase tracking-wider transition-colors cursor-pointer text-[10px]"
+              >
+                Voltar
+              </button>
+              <a
+                href="https://mpago.la/1SfRUJ2"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setShowPaymentInfoModal(false)}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 px-4 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-1 cursor-pointer border-none text-[10px] no-underline"
+              >
+                Ir para o Pagamento
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <OnboardingTutorial 
         theme={theme} 
         isOpen={isTutorialOpen} 

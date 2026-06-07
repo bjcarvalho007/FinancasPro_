@@ -408,7 +408,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                     )}
 
                     <div>
-                      <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Seu E-mail Premium</label>
+                      <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{isTrialSignUp ? 'Seu E-mail' : 'Seu E-mail Premium'}</label>
                       <div className="relative">
                         <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
                         <input 

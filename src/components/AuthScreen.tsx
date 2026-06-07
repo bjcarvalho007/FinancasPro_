@@ -883,7 +883,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
               </div>
 
               <p className="text-[11px] text-slate-300 leading-normal font-light">
-                Os <strong className="font-bold text-white">10 primeiros acessos</strong> saem por apenas <strong className="font-bold text-emerald-400">R$ 11,99/mês</strong>. Após estas 10 assinaturas serem preenchidas, novas inscrições obrigatoriamente pagarão o valor padrão de <strong className="font-bold text-slate-200">R$ 32,99/mês</strong>.
+                As <strong className="font-bold text-white">10 primeiras assinaturas</strong> garantem o valor especial de <strong className="font-bold text-emerald-400">R$ 11,99 mensal</strong>. Após o preenchimento das vagas promocionais, novas assinaturas serão realizadas pelo valor regular do plano.
               </p>
             </div>
 

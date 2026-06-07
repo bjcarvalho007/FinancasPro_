@@ -46,7 +46,9 @@ import {
   Receipt,
   Coins,
   CreditCard,
-  ShieldCheck
+  ShieldCheck,
+  Zap,
+  ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -74,6 +76,8 @@ const defaultCategories = [
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
+  const [userProfile, setUserProfile] = useState<any | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState<boolean>(true);
   
   // App Data State loaded directly from Firestore
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -142,6 +146,44 @@ export default function App() {
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
 
+  const VIP_EMAILS = useMemo(() => ['bjcarvalho07@gmail.com', 'msouzacintia600@gmail.com'], []);
+
+  const isVIP = useMemo(() => {
+    return !!(user && user.email && VIP_EMAILS.includes(user.email.toLowerCase().trim()));
+  }, [user, VIP_EMAILS]);
+
+  const isWithinTwoDaysTrial = useMemo(() => {
+    if (!user) return false;
+    let creationDateStr = userProfile?.createdAt;
+    
+    let creationTime = Date.now();
+    if (creationDateStr) {
+      creationTime = Date.parse(creationDateStr);
+    } else if (user.metadata.creationTime) {
+      creationTime = Date.parse(user.metadata.creationTime);
+    }
+    
+    const diff = Date.now() - creationTime;
+    const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
+    return diff >= 0 && diff < twoDaysInMs;
+  }, [user, userProfile]);
+
+  const hasActiveSubscription = useMemo(() => {
+    if (!userProfile) return false;
+    
+    if (userProfile.assinante !== true || !userProfile.dataVencimento) {
+      return false;
+    }
+    
+    const expiryTime = Date.parse(userProfile.dataVencimento);
+    if (isNaN(expiryTime)) return false;
+    
+    return Date.now() <= expiryTime;
+  }, [userProfile]);
+
+  const hasAccess = isVIP || isWithinTwoDaysTrial || hasActiveSubscription;
+  const isBlocked = !!(user && !hasAccess);
+
   // Validate Firestore Access on Boot as mandated by Skill rules
   useEffect(() => {
     async function testConnection() {
@@ -176,6 +218,83 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
+
+  // Profile snapshot stream
+  useEffect(() => {
+    if (!user) {
+      setUserProfile(null);
+      setLoadingProfile(false);
+      return;
+    }
+    setLoadingProfile(true);
+    const unsubUserProfile = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setUserProfile(docSnap.data());
+      } else {
+        setUserProfile(null);
+      }
+      setLoadingProfile(false);
+    }, (error) => {
+      console.error("Error reading user profile:", error);
+      setLoadingProfile(false);
+    });
+    return unsubUserProfile;
+  }, [user]);
+
+  // Handle subscriber monthly check or update database accordingly
+  useEffect(() => {
+    if (user && userProfile && !isVIP) {
+      if (userProfile.assinante === true && userProfile.dataVencimento) {
+        const expiryTime = Date.parse(userProfile.dataVencimento);
+        if (!isNaN(expiryTime) && Date.now() > expiryTime) {
+          // Expirou! Set assinante: false in DB
+          const userRef = doc(db, 'users', user.uid);
+          updateDoc(userRef, { assinante: false }).catch((err) => {
+            console.error("Erro ao desativar assinante expirado:", err);
+          });
+        }
+      }
+    }
+  }, [user, userProfile, isVIP]);
+
+  // Handle anti-fraud redirect callbacks
+  useEffect(() => {
+    const handlePaymentReturn = async () => {
+      if (!user) return;
+      const urlParams = new URLSearchParams(window.location.search);
+      const status = urlParams.get('status');
+      const paymentId = urlParams.get('payment_id');
+
+      if (status === 'approved' && paymentId) {
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + 30);
+          const dataVencimento = expiryDate.toISOString();
+
+          await setDoc(userRef, {
+            assinante: true,
+            dataVencimento: dataVencimento,
+            paymentId: paymentId,
+            paymentStatus: status,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+
+          triggerToast("Assinatura Ativada! Seu acesso premium foi liberado por 30 dias.", "success");
+
+          // Clear search parameters
+          const cleanUrl = window.location.origin + window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        } catch (err) {
+          console.error("Erro ao atualizar assinatura por pagamento de retorno:", err);
+          triggerToast("Erro ao processar ativação de pagamento no banco de dados.", "error");
+        }
+      }
+    };
+
+    handlePaymentReturn();
+  }, [user]);
 
   // Fire up Firestore Snapshot streams when Authenticated
   useEffect(() => {
@@ -373,14 +492,14 @@ export default function App() {
   }, [transactions, currentMonthKey, settings?.alertThresholdDays, settings]);
 
   // Toast helper triggers
-  const triggerToast = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {
+  function triggerToast(msg: string, type: 'success' | 'error' | 'warning' = 'success') {
     setToastMessage(msg);
     setToastType(type);
     setShowToast(true);
     setTimeout(() => {
       setShowToast(false);
     }, 3000);
-  };
+  }
 
   const formatCurrency = (val: number): string => {
     const symb = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : 'R$';
@@ -1080,7 +1199,9 @@ export default function App() {
     );
   };
 
-  if (loadingUser) {
+  const isLoadingAll = loadingUser || (user ? loadingProfile : false);
+
+  if (isLoadingAll) {
     return (
       <div className="min-h-screen bg-[#070a13] flex flex-col items-center justify-center space-y-6">
         <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center glow-indigo animate-pulse">
@@ -1096,6 +1217,132 @@ export default function App() {
 
   if (!user) {
     return <AuthScreen onSuccess={() => window.location.reload()} showToast={triggerToast} />;
+  }
+
+  if (user && isBlocked) {
+    return (
+      <div className={`min-h-screen w-full flex flex-col justify-between p-4 md:p-8 bg-[#070a13] bg-[radial-gradient(circle_at_50%_0%,#152039_0%,#070a13_100%)] overflow-y-auto ${
+        theme === 'light' ? 'bg-[#f4f7fa]' : 'bg-[#070a13]'
+      }`}>
+        
+        {/* Header bar across the access screen */}
+        <div className="w-full max-w-4xl mx-auto flex items-center justify-between py-4 border-b border-white/5 mb-6 select-none">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center glow-emerald shadow-emerald-500/10 shrink-0">
+              <TrendingUp className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <span className="font-display font-extrabold text-[17px] tracking-tight text-white leading-none">
+                FINANÇAS<span className="text-emerald-400 font-black ml-0.5">PRO</span>
+              </span>
+              <span className="text-[8.5px] text-slate-500 font-extrabold uppercase tracking-widest block leading-tight mt-0.5">Gestão de Caixa Seguro</span>
+            </div>
+          </div>
+
+          <button
+            onClick={executeLogout}
+            className="px-4 py-2 rounded-xl text-[11px] md:text-xs font-bold uppercase tracking-wider text-rose-450 hover:text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sair da Conta
+          </button>
+        </div>
+
+        {/* Blocker Main Content */}
+        <div className="w-full max-w-xl mx-auto py-4 flex-1 flex flex-col justify-center animate-fade-in">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="p-6 md:p-8 rounded-3xl bg-[#090e1b] border border-white/5 shadow-2xl relative overflow-hidden"
+          >
+            {/* Background absolute glowing effect */}
+            <div className="absolute -top-12 -left-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="text-center mb-6">
+              <span className="text-[10px] text-amber-450 font-extrabold uppercase tracking-widest bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full inline-flex items-center gap-1.5 mb-4 animate-pulse">
+                <AlertCircle className="w-4 h-4 text-amber-450" /> Período de Teste Encerrado
+              </span>
+              
+              <h2 className="font-display font-black text-2xl md:text-3xl text-white tracking-tight leading-snug">
+                Seu período de acesso terminou. Deseja continuar usando o sistema?
+              </h2>
+              
+              <p className="text-xs text-slate-400 mt-2.5 font-light leading-relaxed max-w-md mx-auto">
+                Não perca a organização e as projeções automatizadas de fluxo do seu caixa. Ative sua assinatura corporativa premium e garanta acesso vitalício ou mensal contínuo.
+              </p>
+            </div>
+
+            {/* Urgency batch section */}
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 mb-6 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0 text-amber-400">
+                <Zap className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <h4 className="text-xs font-black uppercase tracking-wider text-amber-300">
+                  Lote Promocional: Apenas para os 10 primeiros assinantes!
+                </h4>
+                <p className="text-[10.5px] text-amber-450 leading-relaxed font-semibold">
+                  Aproveite o preço promocional com mais de 60% de desconto definitivo.
+                </p>
+              </div>
+            </div>
+
+            {/* Pricing Card */}
+            <div className="py-6 px-4 md:px-8 rounded-2xl bg-slate-950/40 border border-white/5 text-center mb-6 relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-slate-950 text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full">
+                Melhor Custo-Benefício
+              </div>
+              
+              <div className="flex justify-center items-baseline gap-2 mt-2">
+                <span className="text-xs text-slate-500 line-through font-bold">R$ 32,99/mês</span>
+                <span className="text-[11px] text-slate-400 font-bold">por apenas</span>
+              </div>
+              
+              <div className="flex justify-center items-baseline gap-1 mt-1">
+                <span className="text-emerald-450 font-black text-lg">R$</span>
+                <span className="text-4xl font-extrabold text-white tracking-tight leading-none">11,99</span>
+                <span className="text-slate-400 text-xs font-bold">/ mês</span>
+              </div>
+
+              <p className="text-[10.5px] mt-2.5 text-slate-550 font-medium uppercase tracking-wider">
+                Recorrente mensal • Sem fidelidade ou taxas de cancelamento
+              </p>
+            </div>
+
+            {/* CTA action buttons */}
+            <div className="space-y-3">
+              <a
+                href="https://mpago.la/1SfRUJ2"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-gradient-to-r from-emerald-600 to-emerald-750 hover:from-emerald-500 hover:to-emerald-650 text-white font-extrabold py-4 px-4 rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/15 transform hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer no-underline border-none"
+              >
+                Ativar Meu Acesso Premium
+                <ArrowRight className="w-4 h-4" />
+              </a>
+
+              <button
+                onClick={executeLogout}
+                className="w-full text-xs text-slate-500 hover:text-white font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-transparent border-none mt-2"
+              >
+                ← Voltar para login com outra conta
+              </button>
+            </div>
+
+            {/* Trust Footer Badges */}
+            <div className="flex items-center justify-center gap-1.5 mt-6 pt-4 border-t border-white/5 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" /> Pagamento 100% Protegido pelo Mercado Pago
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Floating high-converting footer credit note */}
+        <div className="mt-8 text-center select-none text-[9px] text-slate-500 hover:text-slate-400 uppercase tracking-widest font-black transition-all">
+          BJC DESENVOLVIMENTOS • FINANÇASPRO premium
+        </div>
+      </div>
+    );
   }
 
   return (

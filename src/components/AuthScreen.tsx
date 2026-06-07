@@ -75,14 +75,15 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
   const [verifyingToken, setVerifyingToken] = useState<boolean>(false);
   const [verifiedEmail, setVerifiedEmail] = useState<string>('');
   const [isCadastroMode, setIsCadastroMode] = useState<boolean>(false);
+  const [isTrialSignUp, setIsTrialSignUp] = useState<boolean>(false);
 
   const handleMercadoPagoCheckout = () => {
-    window.location.href = "https://mpago.la/24ukKJM";
+    window.open("https://mpago.la/1SfRUJ2", "_blank");
   };
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const hasStatusAprovado = urlParams.get('status') === 'aprovado';
+    const hasStatusAprovado = urlParams.get('status') === 'approved' && urlParams.has('payment_id');
     const isCadastro = window.location.pathname.startsWith('/cadastro') || urlParams.has('status');
     
     if (isCadastro) {
@@ -196,29 +197,31 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
     setLoading(true);
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const isMPApproved = urlParams.get('status') === 'aprovado';
+      const isMPApproved = !isTrialSignUp && urlParams.get('status') === 'approved' && !!urlParams.get('payment_id');
 
-      if (isMPApproved) {
-        // Double check if this payment ID was already used for signup
-        const tokenDocRef = doc(db, "tokens_pagos", token);
-        const tokenSnap = await getDocFromServer(tokenDocRef).catch(() => null);
-        if (tokenSnap && tokenSnap.exists()) {
+      if (!isTrialSignUp) {
+        if (isMPApproved) {
+          // Double check if this payment ID was already used for signup
+          const tokenDocRef = doc(db, "tokens_pagos", token);
+          const tokenSnap = await getDocFromServer(tokenDocRef).catch(() => null);
+          if (tokenSnap && tokenSnap.exists()) {
+            const tokenData = tokenSnap.data();
+            if (tokenData.used === true) {
+              throw new Error("Bloqueio de Registro: Este pagamento do Mercado Pago já foi utilizado para criar uma conta.");
+            }
+          }
+        } else {
+          // Normal token checking split
+          const tokenDocRef = doc(db, "tokens_pagos", token);
+          const tokenSnap = await getDocFromServer(tokenDocRef).catch(() => null);
+          if (!tokenSnap || !tokenSnap.exists()) {
+            throw new Error("Bloqueio de Registro: O token de pagamento informado é inválido.");
+          }
+
           const tokenData = tokenSnap.data();
           if (tokenData.used === true) {
-            throw new Error("Bloqueio de Registro: Este pagamento do Mercado Pago já foi utilizado para criar uma conta.");
+            throw new Error("Bloqueio de Registro: Este token de pagamento já foi utilizado para criar uma conta.");
           }
-        }
-      } else {
-        // Normal token checking split
-        const tokenDocRef = doc(db, "tokens_pagos", token);
-        const tokenSnap = await getDocFromServer(tokenDocRef).catch(() => null);
-        if (!tokenSnap || !tokenSnap.exists()) {
-          throw new Error("Bloqueio de Registro: O token de pagamento informado é inválido.");
-        }
-
-        const tokenData = tokenSnap.data();
-        if (tokenData.used === true) {
-          throw new Error("Bloqueio de Registro: Este token de pagamento já foi utilizado para criar uma conta.");
         }
       }
 
@@ -226,24 +229,40 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const registeredUser = userCredential.user;
 
-      // 3. Mark the token as claimed/used associated with the uid
-      await setDoc(doc(db, "tokens_pagos", token), {
-        used: true,
-        userId: registeredUser.uid,
-        usedAt: new Date().toISOString(),
-        paymentSystem: 'MercadoPago'
-      }, { merge: true });
+      if (!isTrialSignUp) {
+        // 3. Mark the token as claimed/used associated with the uid
+        await setDoc(doc(db, "tokens_pagos", token), {
+          used: true,
+          userId: registeredUser.uid,
+          usedAt: new Date().toISOString(),
+          paymentSystem: 'MercadoPago'
+        }, { merge: true });
+      }
 
       // 4. Vincula o token e inicializa os dados básicos do usuário no Firestore
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30);
+      const dataVencimento = expiryDate.toISOString();
+
       await setDoc(doc(db, "users", registeredUser.uid), {
         uid: registeredUser.uid,
         email: email,
         token: token,
-        paymentSystem: 'MercadoPago',
+        paymentSystem: isTrialSignUp ? 'Trial' : 'MercadoPago',
+        assinante: isMPApproved ? true : false,
+        dataVencimento: isMPApproved ? dataVencimento : null,
         createdAt: new Date().toISOString()
       }, { merge: true });
 
-      showToast("Garantia activa. Sua conta de Membro Premium foi gerada com sucesso!", "success");
+      // Clean URL params after successful registration
+      try {
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      } catch (e) {
+        console.warn("URL cleanup bypassed in iframe:", e);
+      }
+
+      showToast(isTrialSignUp ? "Teste Grátis Ativado! Sua conta de Teste de 2 Dias foi criada com sucesso." : "Garantia activa. Sua conta de Membro Premium foi gerada com sucesso!", "success");
       onSuccess();
     } catch (err: any) {
       console.error("Erro ao registrar no Firebase Auth:", err);
@@ -319,14 +338,22 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
 
                 {/* Compact brand marker */}
                 <div className="text-center mb-6">
-                  <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
-                    ✨ Compra Confirmada - Acesso Premium
-                  </span>
+                  {isTrialSignUp ? (
+                    <span className="text-[9px] text-indigo-400 font-extrabold uppercase tracking-widest bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
+                      ⚡ Teste Grátis de 2 Dias Ativado
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
+                      ✨ Compra Confirmada - Acesso Premium
+                    </span>
+                  )}
                   <h2 className="font-display font-black text-2xl md:text-3xl text-white tracking-tight">
-                    Crie sua Conta Premium
+                    {isTrialSignUp ? 'Crie sua Conta de Teste' : 'Crie sua Conta Premium'}
                   </h2>
                   <p className="text-xs text-slate-400 mt-1.5 font-light leading-relaxed">
-                    Defina abaixo sua senha privada para começar a organizar suas finanças de forma premium hoje mesmo.
+                    {isTrialSignUp 
+                      ? 'Defina abaixo suas credenciais para iniciar seu teste gratuito de 2 dias hoje mesmo.'
+                      : 'Defina abaixo sua senha privada para começar a organizar suas finanças de forma premium hoje mesmo.'}
                   </p>
                 </div>
 
@@ -416,11 +443,23 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       disabled={loading}
                       className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      {loading ? 'Criando Conta...' : 'Criar Minha Conta & Acessar'}
+                      {loading ? 'Criando Conta...' : isTrialSignUp ? 'Criar Conta & Iniciar Teste' : 'Criar Minha Conta & Acessar'}
                       {!loading && <ArrowRight className="w-4 h-4" />}
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCadastroMode(false);
+                        setIsTrialSignUp(false);
+                        setErrorAlert(null);
+                      }}
+                      className="w-full text-xs text-slate-450 hover:text-white font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-transparent border-none mt-2"
+                    >
+                      ← Voltar para login
+                    </button>
                     
-                    <p className="text-[10px] text-slate-500 text-center uppercase tracking-wider font-bold leading-relaxed pt-2">
+                    <p className="text-[10px] text-slate-500 text-center uppercase tracking-wider font-bold leading-relaxed pt-3">
                       🔒 Você usará este e-mail e senha para acessar o painel corporativo a qualquer momento.
                     </p>
                   </form>
@@ -648,7 +687,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       ← Voltar para Acesso Direto
                     </button>
                   ) : (
-                    <div className="pt-5 border-t border-white/5 space-y-4">
+                    <div className="pt-5 border-t border-white/5 space-y-3">
                       <p className="text-xs text-slate-400 leading-normal font-semibold">
                         Ainda não possui uma assinatura ativa?
                       </p>
@@ -663,6 +702,20 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       >
                         Quero Assinar
                         <ArrowRight className="w-4 h-4" />
+                      </button>
+
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setIsCadastroMode(true);
+                          setIsTrialSignUp(true);
+                          setTokenVerified(true);
+                          setToken(`trial_${Date.now()}`);
+                          setErrorAlert(null);
+                        }}
+                        className="w-full bg-slate-900 hover:bg-slate-850 border border-white/10 hover:border-white/20 text-slate-300 hover:text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        Criar Conta (Teste de 2 Dias)
                       </button>
                     </div>
                   )}

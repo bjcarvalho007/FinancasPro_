@@ -2015,6 +2015,29 @@ export default function App() {
 
                               {/* Interactive installment planner p/ user escolher valor no mês */}
                               {tx.type === 'parcelas' && (() => {
+                                const handleLancarPagamento = async () => {
+                                  const currentValStr = installmentInputs[tx.id] !== undefined
+                                    ? installmentInputs[tx.id]
+                                    : (tx.paid_amount > 0 ? handleMaskMoney(tx.paid_amount.toFixed(2).replace('.', '')) : "R$ 0,00");
+                                  const newVal = handleParseMoney(currentValStr);
+                                  
+                                  const finishedPaying = newVal > 0;
+                                  const updatedTx = { 
+                                    ...tx, 
+                                    amount: newVal,
+                                    paid_amount: newVal, 
+                                    paid_at: finishedPaying ? new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+                                    updatedAt: new Date().toISOString() 
+                                  };
+                                  const path = `transactions/${tx.id}`;
+                                  try {
+                                    await setDoc(doc(db, 'transactions', tx.id), updatedTx);
+                                    triggerToast(`Pagamento de ${formatCurrency(newVal)} lançado com sucesso!`, 'success');
+                                  } catch (err) {
+                                    handleFirestoreError(err, OperationType.UPDATE, path);
+                                  }
+                                };
+
                                 // Calculate dynamic remaining debt
                                 const masterId = tx.masterId || tx.id;
                                 const masterTx = transactions.find(t => t.id === masterId) || tx;
@@ -2135,59 +2158,45 @@ export default function App() {
                                           Quanto deseja pagar este mês?
                                         </span>
                                         <span className="text-[9.5px] text-slate-500 leading-tight block">
-                                          Digite o valor e tecle Enter ou clique fora
+                                          Digite o valor e clique no botão Lançar ou tecle Enter
                                         </span>
                                       </div>
                                       
-                                      <div className={`relative rounded-xl border ${
-                                        theme === 'light' ? 'bg-slate-50 border-slate-205 focus-within:border-indigo-400' : 'bg-slate-950/40 border-white/5 focus-within:border-indigo-500'
-                                      } transition-all px-3.5 py-2 flex items-center shadow-inner`}>
-                                        <input
-                                          type="text"
-                                          inputMode="numeric"
-                                          placeholder="R$ 0,00"
-                                          value={
-                                            installmentInputs[tx.id] !== undefined
-                                              ? installmentInputs[tx.id]
-                                              : (tx.paid_amount > 0 ? handleMaskMoney(tx.paid_amount.toFixed(2).replace('.', '')) : "R$ 0,00")
-                                          }
-                                          onChange={(e) => {
-                                            const masked = handleMaskMoney(e.target.value);
-                                            setInstallmentInputs(prev => ({ ...prev, [tx.id]: masked }));
-                                          }}
-                                          onBlur={async () => {
-                                            const currentValStr = installmentInputs[tx.id] !== undefined
-                                              ? installmentInputs[tx.id]
-                                              : (tx.paid_amount > 0 ? handleMaskMoney(tx.paid_amount.toFixed(2).replace('.', '')) : "R$ 0,00");
-                                            const newVal = handleParseMoney(currentValStr);
-                                            
-                                            if (newVal !== (tx.paid_amount || 0)) {
-                                              const finishedPaying = newVal > 0;
-                                              const updatedTx = { 
-                                                ...tx, 
-                                                amount: newVal,
-                                                paid_amount: newVal, 
-                                                paid_at: finishedPaying ? new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-                                                updatedAt: new Date().toISOString() 
-                                              };
-                                              const path = `transactions/${tx.id}`;
-                                              try {
-                                                await setDoc(doc(db, 'transactions', tx.id), updatedTx);
-                                                triggerToast(`Pagamento do mês ajustado para ${formatCurrency(newVal)}. Saldo devedor global atualizado!`, 'success');
-                                              } catch (err) {
-                                                handleFirestoreError(err, OperationType.UPDATE, path);
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <div className={`relative rounded-xl border ${
+                                          theme === 'light' ? 'bg-slate-50 border-slate-205 focus-within:border-indigo-400' : 'bg-slate-950/40 border-white/5 focus-within:border-indigo-500'
+                                        } transition-all px-3.5 py-2 flex items-center shadow-inner`}>
+                                          <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            placeholder="R$ 0,00"
+                                            value={
+                                              installmentInputs[tx.id] !== undefined
+                                                ? installmentInputs[tx.id]
+                                                : (tx.paid_amount > 0 ? handleMaskMoney(tx.paid_amount.toFixed(2).replace('.', '')) : "R$ 0,00")
+                                            }
+                                            onChange={(e) => {
+                                              const masked = handleMaskMoney(e.target.value);
+                                              setInstallmentInputs(prev => ({ ...prev, [tx.id]: masked }));
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleLancarPagamento();
                                               }
-                                            }
-                                          }}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              (e.currentTarget as HTMLInputElement).blur();
-                                            }
-                                          }}
-                                          className={`w-32 bg-transparent text-right font-mono font-bold text-xs focus:outline-none p-0 leading-none ${
-                                            theme === 'light' ? 'text-slate-800' : 'text-slate-150'
-                                          }`}
-                                        />
+                                            }}
+                                            className={`w-32 bg-transparent text-right font-mono font-bold text-xs focus:outline-none p-0 leading-none ${
+                                              theme === 'light' ? 'text-slate-800' : 'text-slate-150'
+                                            }`}
+                                          />
+                                        </div>
+                                        <button
+                                          onClick={handleLancarPagamento}
+                                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-md shadow-indigo-600/15 active:scale-95 flex items-center gap-1.5 shrink-0 border-none"
+                                        >
+                                          <span>🚀</span>
+                                          <span>Lançar</span>
+                                        </button>
                                       </div>
                                     </div>
                                   </div>

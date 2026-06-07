@@ -653,6 +653,97 @@ export default function DashboardAnalytics({
     };
   })();
 
+  if (listAll.length === 0) {
+    return (
+      <div className="space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-8 rounded-3xl border ${
+            isLight 
+              ? 'bg-gradient-to-br from-[#f5f3ff] via-white to-white border-violet-100 shadow-md shadow-violet-100/10 text-slate-900' 
+              : 'bg-[#090d1c]/60 border border-indigo-500/15 text-white shadow-xl'
+          }`}
+        >
+          <div className="flex flex-col md:flex-row gap-6 items-start">
+            <div className={`p-4 rounded-2xl shrink-0 border ${
+              isLight ? 'bg-violet-50 border-violet-100 text-violet-600' : 'bg-indigo-500/10 border-indigo-500/25 text-indigo-400'
+            }`}>
+              <Sparkles className="w-8 h-8 animate-pulse text-indigo-400" />
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest block mb-1">
+                  Seja muito bem-vindo ao FinançasPro Premium
+                </span>
+                <h2 className="font-display font-black text-2xl tracking-tight leading-none mb-2">
+                  Pronto para estruturar sua vida financeira? 🚀
+                </h2>
+                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'} leading-relaxed font-light`}>
+                  Seu painel de análise avançada e inteligência está esperando seu primeiro lançamento. Como este é o seu primeiro acesso e não há transações cadastradas ainda, siga o guia passo a passo abaixo para desbloquear suas métricas em poucos segundos:
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                <div className={`p-4 rounded-2xl border ${
+                  isLight ? 'bg-slate-50 border-slate-150' : 'bg-slate-900/40 border-white/5'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-5 h-5 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-black flex items-center justify-center">1</span>
+                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-205'}`}>Definir Ganhos</span>
+                  </div>
+                  <p className={`text-[11px] ${isLight ? 'text-slate-505' : 'text-slate-450'} leading-relaxed font-light`}>
+                    Toque no botão <strong className="text-emerald-450 font-black">Ganhos</strong> no topo para cadastrar seu salário ou saldo em mãos do mês.
+                  </p>
+                </div>
+
+                <div className={`p-4 rounded-2xl border ${
+                  isLight ? 'bg-slate-50 border-slate-150' : 'bg-slate-900/40 border-white/5'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-5 h-5 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-black flex items-center justify-center">2</span>
+                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-205'}`}>Primeiro Lançamento</span>
+                  </div>
+                  <p className={`text-[11px] ${isLight ? 'text-slate-505' : 'text-slate-450'} leading-relaxed font-light`}>
+                    Clique em <strong className="text-indigo-400">Novo Lançamento</strong> para registrar suas primeiras faturas ou despesas recorrentes.
+                  </p>
+                </div>
+
+                <div className={`p-4 rounded-2xl border ${
+                  isLight ? 'bg-slate-50 border-slate-150' : 'bg-slate-900/40 border-white/5'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-5 h-5 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-black flex items-center justify-center">3</span>
+                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-205'}`}>Acompanhar Insights</span>
+                  </div>
+                  <p className={`text-[11px] ${isLight ? 'text-slate-505' : 'text-slate-450'} leading-relaxed font-light`}>
+                    Pronto! Nosso sistema calculará automaticamente o seu <strong className="text-indigo-400">Score de Saúde</strong> e apresentará insights!
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Informative summary card inside empty dashboard */}
+        <div className={`p-6 rounded-3xl border ${
+          isLight ? 'bg-white/70 border-slate-200' : 'bg-[#090d1c]/40 border-white/5'
+        } text-center space-y-4 max-w-lg mx-auto py-10`}>
+          <div className="w-12 h-12 rounded-full bg-slate-500/5 border border-white/5 mx-auto flex items-center justify-center">
+            <Activity className="w-5 h-5 text-indigo-400 animate-pulse" />
+          </div>
+          <div className="space-y-1">
+            <h3 className={`font-display font-medium text-xs sm:text-sm uppercase tracking-widest ${isLight ? 'text-slate-700' : 'text-slate-250'}`}>Aguardando Seus Dados</h3>
+            <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'} leading-relaxed font-light`}>
+              Assim que você registrar sua primeira despesa fixa, variável ou parcelada, este gráfico e os cartões de inteligência financeira serão gerados em tempo real de forma totalmente automatizada.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       

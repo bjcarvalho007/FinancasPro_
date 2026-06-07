@@ -94,7 +94,7 @@ export default function App() {
   const currentMonthKey = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, '0')}`;
 
   // Tabs context
-  const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings' | 'admin'>('contas');
+  const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings' | 'admin'>('dashboard');
   
   // Custom Toasts and Alerts
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -1601,13 +1601,75 @@ export default function App() {
           </header>
 
           {/* Render Mobile summary cards */}
-          {renderSummaryCardsMobile()}
+          {activeTab !== 'dashboard' && renderSummaryCardsMobile()}
+
+          {/* If on dashboard tab, render the two cards side-by-side above the month selector */}
+          {activeTab === 'dashboard' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* Card 1: Sobra Estimada de Caixa */}
+              <motion.div
+                whileHover={{ scale: 1.01 }}
+                onClick={handleOpenIncome}
+                className={`p-5 rounded-3xl ${
+                  theme === 'light' 
+                    ? 'bg-gradient-to-br from-[#f0fdf4] to-white border-slate-205 text-slate-900 shadow-md shadow-emerald-100/10 hover:border-emerald-350' 
+                    : 'bg-gradient-to-br from-[#0c2617]/50 to-slate-950/20 border border-emerald-500/15 text-white shadow-xl hover:border-emerald-500/35'
+                } border flex items-center justify-between cursor-pointer transition-all group`}
+              >
+                <div>
+                  <span className={`text-[10px] font-black ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>
+                    💎 Sobra Estimada de Caixa
+                  </span>
+                  <h3 className={`font-mono text-2xl font-black ${theme === 'light' ? 'text-emerald-700' : 'text-emerald-450'} tracking-tight leading-none`}>
+                    {formatCurrency(leftoverCash)}
+                  </h3>
+                  <span className={`text-[10px] ${theme === 'light' ? 'text-emerald-600 font-bold' : 'text-emerald-400/80'} block font-bold uppercase tracking-wider mt-1.5`}>
+                    Do total disponível de {formatCurrency(totalInflowsSum)}
+                  </span>
+                </div>
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
+                  theme === 'light' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
+                }`}>
+                  <Sparkles className="w-5 h-5" />
+                </div>
+              </motion.div>
+
+              {/* Card 2: Total a Pagar Pendente */}
+              <motion.div
+                whileHover={{ scale: 1.01 }}
+                onClick={() => setIsPendingDebtListOpen(true)}
+                className={`p-5 rounded-3xl ${
+                  theme === 'light' 
+                    ? 'bg-white border-slate-205 shadow-md shadow-slate-100/10 text-slate-900 hover:border-indigo-305' 
+                    : 'bg-slate-950/40 border border-white/5 text-white shadow-xl hover:border-slate-800'
+                } border flex items-center justify-between cursor-pointer transition-all group`}
+              >
+                <div>
+                  <span className={`text-[10px] font-black ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>
+                    💸 Total a Pagar Pendente
+                  </span>
+                  <h3 className="font-mono text-2xl font-black text-rose-450 tracking-tight leading-none">
+                    {formatCurrency(pendingTotalDebt)}
+                  </h3>
+                  <span className={`text-[10px] ${theme === 'light' ? 'text-slate-450 font-bold' : 'text-slate-500'} block font-bold uppercase tracking-wider mt-1.5`}>
+                    Comprometido do mês: {formatCurrency(totalSpentInMonth)}
+                  </span>
+                </div>
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
+                  theme === 'light' ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-rose-500/10 border-rose-500/25 text-rose-400'
+                }`}>
+                  <DollarSign className="w-5 h-5" />
+                </div>
+              </motion.div>
+            </div>
+          )}
 
           {/* Ledger Calendar Month Navigator */}
           <div className={`flex items-center justify-between p-3.5 rounded-2xl border ${
             theme === 'light' ? 'bg-white border-slate-205 shadow-sm text-slate-900' : 'bg-white/3 border-white/5 text-white'
-          }`}>
-            <div className="flex items-center gap-3">
+          } mb-4`}>
+            {/* Centered Month Navigator alignment */}
+            <div className={`flex items-center gap-3 ${activeTab === 'dashboard' ? 'mx-auto md:translate-x-[48px]' : ''}`}>
               <button
                 onClick={() => handleMonthTurn(-1)}
                 className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
@@ -1618,7 +1680,7 @@ export default function App() {
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <h4 className={`font-display font-black text-sm tracking-wide select-none min-w-[124px] text-center ${
+              <h4 className={`font-display font-black text-sm uppercase tracking-widest select-none min-w-[200px] text-center ${
                 theme === 'light' ? 'text-slate-800' : 'text-white'
               }`}>
                 {monthsPortuguese[calendarDate.getMonth()].toUpperCase()} {calendarDate.getFullYear()}
@@ -1635,40 +1697,30 @@ export default function App() {
               </button>
             </div>
 
-            <button
-              onClick={() => {
-                setEditingTransaction(null);
-                setIsAddOpen(true);
-              }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold leading-none select-none flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/15"
-            >
-              <Plus className="w-4 h-4" /> Novo
-            </button>
+            {/* Novo button showing only for lists or offset container */}
+            {activeTab !== 'dashboard' ? (
+              <button
+                onClick={() => {
+                  setEditingTransaction(null);
+                  setIsAddOpen(true);
+                }}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold leading-none select-none flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/15"
+              >
+                <Plus className="w-4 h-4" /> Novo
+              </button>
+            ) : (
+              <div className="hidden md:block w-24 shrink-0" />
+            )}
           </div>
 
 
           {/* Grid Layout that splits screen on PC, but rolls standard single col on Mobile */}
-          {activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
+          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Main lists column */}
               <div className="lg:col-span-8 space-y-4">
                 <main className="space-y-4 pt-1">
-                  {activeTab === 'dashboard' ? (
-                    <DashboardAnalytics
-                      transactions={activeMonthTransactions}
-                      allTransactions={transactions}
-                      currentMonthKey={currentMonthKey}
-                      categoriesList={activeMonthCategoryList}
-                      totalAvailable={totalInflowsSum}
-                      leftover={leftoverCash}
-                      income={inc}
-                      balance={bal}
-                      extra={ext}
-                      currentTheme={theme}
-                      settings={settings}
-                    />
-                  ) : (
-                    <div className="space-y-3">
+                  <div className="space-y-3">
                     {activeTabTransactions.length === 0 ? (
                       <div className={`p-12 text-center border border-dashed rounded-3xl text-xs select-none ${
                         theme === 'light' ? 'border-slate-300 text-slate-500 bg-white' : 'border-white/5 text-slate-500'
@@ -1934,8 +1986,7 @@ export default function App() {
                         })}
                       </div>
                     )}
-                    </div>
-                  )}
+                  </div>
                 </main>
               </div>
 
@@ -1964,10 +2015,24 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* Goals, Settings screens occupy the full 12 column grid */
+            /* Dashboard, Goals, Settings screens occupy the full 12 column grid */
             <div className="w-full">
               <main className="space-y-4 pt-1">
-                {activeTab === 'goals' ? (
+                {activeTab === 'dashboard' ? (
+                  <DashboardAnalytics
+                    transactions={activeMonthTransactions}
+                    allTransactions={transactions}
+                    currentMonthKey={currentMonthKey}
+                    categoriesList={activeMonthCategoryList}
+                    totalAvailable={totalInflowsSum}
+                    leftover={leftoverCash}
+                    income={inc}
+                    balance={bal}
+                    extra={ext}
+                    currentTheme={theme}
+                    settings={settings}
+                  />
+                ) : activeTab === 'goals' ? (
                   <GoalsPanel
                     goals={goals}
                     onCreateGoal={handleCreateGoal}

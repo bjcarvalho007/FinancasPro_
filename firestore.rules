@@ -80,7 +80,10 @@ service cloud.firestore {
         && data.theme is string && (data.theme == 'dark' || data.theme == 'light')
         && data.income is number && data.income >= 0
         && data.balance is number && data.balance >= 0
-        && (!data.keys().hasAny(['extras']) || data.extras is map);
+        && (!data.keys().hasAny(['extras']) || data.extras is map)
+        && (!data.keys().hasAny(['monthlyIncome']) || data.monthlyIncome is map)
+        && (!data.keys().hasAny(['monthlyBalance']) || data.monthlyBalance is map)
+        && (!data.keys().hasAny(['extraEarnings']) || data.extraEarnings is list);
     }
 
     function isValidNotification(data) {

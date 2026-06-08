@@ -868,7 +868,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                     Lote Promocional de Estreia
                   </h5>
                   <p className="text-[9.5px] text-amber-300 font-semibold mt-1">
-                    Primeiros 10 acessos por apenas R$ 11,99!
+                    10 primeiras assinaturas garantem o valor especial de 11,99 mensal após o preenchimento das vagas promocionais, novas assinaturas serão realizadas pelo valor regular do plano.
                   </p>
                 </div>
               </div>

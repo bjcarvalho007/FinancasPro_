@@ -770,8 +770,8 @@ export default function App() {
 
   // Preset configuration and extras cumulative earnings save
   const handleOpenIncome = () => {
-    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? 0;
-    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? 0;
+    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
+    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
     const ext = settings?.extras?.[currentMonthKey] || 0;
 
     setTempIncomeStr(incVal > 0 ? formatCurrency(incVal) : '');
@@ -1183,8 +1183,8 @@ export default function App() {
   }, [activeMonthTransactions, activeTab, tabSortBy]);
 
   // Summaries Calculations
-  const inc = settings?.monthlyIncome?.[currentMonthKey] ?? 0;
-  const bal = settings?.monthlyBalance?.[currentMonthKey] ?? 0;
+  const inc = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
+  const bal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
   const ext = settings?.extras?.[currentMonthKey] || 0;
   
   // Total funds active
@@ -2921,7 +2921,7 @@ export default function App() {
                     Lote Promocional de Estreia
                   </h5>
                   <p className="text-[9.5px] text-amber-300 font-semibold mt-1">
-                    Primeiros 10 acessos por apenas R$ 11,99!
+                    10 primeiras assinaturas garantem o valor especial de 11,99 mensal após o preenchimento das vagas promocionais, novas assinaturas serão realizadas pelo valor regular do plano.
                   </p>
                 </div>
               </div>

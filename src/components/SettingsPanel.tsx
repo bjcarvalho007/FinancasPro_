@@ -63,6 +63,14 @@ export default function SettingsPanel({
     }
   }, [settings]);
 
+  useEffect(() => {
+    setIncStr(baseIncome > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseIncome) : '');
+  }, [baseIncome]);
+
+  useEffect(() => {
+    setBalStr(baseBalance > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseBalance) : '');
+  }, [baseBalance]);
+
   const formatMoney = (val: number): string => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };

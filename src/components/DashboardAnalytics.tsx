@@ -388,8 +388,8 @@ export default function DashboardAnalytics({
   uniqueMonths.forEach(mKey => {
     const listMonth = listAll.filter(t => t.monthKey === mKey);
     const spentMonth = listMonth.reduce((sum, t) => sum + t.amount, 0);
-    const mIncome = settings?.monthlyIncome?.[mKey] ?? settings?.income ?? 0;
-    const mBalance = settings?.monthlyBalance?.[mKey] ?? settings?.balance ?? 0;
+    const mIncome = settings?.monthlyIncome?.[mKey] ?? 0;
+    const mBalance = settings?.monthlyBalance?.[mKey] ?? 0;
     const mExtra = settings?.extras?.[mKey] ?? 0;
     const totalInflows = mIncome + mBalance + mExtra;
     if (spentMonth > totalInflows && totalInflows > 0) {
@@ -510,8 +510,8 @@ export default function DashboardAnalytics({
     const paid = monthTx.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
     
     // Dynamic per-month metrics using settings mappings
-    const mIncome = settings?.monthlyIncome?.[mKey] ?? settings?.income ?? 0;
-    const mBalance = settings?.monthlyBalance?.[mKey] ?? settings?.balance ?? 0;
+    const mIncome = settings?.monthlyIncome?.[mKey] ?? 0;
+    const mBalance = settings?.monthlyBalance?.[mKey] ?? 0;
     const mExtra = settings?.extras?.[mKey] ?? 0;
     const totalInflows = mIncome + mBalance + mExtra;
     const leftoverMargin = totalInflows - spent;
@@ -552,8 +552,8 @@ export default function DashboardAnalytics({
   // Compute stats for previous month
   const prevSpent = prevMonthTransactions.reduce((sum, t) => sum + t.amount, 0);
   const prevPaid = prevMonthTransactions.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
-  const prevIncome = settings?.monthlyIncome?.[prevMonthKey] ?? settings?.income ?? 0;
-  const prevBalanceOld = settings?.monthlyBalance?.[prevMonthKey] ?? settings?.balance ?? 0;
+  const prevIncome = settings?.monthlyIncome?.[prevMonthKey] ?? 0;
+  const prevBalanceOld = settings?.monthlyBalance?.[prevMonthKey] ?? 0;
   const prevExtra = settings?.extras?.[prevMonthKey] || 0;
   const prevTotalAvailable = prevIncome + prevBalanceOld + prevExtra;
   const prevLeftover = prevTotalAvailable - prevSpent;
@@ -1217,8 +1217,8 @@ export default function DashboardAnalytics({
       {/* SECTION 3: KEY METRICS GRID */}
       {(() => {
         const historicalTotalInflow = uniqueMonths.reduce((sum, mKey) => {
-          const mIncome = settings?.monthlyIncome?.[mKey] ?? settings?.income ?? 0;
-          const mBalance = settings?.monthlyBalance?.[mKey] ?? settings?.balance ?? 0;
+          const mIncome = settings?.monthlyIncome?.[mKey] ?? 0;
+          const mBalance = settings?.monthlyBalance?.[mKey] ?? 0;
           const mExtra = settings?.extras?.[mKey] ?? 0;
           return sum + mIncome + mBalance + mExtra;
         }, 0);

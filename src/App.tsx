@@ -382,7 +382,10 @@ export default function App() {
           theme: 'dark',
           income: 0,
           balance: 0,
-          extras: {}
+          extras: {},
+          monthlyIncome: {},
+          monthlyBalance: {},
+          extraEarnings: []
         };
         setDoc(doc(db, 'settings', uid), initData).catch(e => {
           handleFirestoreError(e, OperationType.CREATE, `settings/${uid}`);
@@ -770,8 +773,8 @@ export default function App() {
 
   // Preset configuration and extras cumulative earnings save
   const handleOpenIncome = () => {
-    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
-    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
+    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? 0;
+    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? 0;
     const ext = settings?.extras?.[currentMonthKey] || 0;
 
     setTempIncomeStr(incVal > 0 ? formatCurrency(incVal) : '');
@@ -786,35 +789,17 @@ export default function App() {
     const balVal = handleParseMoney(tempBalanceStr);
     const extVal = handleParseMoney(tempExtraStr);
 
-    const oldMonthlyIncome = settings.monthlyIncome || {};
-    const oldMonthlyBalance = settings.monthlyBalance || {};
-    const oldExtrasMap = settings.extras || {};
-
-    // Auto-update standard fallback if not set yet
-    const baseInc = settings.income || incVal;
-    const baseBal = settings.balance || balVal;
-
-    const updatedSettings: Setting = {
-      ...settings,
-      income: baseInc,
-      balance: baseBal,
-      monthlyIncome: {
-        ...oldMonthlyIncome,
-        [currentMonthKey]: incVal
-      },
-      monthlyBalance: {
-        ...oldMonthlyBalance,
-        [currentMonthKey]: balVal
-      },
-      extras: {
-        ...oldExtrasMap,
-        [currentMonthKey]: extVal
-      }
-    };
-
     const path = `settings/${user.uid}`;
     try {
-      await setDoc(doc(db, 'settings', user.uid), updatedSettings);
+      const updatedMonthlyIncome = { ...(settings.monthlyIncome || {}), [currentMonthKey]: incVal };
+      const updatedMonthlyBalance = { ...(settings.monthlyBalance || {}), [currentMonthKey]: balVal };
+      const updatedExtras = { ...(settings.extras || {}), [currentMonthKey]: extVal };
+
+      await updateDoc(doc(db, 'settings', user.uid), {
+        monthlyIncome: updatedMonthlyIncome,
+        monthlyBalance: updatedMonthlyBalance,
+        extras: updatedExtras
+      });
       triggerToast('Ganhos do mês atualizados!', 'success');
       setIsIncomeOpen(false);
     } catch (e) {
@@ -839,19 +824,13 @@ export default function App() {
     const sameMonthEarnings = updatedEarningList.filter(item => item.monthKey === targetMonthKey);
     const sumForMonth = sameMonthEarnings.reduce((acc, item) => acc + item.amount, 0);
 
-    const oldExtrasMap = settings.extras || {};
-    const updatedSettings: Setting = {
-      ...settings,
-      extras: {
-        ...oldExtrasMap,
-        [targetMonthKey]: sumForMonth
-      },
-      extraEarnings: updatedEarningList
-    };
-
     const path = `settings/${user.uid}`;
     try {
-      await setDoc(doc(db, 'settings', user.uid), updatedSettings);
+      const updatedExtras = { ...(settings.extras || {}), [targetMonthKey]: sumForMonth };
+      await updateDoc(doc(db, 'settings', user.uid), {
+        extraEarnings: updatedEarningList,
+        extras: updatedExtras
+      });
       if (targetMonthKey === currentMonthKey) {
         setTempExtraStr(formatCurrency(sumForMonth));
       }
@@ -873,19 +852,13 @@ export default function App() {
     const sameMonthEarnings = updatedEarningList.filter(item => item.monthKey === targetMonthKey);
     const sumForMonth = sameMonthEarnings.reduce((acc, item) => acc + item.amount, 0);
 
-    const oldExtrasMap = settings.extras || {};
-    const updatedSettings: Setting = {
-      ...settings,
-      extras: {
-        ...oldExtrasMap,
-        [targetMonthKey]: sumForMonth
-      },
-      extraEarnings: updatedEarningList
-    };
-
     const path = `settings/${user.uid}`;
     try {
-      await setDoc(doc(db, 'settings', user.uid), updatedSettings);
+      const updatedExtras = { ...(settings.extras || {}), [targetMonthKey]: sumForMonth };
+      await updateDoc(doc(db, 'settings', user.uid), {
+        extraEarnings: updatedEarningList,
+        extras: updatedExtras
+      });
       if (targetMonthKey === currentMonthKey) {
         setTempExtraStr(sumForMonth > 0 ? formatCurrency(sumForMonth) : '');
       }
@@ -997,7 +970,7 @@ export default function App() {
     setTheme(newTheme);
     const path = `settings/${user.uid}`;
     try {
-      await setDoc(doc(db, 'settings', user.uid), { ...settings, theme: newTheme });
+      await updateDoc(doc(db, 'settings', user.uid), { theme: newTheme });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, path);
     }
@@ -1008,7 +981,7 @@ export default function App() {
     setCurrency(newCurrency);
     const path = `settings/${user.uid}`;
     try {
-      await setDoc(doc(db, 'settings', user.uid), { ...settings, currency: newCurrency });
+      await updateDoc(doc(db, 'settings', user.uid), { currency: newCurrency });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, path);
     }
@@ -1018,11 +991,11 @@ export default function App() {
     if (!user || !settings) return;
     const path = `settings/${user.uid}`;
     try {
-      const payload: any = { ...settings, income: inc, balance: bal };
+      const updates: any = { income: inc, balance: bal };
       if (alertDays !== undefined) {
-        payload.alertThresholdDays = alertDays;
+        updates.alertThresholdDays = alertDays;
       }
-      await setDoc(doc(db, 'settings', user.uid), payload);
+      await updateDoc(doc(db, 'settings', user.uid), updates);
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, path);
     }
@@ -1037,14 +1010,12 @@ export default function App() {
     if (!user || !settings) return;
     const path = `settings/${user.uid}`;
     try {
-      const updatedSettings: Setting = {
-        ...settings,
+      await updateDoc(doc(db, 'settings', user.uid), {
         emailAlerts,
         whatsappAlerts,
         alertEmail,
         alertPhone
-      };
-      await setDoc(doc(db, 'settings', user.uid), updatedSettings);
+      });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, path);
     }
@@ -1183,8 +1154,8 @@ export default function App() {
   }, [activeMonthTransactions, activeTab, tabSortBy]);
 
   // Summaries Calculations
-  const inc = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
-  const bal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
+  const inc = settings?.monthlyIncome?.[currentMonthKey] ?? 0;
+  const bal = settings?.monthlyBalance?.[currentMonthKey] ?? 0;
   const ext = settings?.extras?.[currentMonthKey] || 0;
   
   // Total funds active
@@ -2356,8 +2327,8 @@ export default function App() {
                     onChangeTheme={handleThemeModify}
                     currentCurrency={currency}
                     onChangeCurrency={handleCurrencyModify}
-                    baseIncome={inc}
-                    baseBalance={bal}
+                    baseIncome={settings?.income ?? 0}
+                    baseBalance={settings?.balance ?? 0}
                     onSavePreferences={handlePresetConfigsSave}
                     onSaveAlertSettings={handleUpdateAlertSettings}
                     transactions={transactions}

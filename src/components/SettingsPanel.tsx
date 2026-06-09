@@ -123,7 +123,64 @@ export default function SettingsPanel({
 
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const pendingDebts = transactions.filter(t => t.monthKey === currentMonthKey && t.paid_amount < t.amount);
+
+  // Build the projection list of all unpaid and projected transactions for the current month
+  const realTransactionsThisMonth = transactions.filter(t => t.monthKey === currentMonthKey);
+  const masterTransactions = transactions.filter(t => (t.type === 'fixos' || t.type === 'parcelas') && !t.id.startsWith('v_'));
+  const mastersMap = new Map<string, Transaction>();
+  const sortedMasters = [...masterTransactions].sort((a, b) => {
+    const dateA = a.updatedAt || a.createdAt || '';
+    const dateB = b.updatedAt || b.createdAt || '';
+    return dateB.localeCompare(dateA);
+  });
+
+  for (const tx of sortedMasters) {
+    const matchKey = tx.masterId || `name_${tx.name.trim().toLowerCase()}`;
+    if (!mastersMap.has(matchKey)) {
+      mastersMap.set(matchKey, tx);
+    }
+  }
+
+  const enrichedTransactions = [...realTransactionsThisMonth];
+
+  mastersMap.forEach((masterTx) => {
+    const exists = realTransactionsThisMonth.some(t => {
+      if (t.id === masterTx.id) return true;
+      if (masterTx.masterId && t.masterId === masterTx.masterId) return true;
+      if (t.masterId === masterTx.id) return true;
+      if (t.name.trim().toLowerCase() === masterTx.name.trim().toLowerCase()) return true;
+      return false;
+    });
+
+    if (!exists) {
+      const virtualId = `v_${masterTx.masterId || masterTx.id}_${currentMonthKey}`;
+      const virtualTx: Transaction = {
+        id: virtualId,
+        userId: masterTx.userId,
+        name: masterTx.name,
+        amount: masterTx.type === 'parcelas' ? 0 : masterTx.amount,
+        type: masterTx.type,
+        cat: masterTx.cat,
+        due: masterTx.due,
+        paid_amount: 0,
+        paid_at: '',
+        masterId: masterTx.masterId || masterTx.id,
+        monthKey: currentMonthKey,
+        total_parcelado: masterTx.type === 'parcelas' ? (masterTx.total_parcelado || masterTx.amount) : undefined,
+        createdAt: masterTx.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      enrichedTransactions.push(virtualTx);
+    }
+  });
+
+  const activeMonthTransactions = enrichedTransactions.filter(t => !t.is_skipped);
+
+  const pendingDebts = activeMonthTransactions.filter(t => {
+    const isCcInstallment = t.type === 'parcelas';
+    const amountToCheck = t.amount > 0 ? t.amount : (isCcInstallment ? (t.total_parcelado || 0) : 0);
+    return amountToCheck - (t.paid_amount || 0) > 0;
+  });
 
   const handleSaveAlerts = async () => {
     if (onSaveAlertSettings) {
@@ -147,7 +204,8 @@ export default function SettingsPanel({
       text += `✅ Excelente! Não há contas em aberto mapeadas para este período.`;
     } else {
       pendingDebts.forEach(d => {
-        const rem = d.amount - (d.paid_amount || 0);
+        const amt = d.amount > 0 ? d.amount : (d.type === 'parcelas' ? (d.total_parcelado || 0) : 0);
+        const rem = amt - (d.paid_amount || 0);
         text += `• *${d.name}*: Resta pagar *R$ ${rem.toFixed(2).replace('.', ',')}* (Dia ${d.due})\n`;
       });
     }

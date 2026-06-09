@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import firebaseConfigJson from '../firebase-applet-config.json';
 
 // Suporta variáveis de ambiente (Vercel/GitHub/Produção) com fallback para o arquivo de configuração
@@ -17,8 +17,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)' 
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId) 
-  : getFirestore(app);
+  ? initializeFirestore(app, { ignoreUndefinedProperties: true }, firebaseConfig.firestoreDatabaseId) 
+  : initializeFirestore(app, { ignoreUndefinedProperties: true });
 export const auth = getAuth();
 
 export enum OperationType {

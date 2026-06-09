@@ -115,6 +115,12 @@ export default function App() {
   const [toastType, setToastType] = useState<'success' | 'error' | 'warning'>('success');
   const [showToast, setShowToast] = useState<boolean>(false);
   const [floatingAlert, setFloatingAlert] = useState<{ id: string; title: string; desc: string; type: string } | null>(null);
+  const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, boolean>>({});
+  const [prevMonthKey, setPrevMonthKey] = useState(currentMonthKey);
+  if (currentMonthKey !== prevMonthKey) {
+    setPrevMonthKey(currentMonthKey);
+    setDismissedAlerts({});
+  }
 
   // Modal display parameters
   const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
@@ -417,100 +423,7 @@ export default function App() {
     };
   }, [user]);
 
-  // Alert triggers: Monitor upcoming bills due on mounting/ledger updates
-  useEffect(() => {
-    if (transactions.length === 0) {
-      setFloatingAlert(null);
-      return;
-    }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expiring: Transaction[] = [];
-
-    const thresholdDays = settings?.alertThresholdDays !== undefined ? settings.alertThresholdDays : 3;
-
-    // Check items for current month and filter unpaid ones matching today or configured threshold
-    const filteredThisMonth = transactions.filter(t => t.monthKey === currentMonthKey);
-    filteredThisMonth.forEach(item => {
-      const remainingDeficit = item.amount - (item.paid_amount || 0);
-      if (remainingDeficit > 0 && item.due) {
-        const dayMatch = item.due.match(/\d+/);
-        if (dayMatch) {
-          const dueDay = parseInt(dayMatch[0]);
-          const dueDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), dueDay);
-          dueDate.setHours(0, 0, 0, 0);
-
-          const diffInMs = dueDate.getTime() - today.getTime();
-          const diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
-          
-          if (diffInDays >= 0 && diffInDays <= thresholdDays) {
-            expiring.push(item);
-          }
-        }
-      }
-    });
-
-    // Sync current computed upcoming bills with the Service Worker cache for absolute background dispatch
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((reg) => {
-        if (reg.active) {
-          reg.active.postMessage({
-            type: 'SET_REMINDERS',
-            bills: expiring.map(e => ({
-              id: e.id,
-              name: e.name,
-              due: e.due,
-              amount: e.amount
-            }))
-          });
-        }
-      });
-    }
-
-    if (expiring.length > 0) {
-      const targetBill = expiring[0];
-      setFloatingAlert({
-        id: targetBill.id,
-        title: '⚠️ ATENÇÃO - VENCIMENTO',
-        desc: `A despesa "${targetBill.name}" está agendada para vencer no dia ${targetBill.due}. Regularize para manter em dia o seu índice de sobras estimadas!`,
-        type: 'vencimento'
-      });
-
-      // Browser Web Notifications integration with active PWA app-launch visual styling
-      if ('Notification' in window && Notification.permission === 'granted') {
-        const sessionKey = `financaspro_notified_bill_${targetBill.id}`;
-        if (!sessionStorage.getItem(sessionKey)) {
-          try {
-            const hasServiceWorker = 'serviceWorker' in navigator;
-            const notificationTitle = 'FinançasPro';
-            const notificationOptions = {
-              body: `Atenção: A despesa "${targetBill.name}" vence no dia ${targetBill.due}.`,
-              icon: '/app_icon.png',
-              badge: '/app_icon.png',
-              vibrate: [200, 100, 200],
-              tag: `financaspro-bill-${targetBill.id}`,
-              renotify: true
-            };
-
-            if (hasServiceWorker) {
-              navigator.serviceWorker.ready.then((reg) => {
-                reg.showNotification(notificationTitle, notificationOptions);
-              }).catch(() => {
-                new Notification(notificationTitle, notificationOptions);
-              });
-            } else {
-              new Notification(notificationTitle, notificationOptions);
-            }
-            sessionStorage.setItem(sessionKey, 'true');
-          } catch (e) {
-            console.warn('System browser notification list fallback: ', e);
-          }
-        }
-      }
-    } else {
-      setFloatingAlert(null);
-    }
-  }, [transactions, currentMonthKey, settings?.alertThresholdDays, settings]);
+  // Alert triggers relocated beneath activeMonthTransactions definition for dynamic virtual projection compatibility
 
   // Toast helper triggers
   function triggerToast(msg: string, type: 'success' | 'error' | 'warning' = 'success') {
@@ -1071,7 +984,7 @@ export default function App() {
     const realTransactionsThisMonth = transactions.filter(t => t.monthKey === currentMonthKey);
 
     // 2. Find all unique master transaction templates (fixed and installments) in database
-    const masterTransactions = transactions.filter(t => t.type === 'fixos' || t.type === 'parcelas');
+    const masterTransactions = transactions.filter(t => (t.type === 'fixos' || t.type === 'parcelas') && !t.id.startsWith('v_'));
     
     // Group them uniquely by recurring identity to avoid duplicates.
     const mastersMap = new Map<string, Transaction>();
@@ -1127,6 +1040,130 @@ export default function App() {
 
     return enrichedTransactions.filter(t => !t.is_skipped);
   }, [transactions, currentMonthKey]);
+
+  // Alert triggers: Monitor upcoming / overdue bills due on mounting/ledger updates using activeMonthTransactions (enables virtual/projection compatibility)
+  useEffect(() => {
+    if (activeMonthTransactions.length === 0) {
+      setFloatingAlert(null);
+      return;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiring: { item: Transaction; diffInDays: number; isOverdue: boolean }[] = [];
+
+    const thresholdDays = settings?.alertThresholdDays !== undefined ? settings.alertThresholdDays : 3;
+
+    activeMonthTransactions.forEach(item => {
+      // Avoid alerting if already dismissed by user
+      if (dismissedAlerts[item.id]) return;
+
+      const itemAmount = item.amount > 0 ? item.amount : (item.type === 'parcelas' ? (item.total_parcelado || 0) : 0);
+      const remainingDeficit = itemAmount - (item.paid_amount || 0);
+
+      if (remainingDeficit > 0 && item.due) {
+        const dayMatch = item.due.match(/\d+/);
+        if (dayMatch) {
+          const dueDay = parseInt(dayMatch[0], 10);
+          
+          // Ensure valid day matching month bounds to prevent rollover errors
+          const currentYear = calendarDate.getFullYear();
+          const currentMonth = calendarDate.getMonth();
+          const maxDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+          const safeDueDay = Math.min(Math.max(1, dueDay), maxDays);
+
+          const dueDate = new Date(currentYear, currentMonth, safeDueDay);
+          dueDate.setHours(0, 0, 0, 0);
+
+          const diffInMs = dueDate.getTime() - today.getTime();
+          const diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
+
+          const isOverdue = diffInDays < 0;
+          const isWithinUpcomingThreshold = diffInDays >= 0 && diffInDays <= thresholdDays;
+
+          if (isOverdue || isWithinUpcomingThreshold) {
+            expiring.push({ item, diffInDays, isOverdue });
+          }
+        }
+      }
+    });
+
+    // Sort: Overdue first (oldest first), then upcoming (closest first)
+    expiring.sort((a, b) => {
+      if (a.isOverdue !== b.isOverdue) {
+        return a.isOverdue ? -1 : 1;
+      }
+      return a.diffInDays - b.diffInDays;
+    });
+
+    // Sync computed bills/alerts with Service Worker cache
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((reg) => {
+        if (reg.active) {
+          reg.active.postMessage({
+            type: 'SET_REMINDERS',
+            bills: expiring.map(e => ({
+              id: e.item.id,
+              name: e.item.name,
+              due: e.item.due,
+              amount: e.item.amount || e.item.total_parcelado || 0
+            }))
+          });
+        }
+      }).catch(e => console.warn('SW Ready check failed:', e));
+    }
+
+    if (expiring.length > 0) {
+      const { item, diffInDays, isOverdue } = expiring[0];
+      
+      const title = isOverdue ? '🚨 CONTA ATRASADA' : '⚠️ ATENÇÃO - VENCIMENTO';
+      const desc = isOverdue
+        ? `A despesa "${item.name}" está em ATRASO desde o dia ${item.due} deste mês. Regularize para evitar multas!`
+        : `A despesa "${item.name}" está agendada para vencer no dia ${item.due}. Regularize para manter em dia o seu índice de sobras estimadas!`;
+
+      setFloatingAlert({
+        id: item.id,
+        title,
+        desc,
+        type: 'vencimento'
+      });
+
+      // Browser Web Notifications integration with active visual styling
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const sessionKey = `financaspro_notified_bill_${item.id}`;
+        if (!sessionStorage.getItem(sessionKey)) {
+          try {
+            const hasServiceWorker = 'serviceWorker' in navigator;
+            const notificationTitle = isOverdue ? 'Conta Atrasada!' : 'FinançasPro';
+            const notificationOptions = {
+              body: isOverdue 
+                ? `Atenção: A despesa "${item.name}" está em atraso desde o dia ${item.due}.`
+                : `Atenção: A despesa "${item.name}" vence no dia ${item.due}.`,
+              icon: '/app_icon.png',
+              badge: '/app_icon.png',
+              vibrate: [200, 100, 200],
+              tag: `financaspro-bill-${item.id}`,
+              renotify: true
+            };
+
+            if (hasServiceWorker) {
+              navigator.serviceWorker.ready.then((reg) => {
+                reg.showNotification(notificationTitle, notificationOptions);
+              }).catch(() => {
+                new Notification(notificationTitle, notificationOptions);
+              });
+            } else {
+              new Notification(notificationTitle, notificationOptions);
+            }
+            sessionStorage.setItem(sessionKey, 'true');
+          } catch (e) {
+            console.warn('System browser notification list fallback: ', e);
+          }
+        }
+      }
+    } else {
+      setFloatingAlert(null);
+    }
+  }, [activeMonthTransactions, calendarDate, settings?.alertThresholdDays, settings, dismissedAlerts]);
 
   const activeTabTransactions = useMemo(() => {
     let filtered: Transaction[] = [];
@@ -1484,7 +1521,12 @@ export default function App() {
               </div>
             </div>
             <button
-              onClick={() => setFloatingAlert(null)}
+              onClick={() => {
+                if (floatingAlert) {
+                  setDismissedAlerts(prev => ({ ...prev, [floatingAlert.id]: true }));
+                }
+                setFloatingAlert(null);
+              }}
               className={`p-1.5 rounded-xl transition-all cursor-pointer text-xs font-bold hover:scale-110 active:scale-95 ${
                 theme === 'light' ? 'hover:bg-slate-105 text-slate-500 hover:text-slate-900' : 'hover:bg-white/5 text-slate-500 hover:text-white'
               }`}
@@ -1496,7 +1538,12 @@ export default function App() {
 
           <div className="flex gap-2 w-full pt-1.5">
             <button
-              onClick={() => setFloatingAlert(null)}
+              onClick={() => {
+                if (floatingAlert) {
+                  setDismissedAlerts(prev => ({ ...prev, [floatingAlert.id]: true }));
+                }
+                setFloatingAlert(null);
+              }}
               className={`flex-1 py-3 rounded-2xl text-[10px] font-bold tracking-widest transition-all cursor-pointer text-center uppercase border ${
                 theme === 'light' 
                   ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200' 

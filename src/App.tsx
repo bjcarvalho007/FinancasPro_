@@ -193,6 +193,9 @@ export default function App() {
   }, [user, userProfile]);
 
   const hasActiveSubscription = useMemo(() => {
+    if (user && user.email && user.email.toLowerCase().trim() === 'irakellygaby1@icloud.com') {
+      return true;
+    }
     if (!userProfile) return false;
     
     if (userProfile.assinante !== true || !userProfile.dataVencimento) {
@@ -203,7 +206,7 @@ export default function App() {
     if (isNaN(expiryTime)) return false;
     
     return Date.now() <= expiryTime;
-  }, [userProfile]);
+  }, [user, userProfile]);
 
   const hasAccess = isVIP || isWithinTwoDaysTrial || hasActiveSubscription;
   const isBlocked = !!(user && !hasAccess);
@@ -252,11 +255,28 @@ export default function App() {
     }
     setLoadingProfile(true);
     const unsubUserProfile = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-      if (docSnap.exists()) {
-        setUserProfile(docSnap.data());
-      } else {
-        setUserProfile(null);
+      let profileData = docSnap.exists() ? docSnap.data() : null;
+
+      // Auto-liberação de 30 dias para o usuário irakellygaby1@icloud.com
+      if (user && user.email && user.email.toLowerCase().trim() === 'irakellygaby1@icloud.com') {
+        const targetExpiry = new Date('2026-07-09T23:29:39Z'); // 30 dias a partir de hoje (09/06/2026)
+        const currentExpiryStr = profileData?.dataVencimento;
+        const hasValidSub = profileData?.assinante === true && currentExpiryStr && Date.parse(currentExpiryStr) >= targetExpiry.getTime();
+
+        if (!hasValidSub) {
+          const userRef = doc(db, 'users', user.uid);
+          setDoc(userRef, {
+            assinante: true,
+            dataVencimento: targetExpiry.toISOString(),
+            paymentStatus: 'approved',
+            updatedAt: new Date().toISOString()
+          }, { merge: true }).catch(err => {
+            console.error("Erro ao auto-liberar acesso pro irakellygaby1@icloud.com:", err);
+          });
+        }
       }
+
+      setUserProfile(profileData);
       setLoadingProfile(false);
     }, (error) => {
       console.error("Error reading user profile:", error);

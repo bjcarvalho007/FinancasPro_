@@ -91,7 +91,26 @@ export default function DashboardAnalytics({
 
   // Safe list fallbacks
   const listActive = transactions;
-  const listAll = allTransactions.length > 0 ? allTransactions : transactions;
+  const listAllRaw = allTransactions.length > 0 ? allTransactions : transactions;
+
+  // Normalize listAll:
+  // 1. Only include transactions with monthKey <= currentMonthKey (exclude future months ahead of selected month)
+  // 2. For 'parcelas' transactions, normalize their evaluated amount to use the correct monthly due value instead of the total balance.
+  const listAll = listAllRaw
+    .filter(t => !t.monthKey || t.monthKey <= currentMonthKey)
+    .map(t => {
+      if (t.type === 'parcelas') {
+        const totalVal = t.total_parcelado || t.amount || 0;
+        const count = t.installmentsCount || 1;
+        const installmentValue = totalVal / count;
+        return {
+          ...t,
+          amount: t.paid_amount > 0 ? t.paid_amount : installmentValue,
+          total_parcelado: totalVal
+        };
+      }
+      return t;
+    });
 
   // 1. DYNAMIC COLOR SCHEME REFERENCE FOR CATEGORIES
   const getCategoryThemeStyle = (key: string) => {

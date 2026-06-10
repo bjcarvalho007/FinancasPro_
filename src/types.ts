@@ -12,6 +12,8 @@ export interface Transaction {
   monthKey: string; // YYYY-MM
   total_parcelado?: number;
   extra_gasto?: number;
+  establishment?: string;
+  installmentsCount?: number;
   createdAt?: string;
   updatedAt?: string;
   is_skipped?: boolean;

@@ -141,6 +141,12 @@ export default function SettingsPanel({
     }
   }
 
+  const getMonthsDiff = (startKey: string, targetKey: string): number => {
+    const [startY, startM] = startKey.split('-').map(Number);
+    const [targetY, targetM] = targetKey.split('-').map(Number);
+    return (targetY - startY) * 12 + (targetM - startM);
+  };
+
   const enrichedTransactions = [...realTransactionsThisMonth];
 
   mastersMap.forEach((masterTx) => {
@@ -153,12 +159,32 @@ export default function SettingsPanel({
     });
 
     if (!exists) {
+      if (masterTx.type === 'parcelas' && masterTx.installmentsCount) {
+        const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? masterTx.createdAt.substring(0, 7) : currentMonthKey);
+        const monthsDiff = getMonthsDiff(startMonthKey, currentMonthKey);
+        if (monthsDiff < 0 || monthsDiff >= masterTx.installmentsCount) {
+          return;
+        }
+      }
+
       const virtualId = `v_${masterTx.masterId || masterTx.id}_${currentMonthKey}`;
+      
+      let defaultAmount = 0;
+      if (masterTx.type === 'parcelas') {
+        if (masterTx.installmentsCount) {
+          defaultAmount = (masterTx.total_parcelado || masterTx.amount || 0) / masterTx.installmentsCount;
+        } else {
+          defaultAmount = 0;
+        }
+      } else {
+        defaultAmount = masterTx.amount;
+      }
+
       const virtualTx: Transaction = {
         id: virtualId,
         userId: masterTx.userId,
         name: masterTx.name,
-        amount: masterTx.type === 'parcelas' ? 0 : masterTx.amount,
+        amount: defaultAmount,
         type: masterTx.type,
         cat: masterTx.cat,
         due: masterTx.due,
@@ -167,6 +193,8 @@ export default function SettingsPanel({
         masterId: masterTx.masterId || masterTx.id,
         monthKey: currentMonthKey,
         total_parcelado: masterTx.type === 'parcelas' ? (masterTx.total_parcelado || masterTx.amount) : undefined,
+        establishment: masterTx.establishment,
+        installmentsCount: masterTx.installmentsCount,
         createdAt: masterTx.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };

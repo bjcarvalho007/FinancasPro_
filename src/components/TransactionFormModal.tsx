@@ -13,6 +13,8 @@ interface TransactionFormModalProps {
     cat: string;
     due: string;
     total_parcelado?: number;
+    establishment?: string;
+    installmentsCount?: number;
   }) => void;
   initialData?: Transaction | null;
   categoriesList: Category[];
@@ -35,6 +37,8 @@ export default function TransactionFormModal({
   const [cat, setCat] = useState<string>('moradia');
   const [due, setDue] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [establishment, setEstablishment] = useState<string>('');
+  const [installmentsCount, setInstallmentsCount] = useState<string>('');
   
   // Custom interactive sub-state for creating categories on the flow
   const [showCatDropdown, setShowCatDropdown] = useState<boolean>(false);
@@ -51,12 +55,16 @@ export default function TransactionFormModal({
         setType(initialData.type);
         setCat(initialData.cat);
         setDue(initialData.due || '');
+        setEstablishment(initialData.establishment || '');
+        setInstallmentsCount(initialData.installmentsCount ? String(initialData.installmentsCount) : '');
       } else {
         setName('');
         setAmountStr('');
         setType(defaultType);
         setCat('moradia');
         setDue('Dia 10');
+        setEstablishment('');
+        setInstallmentsCount('');
       }
       setShowCatDropdown(false);
       setShowAddCustomCat(false);
@@ -97,6 +105,12 @@ export default function TransactionFormModal({
     }
 
     const totalVal = type === 'parcelas' ? amountVal : undefined;
+    const installmentsNum = type === 'parcelas' && installmentsCount ? parseInt(installmentsCount, 10) : undefined;
+
+    if (type === 'parcelas' && installmentsNum !== undefined && (isNaN(installmentsNum) || installmentsNum <= 0)) {
+      setError("Por favor, digite uma quantidade de parcelas válida (número maior que zero).");
+      return;
+    }
 
     onSave({
       name,
@@ -104,7 +118,9 @@ export default function TransactionFormModal({
       type,
       cat,
       due: due || 'Dia 10',
-      total_parcelado: totalVal || undefined
+      total_parcelado: totalVal || undefined,
+      establishment: establishment.trim() || undefined,
+      installmentsCount: installmentsNum || undefined
     });
     onClose();
   };
@@ -199,6 +215,43 @@ export default function TransactionFormModal({
                 <option value="parcelas">💳 Parcelamento Fatura (Débito parcelado)</option>
               </select>
             </div>
+
+            {/* Optional Establishment Info */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                🏢 Estabelecimento / Beneficiário (Opcional)
+              </label>
+              <input
+                id="modal-establishment-input"
+                type="text"
+                placeholder="Ex: Amazon, Mercado Livre, etc."
+                value={establishment}
+                onChange={(e) => setEstablishment(e.target.value)}
+                className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3.5 rounded-xl transition-all font-medium"
+              />
+            </div>
+
+            {/* Quantity of Installments (only for parcelas) */}
+            {type === 'parcelas' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="overflow-hidden"
+              >
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                  🔢 Quantidade de Parcelas
+                </label>
+                <input
+                  id="modal-installments-count-input"
+                  type="number"
+                  min="1"
+                  placeholder="Ex: 5, 10, 12, etc."
+                  value={installmentsCount}
+                  onChange={(e) => setInstallmentsCount(e.target.value)}
+                  className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold"
+                />
+              </motion.div>
+            )}
 
             {/* Custom Interactive Category Selector */}
             <div className="relative">

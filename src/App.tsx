@@ -473,6 +473,22 @@ export default function App() {
     return parseFloat(clean) || 0;
   };
 
+  const getMonthsDiff = (startKey: string, targetKey: string): number => {
+    const [startY, startM] = startKey.split('-').map(Number);
+    const [targetY, targetM] = targetKey.split('-').map(Number);
+    return (targetY - startY) * 12 + (targetM - startM);
+  };
+
+  const getInstallmentIndex = (tx: Transaction, currentMonth: string): string => {
+    if (!tx.installmentsCount) return '';
+    const startMonthKey = tx.monthKey || (tx.createdAt ? tx.createdAt.substring(0, 7) : currentMonth);
+    const index = getMonthsDiff(startMonthKey, currentMonth) + 1;
+    if (index >= 1 && index <= tx.installmentsCount) {
+      return `${index}/${tx.installmentsCount}`;
+    }
+    return '';
+  };
+
   // Switch ledger timeline month helper
   const handleMonthTurn = (direction: number) => {
     const nextDate = new Date(calendarDate);
@@ -488,6 +504,8 @@ export default function App() {
     cat: string;
     due: string;
     total_parcelado?: number;
+    establishment?: string;
+    installmentsCount?: number;
   }) => {
     if (!user) return;
     const docId = editingTransaction ? editingTransaction.id : `tx_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -537,6 +555,18 @@ export default function App() {
       newTx.total_parcelado = data.total_parcelado;
     } else if (editingTransaction?.total_parcelado !== undefined) {
       newTx.total_parcelado = editingTransaction.total_parcelado;
+    }
+
+    if (data.establishment !== undefined) {
+      newTx.establishment = data.establishment;
+    } else if (editingTransaction?.establishment !== undefined) {
+      newTx.establishment = editingTransaction.establishment;
+    }
+
+    if (data.installmentsCount !== undefined) {
+      newTx.installmentsCount = data.installmentsCount;
+    } else if (editingTransaction?.installmentsCount !== undefined) {
+      newTx.installmentsCount = editingTransaction.installmentsCount;
     }
 
     if (inferredMasterId) {
@@ -1003,6 +1033,21 @@ export default function App() {
     // 1. Get real transactions for this month
     const realTransactionsThisMonth = transactions.filter(t => t.monthKey === currentMonthKey);
 
+    // Normalize real transactions of the current month to correctly use their single-month installment value
+    const normalizedRealTransactions = realTransactionsThisMonth.map(t => {
+      if (t.type === 'parcelas') {
+        const totalVal = t.total_parcelado || t.amount || 0;
+        const count = t.installmentsCount || 1;
+        const installmentValue = totalVal / count;
+        return {
+          ...t,
+          amount: t.paid_amount > 0 ? t.paid_amount : installmentValue,
+          total_parcelado: totalVal
+        };
+      }
+      return t;
+    });
+
     // 2. Find all unique master transaction templates (fixed and installments) in database
     const masterTransactions = transactions.filter(t => (t.type === 'fixos' || t.type === 'parcelas') && !t.id.startsWith('v_'));
     
@@ -1023,11 +1068,11 @@ export default function App() {
       }
     }
 
-    const enrichedTransactions = [...realTransactionsThisMonth];
+    const enrichedTransactions = [...normalizedRealTransactions];
 
     mastersMap.forEach((masterTx) => {
       // Check if there is already a transaction for this month that matches this master
-      const exists = realTransactionsThisMonth.some(t => {
+      const exists = normalizedRealTransactions.some(t => {
         if (t.id === masterTx.id) return true;
         if (masterTx.masterId && t.masterId === masterTx.masterId) return true;
         if (t.masterId === masterTx.id) return true;
@@ -1036,13 +1081,35 @@ export default function App() {
       });
 
       if (!exists) {
+        // Verify installments bounds for type 'parcelas'
+        if (masterTx.type === 'parcelas' && masterTx.installmentsCount) {
+          const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? masterTx.createdAt.substring(0, 7) : currentMonthKey);
+          const monthsDiff = getMonthsDiff(startMonthKey, currentMonthKey);
+          if (monthsDiff < 0 || monthsDiff >= masterTx.installmentsCount) {
+            // Month falls outside specified installments count - do not project
+            return;
+          }
+        }
+
         // Create virtual projection
         const virtualId = `v_${masterTx.masterId || masterTx.id}_${currentMonthKey}`;
+        
+        let defaultAmount = 0;
+        if (masterTx.type === 'parcelas') {
+          if (masterTx.installmentsCount) {
+            defaultAmount = (masterTx.total_parcelado || masterTx.amount || 0) / masterTx.installmentsCount;
+          } else {
+            defaultAmount = 0;
+          }
+        } else {
+          defaultAmount = masterTx.amount;
+        }
+
         const virtualTx: Transaction = {
           id: virtualId,
           userId: masterTx.userId,
           name: masterTx.name,
-          amount: masterTx.type === 'parcelas' ? 0 : masterTx.amount,
+          amount: defaultAmount,
           type: masterTx.type, // Keeps original type: 'fixos' or 'parcelas'
           cat: masterTx.cat,
           due: masterTx.due,
@@ -1051,6 +1118,8 @@ export default function App() {
           masterId: masterTx.masterId || masterTx.id,
           monthKey: currentMonthKey,
           total_parcelado: masterTx.type === 'parcelas' ? (masterTx.total_parcelado || masterTx.amount) : undefined,
+          establishment: masterTx.establishment,
+          installmentsCount: masterTx.installmentsCount,
           createdAt: masterTx.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
@@ -1077,7 +1146,7 @@ export default function App() {
       // Avoid alerting if already dismissed by user
       if (dismissedAlerts[item.id]) return;
 
-      const itemAmount = item.amount > 0 ? item.amount : (item.type === 'parcelas' ? (item.total_parcelado || 0) : 0);
+      const itemAmount = item.amount > 0 ? item.amount : (item.type === 'parcelas' ? (item.installmentsCount ? (item.total_parcelado || 0) / item.installmentsCount : (item.total_parcelado || 0)) : 0);
       const remainingDeficit = itemAmount - (item.paid_amount || 0);
 
       if (remainingDeficit > 0 && item.due) {
@@ -2073,9 +2142,17 @@ export default function App() {
                                         {tx.type === 'variaveis' && (
                                           <span className="text-[8.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/10">Variável</span>
                                         )}
+                                        {tx.type === 'parcelas' && (
+                                          <span className="text-[8.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-500 border border-pink-500/10">
+                                            Parcela {getInstallmentIndex(tx, currentMonthKey) || 'Ativa'}
+                                          </span>
+                                        )}
                                       </h4>
-                                      <p className="text-[10px] text-slate-550/90 font-medium truncate mt-0.5">
-                                        {categoryObj.label} • {formatCurrency(tx.amount)}
+                                      <p className="text-[10px] text-slate-550/90 font-medium truncate mt-0.5 flex flex-wrap items-center gap-1">
+                                        <span>{categoryObj.label} • {formatCurrency(tx.amount)}</span>
+                                        {tx.establishment && (
+                                          <span className="text-indigo-400 font-bold ml-1">🏢 {tx.establishment}</span>
+                                        )}
                                       </p>
                                     </div>
                                   </div>
@@ -2159,9 +2236,17 @@ export default function App() {
                                       {tx.type === 'variaveis' && (
                                         <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">Variável</span>
                                       )}
+                                      {tx.type === 'parcelas' && (
+                                        <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-500 border border-pink-500/20">
+                                          Parcela {getInstallmentIndex(tx, currentMonthKey) || 'Ativa'}
+                                        </span>
+                                      )}
                                     </h4>
-                                    <p className="text-[11.5px] text-slate-500 mt-1 uppercase font-semibold tracking-wider">
-                                      {tx.due || 'Sem vencimento'} • {categoryObj.label} 
+                                    <p className="text-[11.5px] text-slate-500 mt-1 uppercase font-semibold tracking-wider flex flex-wrap items-center gap-1">
+                                      <span>{tx.due || 'Sem vencimento'} • {categoryObj.label}</span>
+                                      {tx.establishment && (
+                                        <span className="text-indigo-400 font-bold ml-1">🏢 {tx.establishment}</span>
+                                      )}
                                       {tx.paid_amount > 0 && !isPaid && ` • Parcial: ${formatCurrency(tx.paid_amount)}`}
                                     </p>
                                   </div>

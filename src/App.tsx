@@ -2315,7 +2315,7 @@ export default function App() {
                                 const handleLancarPagamento = async () => {
                                   const currentValStr = installmentInputs[tx.id] !== undefined
                                     ? installmentInputs[tx.id]
-                                    : (tx.paid_amount > 0 ? handleMaskMoney(tx.paid_amount.toFixed(2).replace('.', '')) : "R$ 0,00");
+                                    : "R$ 0,00";
                                   const newVal = handleParseMoney(currentValStr);
                                   
                                   const finishedPaying = newVal > 0;
@@ -2329,6 +2329,7 @@ export default function App() {
                                   const path = `transactions/${tx.id}`;
                                   try {
                                     await setDoc(doc(db, 'transactions', tx.id), updatedTx);
+                                    setInstallmentInputs(prev => ({ ...prev, [tx.id]: "R$ 0,00" }));
                                     triggerToast(`Pagamento de ${formatCurrency(newVal)} lançado com sucesso!`, 'success');
                                   } catch (err) {
                                     handleFirestoreError(err, OperationType.UPDATE, path);
@@ -2470,7 +2471,7 @@ export default function App() {
                                             value={
                                               installmentInputs[tx.id] !== undefined
                                                 ? installmentInputs[tx.id]
-                                                : (tx.paid_amount > 0 ? handleMaskMoney(tx.paid_amount.toFixed(2).replace('.', '')) : "R$ 0,00")
+                                                : "R$ 0,00"
                                             }
                                             onChange={(e) => {
                                               const masked = handleMaskMoney(e.target.value);

@@ -160,6 +160,8 @@ export default function App() {
   const [tempExtraStr, setTempExtraStr] = useState<string>('');
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
   const [showPaymentInfoModal, setShowPaymentInfoModal] = useState<boolean>(false);
+  const [showCelebrationModal, setShowCelebrationModal] = useState<boolean>(false);
+  const [celebratedTx, setCelebratedTx] = useState<{ name: string; amount: number } | null>(null);
 
   // Pull to refresh support variables
   const [startY, setStartY] = useState<number>(0);
@@ -2312,30 +2314,6 @@ export default function App() {
 
                               {/* Interactive installment planner p/ user escolher valor no mês */}
                               {tx.type === 'parcelas' && (() => {
-                                const handleLancarPagamento = async () => {
-                                  const currentValStr = installmentInputs[tx.id] !== undefined
-                                    ? installmentInputs[tx.id]
-                                    : "R$ 0,00";
-                                  const newVal = handleParseMoney(currentValStr);
-                                  
-                                  const finishedPaying = newVal > 0;
-                                  const updatedTx = { 
-                                    ...tx, 
-                                    amount: newVal,
-                                    paid_amount: newVal, 
-                                    paid_at: finishedPaying ? new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-                                    updatedAt: new Date().toISOString() 
-                                  };
-                                  const path = `transactions/${tx.id}`;
-                                  try {
-                                    await setDoc(doc(db, 'transactions', tx.id), updatedTx);
-                                    setInstallmentInputs(prev => ({ ...prev, [tx.id]: "R$ 0,00" }));
-                                    triggerToast(`Pagamento de ${formatCurrency(newVal)} lançado com sucesso!`, 'success');
-                                  } catch (err) {
-                                    handleFirestoreError(err, OperationType.UPDATE, path);
-                                  }
-                                };
-
                                 // Calculate dynamic remaining debt
                                 const masterId = tx.masterId || tx.id;
                                 const masterTx = transactions.find(t => t.id === masterId) || tx;
@@ -2349,6 +2327,56 @@ export default function App() {
                                   .reduce((sum, t) => sum + (t.paid_amount || 0), 0);
                                   
                                 const totalDevedorRestante = Math.max(0, totalOriginal - totalPaidAcrossMonths);
+
+                                const handleLancarPagamento = async () => {
+                                  const currentValStr = installmentInputs[tx.id] !== undefined
+                                    ? installmentInputs[tx.id]
+                                    : "R$ 0,00";
+                                  const newVal = handleParseMoney(currentValStr);
+                                  if (newVal <= 0) return;
+
+                                  const idxStr = getInstallmentIndex(tx, currentMonthKey) || '';
+
+                                  const executePayment = async () => {
+                                    const finishedPaying = newVal > 0;
+                                    const updatedTx = { 
+                                      ...tx, 
+                                      amount: newVal,
+                                      paid_amount: newVal, 
+                                      paid_at: finishedPaying ? new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+                                      updatedAt: new Date().toISOString() 
+                                    };
+                                    const path = `transactions/${tx.id}`;
+                                    try {
+                                      await setDoc(doc(db, 'transactions', tx.id), updatedTx);
+                                      setInstallmentInputs(prev => ({ ...prev, [tx.id]: "R$ 0,00" }));
+                                      
+                                      // Check if this was the last remaining installment of the plan!
+                                      const finalRemaining = totalDevedorRestante - newVal;
+                                      const isLastIdx = idxStr ? (idxStr.split('/')[0] === idxStr.split('/')[1] || idxStr.split('/')[0] === String(tx.installmentsCount)) : false;
+                                      
+                                      if (isLastIdx || finalRemaining <= 0.05) {
+                                        setCelebratedTx({ name: tx.name, amount: totalOriginalBase });
+                                        setShowCelebrationModal(true);
+                                      } else {
+                                        triggerToast(`Pagamento de ${formatCurrency(newVal)} lançado com sucesso!`, 'success');
+                                      }
+                                    } catch (err) {
+                                      handleFirestoreError(err, OperationType.UPDATE, path);
+                                    }
+                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                  };
+
+                                  setConfirmModal({
+                                    isOpen: true,
+                                    title: '❓ Confirmar Parcela',
+                                    message: `Este valor de ${formatCurrency(newVal)} é referente ao pagamento de uma das parcelas do parcelamento "${tx.name}" (${idxStr ? `Parcela ${idxStr}` : 'parcela'})? Ao confirmar, daremos baixa nesta parcela.`,
+                                    confirmText: 'Sim, dar baixa na parcela',
+                                    cancelText: 'Cancelar',
+                                    classNameConfirm: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+                                    onConfirm: executePayment
+                                  });
+                                };
                                 
                                 return (
                                   <div className={`pt-3.5 border-t border-dashed ${theme === 'light' ? 'border-slate-150' : 'border-white/5'} flex flex-col gap-4 mt-1.5 p-4 rounded-2xl ${
@@ -3166,6 +3194,75 @@ export default function App() {
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {showCelebrationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-45"
+            onClick={() => {
+              setShowCelebrationModal(false);
+              setCelebratedTx(null);
+            }}
+          />
+          
+          <motion.div
+            initial={{ scale: 0.9, y: 30, opacity: 0 }}
+            animate={{ scale: 1, y: 0, opacity: 1 }}
+            exit={{ scale: 0.9, y: 30, opacity: 0 }}
+            transition={{ type: 'spring', bounce: 0.3 }}
+            className={`w-full max-w-md rounded-3xl p-8 shadow-2xl relative z-50 text-center space-y-6 border transition-all ${
+              theme === 'light'
+                ? 'bg-white border-emerald-100 text-slate-900 shadow-emerald-100/40'
+                : 'bg-gradient-to-b from-slate-900 to-[#0e1627] border-emerald-500/20 text-white shadow-emerald-500/10'
+            }`}
+          >
+            {/* Animated Celebration Icon */}
+            <div className="relative mx-auto w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-3xl shadow-lg shadow-emerald-500/15 animate-bounce">
+              🏆
+              <span className="absolute -top-1 -right-1 text-base">✨</span>
+              <span className="absolute -bottom-1 -left-1 text-base">🎉</span>
+            </div>
+
+            <div className="space-y-3">
+              <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-400/25 px-3 py-1 rounded-full inline-flex items-center gap-1.5 justify-center">
+                🎉 Objetivo Concluído!
+              </span>
+              <h2 className={`font-display font-black text-xl leading-tight ${theme === 'light' ? 'text-slate-900' : 'text-white'}`}>
+                Parabéns pela competência por ter pago todo parcelamento!
+              </h2>
+              <div className={`p-4 rounded-2xl text-left border ${
+                theme === 'light' ? 'bg-slate-50 border-slate-100' : 'bg-slate-950/40 border-white/5'
+              }`}>
+                <div className="text-[11px] text-slate-500 uppercase font-black tracking-wider">Lançamento quitado:</div>
+                <div className={`text-base font-bold mt-0.5 truncate ${theme === 'light' ? 'text-slate-800' : 'text-white'}`}>
+                  {celebratedTx?.name || 'Gasto Parcelado'}
+                </div>
+                {celebratedTx?.amount && (
+                  <div className="text-xs text-slate-400 mt-1">
+                    Valor total original: <strong className="font-semibold text-emerald-400">{formatCurrency(celebratedTx.amount)}</strong>
+                  </div>
+                )}
+              </div>
+              <p className={`text-xs leading-relaxed ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
+                Você atingiu a liquidação total desse planejamento financeiro e demonstrou excelente responsabilidade econômica. Cada parcelamento finalizado é um grande passo rumo à sua liberdade e tranquilidade! Continue guiando seus gastos com precisão. 🏆✨
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowCelebrationModal(false);
+                setCelebratedTx(null);
+              }}
+              className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-450 text-white font-black text-xs uppercase tracking-widest rounded-2xl transition-all cursor-pointer shadow-lg shadow-emerald-500/15 active:scale-[0.98] border-none"
+            >
+              Excelente, obrigado! 🌟
+            </button>
           </motion.div>
         </div>
       )}

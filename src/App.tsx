@@ -487,7 +487,6 @@ export default function App() {
     const masterId = tx.masterId || tx.id;
     // Find all real transactions of this same installment series in the database
     const seriesTransactions = transactions.filter(t => 
-      !t.id.startsWith('v_') && 
       !t.is_skipped &&
       (t.id === masterId || t.masterId === masterId)
     );
@@ -1140,7 +1139,6 @@ export default function App() {
         if (masterTx.type === 'parcelas' && masterTx.installmentsCount) {
           const masterId = masterTx.masterId || masterTx.id;
           const countPaidBefore = transactions.filter(t => 
-            !t.id.startsWith('v_') && 
             !t.is_skipped &&
             (t.paid_amount || 0) > 0 &&
             (t.id === masterId || t.masterId === masterId) &&

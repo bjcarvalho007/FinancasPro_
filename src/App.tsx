@@ -483,10 +483,44 @@ export default function App() {
 
   const getInstallmentIndex = (tx: Transaction, currentMonth: string): string => {
     if (!tx.installmentsCount) return '';
-    const startMonthKey = tx.monthKey || (tx.createdAt ? tx.createdAt.substring(0, 7) : currentMonth);
-    const index = getMonthsDiff(startMonthKey, currentMonth) + 1;
-    if (index >= 1 && index <= tx.installmentsCount) {
-      return `${index}/${tx.installmentsCount}`;
+    
+    const masterId = tx.masterId || tx.id;
+    // Find all real transactions of this same installment series in the database
+    const seriesTransactions = transactions.filter(t => 
+      !t.id.startsWith('v_') && 
+      !t.is_skipped &&
+      (t.id === masterId || t.masterId === masterId)
+    );
+
+    // Filter to find how many have been paid (paid_amount > 0) in months strictly before the current month
+    const paidBeforeCurrentMonth = seriesTransactions.filter(t => 
+      t.monthKey < currentMonth && 
+      (t.paid_amount || 0) > 0
+    );
+    const countPaidBefore = paidBeforeCurrentMonth.length;
+
+    // Check if the current transaction itself is a paid transaction for this current month
+    const isPaidCurrentMonth = tx.paid_amount > 0 || seriesTransactions.some(t => t.monthKey === currentMonth && (t.paid_amount || 0) > 0);
+
+    if (isPaidCurrentMonth) {
+      // Find where currentMonth ranks among paid months for this series
+      const paidMonths = Array.from(new Set(
+        seriesTransactions
+          .filter(t => (t.paid_amount || 0) > 0)
+          .map(t => t.monthKey)
+      )).sort();
+      
+      const idx = paidMonths.indexOf(currentMonth);
+      if (idx !== -1) {
+        return `${idx + 1}/${tx.installmentsCount}`;
+      }
+      return `${countPaidBefore + 1}/${tx.installmentsCount}`;
+    } else {
+      // It is not paid, so the upcoming installment to pay is (countPaidBefore + 1)
+      const nextIndex = countPaidBefore + 1;
+      if (nextIndex <= tx.installmentsCount) {
+        return `${nextIndex}/${tx.installmentsCount}`;
+      }
     }
     return '';
   };
@@ -1050,6 +1084,17 @@ export default function App() {
       return t;
     });
 
+    // Find the absolute earliest month key where the user actually created/wrote a real transaction
+    const nonVirtualUserTxs = transactions.filter(t => !t.id.startsWith('v_') && !t.is_skipped && t.monthKey);
+    const earliestRealMonthKey = nonVirtualUserTxs.length > 0 
+      ? nonVirtualUserTxs.reduce((min, t) => t.monthKey < min ? t.monthKey : min, nonVirtualUserTxs[0].monthKey) 
+      : currentMonthKey;
+
+    // If the currently viewed month is strictly before the earliest month they started adding data, show nothing
+    if (currentMonthKey < earliestRealMonthKey) {
+      return normalizedRealTransactions;
+    }
+
     // 2. Find all unique master transaction templates (fixed and installments) in database
     const masterTransactions = transactions.filter(t => (t.type === 'fixos' || t.type === 'parcelas') && !t.id.startsWith('v_'));
     
@@ -1083,12 +1128,27 @@ export default function App() {
       });
 
       if (!exists) {
+        const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? masterTx.createdAt.substring(0, 7) : currentMonthKey);
+        const monthsDiff = getMonthsDiff(startMonthKey, currentMonthKey);
+        
+        // Months before the transaction started: do not project
+        if (monthsDiff < 0) {
+          return;
+        }
+
         // Verify installments bounds for type 'parcelas'
         if (masterTx.type === 'parcelas' && masterTx.installmentsCount) {
-          const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? masterTx.createdAt.substring(0, 7) : currentMonthKey);
-          const monthsDiff = getMonthsDiff(startMonthKey, currentMonthKey);
-          if (monthsDiff < 0 || monthsDiff >= masterTx.installmentsCount) {
-            // Month falls outside specified installments count - do not project
+          const masterId = masterTx.masterId || masterTx.id;
+          const countPaidBefore = transactions.filter(t => 
+            !t.id.startsWith('v_') && 
+            !t.is_skipped &&
+            (t.paid_amount || 0) > 0 &&
+            (t.id === masterId || t.masterId === masterId) &&
+            t.monthKey < currentMonthKey
+          ).length;
+
+          if (countPaidBefore >= masterTx.installmentsCount) {
+            // All installments are already paid! Do not project more.
             return;
           }
         }

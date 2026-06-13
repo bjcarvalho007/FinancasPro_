@@ -147,6 +147,19 @@ export default function SettingsPanel({
     return (targetY - startY) * 12 + (targetM - startM);
   };
 
+  const addMonthsToKey = (monthKey: string, monthsToAdd: number): string => {
+    if (!monthsToAdd) return monthKey;
+    const [yearStr, monthStr] = monthKey.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    
+    const totalMonths = (year * 12 + (month - 1)) + monthsToAdd;
+    const newYear = Math.floor(totalMonths / 12);
+    const newMonth = (totalMonths % 12) + 1;
+    
+    return `${newYear}-${String(newMonth).padStart(2, '0')}`;
+  };
+
   const enrichedTransactions = [...realTransactionsThisMonth];
 
   mastersMap.forEach((masterTx) => {
@@ -159,13 +172,15 @@ export default function SettingsPanel({
     });
 
     if (!exists) {
-      if (masterTx.type === 'parcelas' && masterTx.installmentsCount) {
-        const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? masterTx.createdAt.substring(0, 7) : currentMonthKey);
-        const monthsDiff = getMonthsDiff(startMonthKey, currentMonthKey);
-        if (monthsDiff < 0) {
-          return;
-        }
+      const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? masterTx.createdAt.substring(0, 7) : currentMonthKey);
+      const monthsDiff = getMonthsDiff(startMonthKey, currentMonthKey);
+      
+      // Months before the transaction started: do not project
+      if (monthsDiff < 0) {
+        return;
+      }
 
+      if (masterTx.type === 'parcelas') {
         const masterId = masterTx.masterId || masterTx.id;
         const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
         const totalExtraGasto = masterTx.extra_gasto || 0;
@@ -177,8 +192,24 @@ export default function SettingsPanel({
           
         const totalDevedorRestante = Math.max(0, totalOriginal - totalPaidAcrossMonths);
 
+        // 1. Find standard end month key
+        let standardEndMonthKey = startMonthKey;
+        if (masterTx.installmentsCount) {
+          standardEndMonthKey = addMonthsToKey(startMonthKey, masterTx.installmentsCount - 1);
+        } else {
+          standardEndMonthKey = masterTx.target_payoff_month || (masterTx.target_payoff_date ? masterTx.target_payoff_date.substring(0, 7) : currentMonthKey);
+        }
+
+        // 2. Find extended end month key
+        const extendedEndMonthKey = addMonthsToKey(standardEndMonthKey, masterTx.extension_months || 0);
+
+        // 3. Is current viewed month within active timeline?
+        const isWithinTimeline = currentMonthKey <= extendedEndMonthKey;
+
         if (totalDevedorRestante <= 0.05) {
-          return;
+          if (!isWithinTimeline) {
+            return;
+          }
         }
       }
 
@@ -186,10 +217,16 @@ export default function SettingsPanel({
       
       let defaultAmount = 0;
       if (masterTx.type === 'parcelas') {
+        const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+        const totalExtraGasto = masterTx.extra_gasto || 0;
+        const totalOriginal = totalOriginalBase + totalExtraGasto;
+
         if (masterTx.installmentsCount) {
-          defaultAmount = ((masterTx.total_parcelado || masterTx.amount || 0) + (masterTx.extra_gasto || 0)) / masterTx.installmentsCount;
+          defaultAmount = totalOriginal / masterTx.installmentsCount;
         } else {
-          defaultAmount = 0;
+          const standardEndMonthKey = masterTx.target_payoff_month || (masterTx.target_payoff_date ? masterTx.target_payoff_date.substring(0, 7) : currentMonthKey);
+          const monthsCount = getMonthsDiff(startMonthKey, standardEndMonthKey) + 1;
+          defaultAmount = totalOriginal / Math.max(1, monthsCount);
         }
       } else {
         defaultAmount = masterTx.amount;
@@ -212,7 +249,10 @@ export default function SettingsPanel({
         installmentsCount: masterTx.installmentsCount,
         createdAt: masterTx.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        keep_showing: masterTx.keep_showing
+        keep_showing: masterTx.keep_showing,
+        extension_months: masterTx.extension_months,
+        target_payoff_month: masterTx.target_payoff_month,
+        target_payoff_date: masterTx.target_payoff_date
       };
       enrichedTransactions.push(virtualTx);
     }

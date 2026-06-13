@@ -18,6 +18,9 @@ export interface Transaction {
   updatedAt?: string;
   is_skipped?: boolean;
   keep_showing?: boolean;
+  extension_months?: number;
+  target_payoff_month?: string;
+  target_payoff_date?: string;
 }
 
 export interface Category {

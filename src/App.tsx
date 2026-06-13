@@ -151,6 +151,7 @@ export default function App() {
   const [isPendingDebtListOpen, setIsPendingDebtListOpen] = useState<boolean>(false);
   const [installmentInputs, setInstallmentInputs] = useState<Record<string, string>>({});
   const [extraGastoInputs, setExtraGastoInputs] = useState<Record<string, string>>({});
+  const [extensionInputs, setExtensionInputs] = useState<Record<string, number>>({});
 
   // Income parameters custom configuration trigger modal
   const [isIncomeOpen, setIsIncomeOpen] = useState<boolean>(false);
@@ -481,8 +482,33 @@ export default function App() {
     return (targetY - startY) * 12 + (targetM - startM);
   };
 
+  const addMonthsToKey = (monthKey: string, monthsToAdd: number): string => {
+    if (!monthsToAdd) return monthKey;
+    const [yearStr, monthStr] = monthKey.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    
+    const totalMonths = (year * 12 + (month - 1)) + monthsToAdd;
+    const newYear = Math.floor(totalMonths / 12);
+    const newMonth = (totalMonths % 12) + 1;
+    
+    return `${newYear}-${String(newMonth).padStart(2, '0')}`;
+  };
+
   const getInstallmentIndex = (tx: Transaction, currentMonth: string): string => {
-    if (!tx.installmentsCount) return '';
+    if (!tx.installmentsCount) {
+      if (tx.target_payoff_month || tx.target_payoff_date) {
+        const target = tx.target_payoff_month || (tx.target_payoff_date ? tx.target_payoff_date.substring(0, 7) : '');
+        if (target) {
+          const [yr, mn] = target.split('-');
+          const monthNamesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+          const mIdx = parseInt(mn, 10) - 1;
+          const label = mIdx >= 0 && mIdx < 12 ? `${monthNamesShort[mIdx]}/${yr}` : target;
+          return `Meta: ${label}`;
+        }
+      }
+      return '';
+    }
     
     const masterId = tx.masterId || tx.id;
     // Find all real transactions of this same installment series in the database
@@ -1137,7 +1163,7 @@ export default function App() {
         }
 
         // Verify installments bounds for type 'parcelas'
-        if (masterTx.type === 'parcelas' && masterTx.installmentsCount) {
+        if (masterTx.type === 'parcelas') {
           const masterId = masterTx.masterId || masterTx.id;
           
           const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
@@ -1150,14 +1176,25 @@ export default function App() {
             
           const totalDevedorRestante = Math.max(0, totalOriginal - totalPaidAcrossMonths);
 
-          if (totalDevedorRestante <= 0.05) {
-            // All installments are already paid and debt is fully settled! Do not project more.
-            return;
+          // 1. Find standard end month key
+          let standardEndMonthKey = startMonthKey;
+          if (masterTx.installmentsCount) {
+            standardEndMonthKey = addMonthsToKey(startMonthKey, masterTx.installmentsCount - 1);
+          } else {
+            standardEndMonthKey = masterTx.target_payoff_month || (masterTx.target_payoff_date ? masterTx.target_payoff_date.substring(0, 7) : currentMonthKey);
           }
 
-          if (monthsDiff >= masterTx.installmentsCount) {
-            // Standard months ended, but debt is still unpaid or they selected keep_showing
-            // (If they chose keep_showing, or if it is unpaid, we keep projecting to allow interaction / visibility)
+          // 2. Find extended end month key
+          const extendedEndMonthKey = addMonthsToKey(standardEndMonthKey, masterTx.extension_months || 0);
+
+          // 3. Is current viewed month within active timeline?
+          const isWithinTimeline = currentMonthKey <= extendedEndMonthKey;
+
+          if (totalDevedorRestante <= 0.05) {
+            // All installments are already paid and debt is fully settled!
+            if (!isWithinTimeline) {
+              return; // Outside timeline and paid off: do NOT project more.
+            }
           }
         }
 
@@ -1166,10 +1203,16 @@ export default function App() {
         
         let defaultAmount = 0;
         if (masterTx.type === 'parcelas') {
+          const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+          const totalExtraGasto = masterTx.extra_gasto || 0;
+          const totalOriginal = totalOriginalBase + totalExtraGasto;
+          
           if (masterTx.installmentsCount) {
-            defaultAmount = ((masterTx.total_parcelado || masterTx.amount || 0) + (masterTx.extra_gasto || 0)) / masterTx.installmentsCount;
+            defaultAmount = totalOriginal / masterTx.installmentsCount;
           } else {
-            defaultAmount = 0;
+            const standardEndMonthKey = masterTx.target_payoff_month || (masterTx.target_payoff_date ? masterTx.target_payoff_date.substring(0, 7) : currentMonthKey);
+            const monthsCount = getMonthsDiff(startMonthKey, standardEndMonthKey) + 1;
+            defaultAmount = totalOriginal / Math.max(1, monthsCount);
           }
         } else {
           defaultAmount = masterTx.amount;
@@ -1192,7 +1235,10 @@ export default function App() {
           installmentsCount: masterTx.installmentsCount,
           createdAt: masterTx.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          keep_showing: masterTx.keep_showing
+          keep_showing: masterTx.keep_showing,
+          extension_months: masterTx.extension_months,
+          target_payoff_month: masterTx.target_payoff_month,
+          target_payoff_date: masterTx.target_payoff_date
         };
         enrichedTransactions.push(virtualTx);
       }
@@ -2500,47 +2546,102 @@ export default function App() {
                                   });
                                 };
                                 
+                                const standardEndMonthKey = masterTx.installmentsCount 
+                                  ? addMonthsToKey(startMonthKey, masterTx.installmentsCount - 1)
+                                  : (masterTx.target_payoff_month || (masterTx.target_payoff_date ? masterTx.target_payoff_date.substring(0, 7) : currentMonthKey));
+                                
+                                const extendedEndMonthKey = addMonthsToKey(standardEndMonthKey, masterTx.extension_months || 0);
+                                const isDeadlineEnded = currentMonthKey > extendedEndMonthKey;
+
                                 return (
                                   <div className={`pt-3.5 border-t border-dashed ${theme === 'light' ? 'border-slate-150' : 'border-white/5'} flex flex-col gap-4 mt-1.5 p-4 rounded-2xl ${
                                     theme === 'light' ? 'bg-indigo-50/20 border border-slate-200' : 'bg-indigo-950/10 border border-white/5'
                                   }`}>
-                                    {/* Warn end of installment count */}
-                                    {masterTx.installmentsCount && monthsDiff >= masterTx.installmentsCount && !masterTx.keep_showing && (
+                                    {/* Warn end of installment count or payoff target period */}
+                                    {isDeadlineEnded && totalDevedorRestante > 0.05 && !masterTx.keep_showing && (
                                       <div className={`p-4 rounded-2xl border ${
                                         theme === 'light' 
                                           ? 'bg-amber-50 border-amber-200 text-amber-900 shadow-md shadow-amber-100/30' 
                                           : 'bg-amber-500/10 border border-amber-500/20 text-amber-300'
-                                      } flex flex-col gap-3 ml-0`}>
+                                      } flex flex-col gap-3.5 ml-0`}>
                                         <div className="flex items-start gap-2.5">
                                           <span className="text-base shrink-0">⚠️</span>
                                           <div className="space-y-1">
                                             <h5 className="font-display font-extrabold text-xs uppercase tracking-wider">
-                                              Fim do período de parcelas atingido!
+                                              Prazo de planejamento encerrado!
                                             </h5>
-                                            <p className="text-[11px] leading-relaxed opacity-90">
-                                              Este parcelamento chegou ao fim dos <strong className="font-bold">{masterTx.installmentsCount} meses</strong> planejados para o pagamento de todas as parcelas. O saldo devedor pendente para quitação é de <strong className="font-black">{formatCurrency(totalDevedorRestante)}</strong>.
+                                            <p className="text-[11.5px] leading-relaxed opacity-95">
+                                              O prazo determinado para este controle ({masterTx.installmentsCount ? `${masterTx.installmentsCount} meses` : `Meta ${standardEndMonthKey}`}) finalizou, porém ainda resta um saldo pendente de <strong className="font-bold">{formatCurrency(totalDevedorRestante)}</strong>.
                                             </p>
                                           </div>
                                         </div>
                                         
-                                        <div className="flex flex-wrap gap-2 pt-1 border-t border-dashed border-amber-500/20 pt-2">
-                                          <button
-                                            onClick={handleManterMostrando}
-                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
-                                              theme === 'light' 
-                                                ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300' 
-                                                : 'bg-slate-900 hover:bg-slate-805 text-slate-200 border-white/5'
-                                            }`}
-                                          >
-                                            📌 Manter mostrando gasto
-                                          </button>
-                                          
-                                          <button
-                                            onClick={handleQuitarTudo}
-                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-705 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shadow-sm shadow-emerald-600/10 active:scale-95 transition-all"
-                                          >
-                                            💰 Pagar tudo ({formatCurrency(totalDevedorRestante)})
-                                          </button>
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-dashed border-amber-500/20">
+                                          <div className="flex items-center gap-2 bg-black/10 p-1.5 rounded-xl border border-amber-500/5">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 pl-1">Mais meses:</span>
+                                            <div className="flex items-center gap-1">
+                                              <button 
+                                                onClick={() => setExtensionInputs(prev => ({ ...prev, [tx.id]: Math.max(1, (prev[tx.id] || 3) - 1) }))}
+                                                className={`w-6 h-6 rounded text-xs font-bold font-mono shrink-0 cursor-pointer border-none flex items-center justify-center ${
+                                                  theme === 'light' ? 'bg-amber-100 hover:bg-amber-200 text-amber-955' : 'bg-slate-800 hover:bg-slate-705 text-slate-200'
+                                                }`}
+                                              >
+                                                -
+                                              </button>
+                                              <span className="w-8 text-center text-xs font-extrabold font-mono text-amber-500">
+                                                {extensionInputs[tx.id] || 3}
+                                              </span>
+                                              <button 
+                                                onClick={() => setExtensionInputs(prev => ({ ...prev, [tx.id]: (prev[tx.id] || 3) + 1 }))}
+                                                className={`w-6 h-6 rounded text-xs font-bold font-mono shrink-0 cursor-pointer border-none flex items-center justify-center ${
+                                                  theme === 'light' ? 'bg-amber-100 hover:bg-amber-200 text-amber-955' : 'bg-slate-800 hover:bg-slate-705 text-slate-200'
+                                                }`}
+                                              >
+                                                +
+                                              </button>
+                                            </div>
+                                            <button
+                                              onClick={async () => {
+                                                const path = `transactions/${masterId}`;
+                                                const countToAdd = extensionInputs[tx.id] || 3;
+                                                try {
+                                                  const currentExt = masterTx.extension_months || 0;
+                                                  const newExt = currentExt + countToAdd;
+                                                  const docRef = doc(db, 'transactions', masterId);
+                                                  await updateDoc(docRef, {
+                                                    extension_months: newExt,
+                                                    updatedAt: new Date().toISOString()
+                                                  });
+                                                  triggerToast(`Planejamento de "${tx.name}" estendido por mais ${countToAdd} meses com sucesso!`, 'success');
+                                                } catch (err) {
+                                                  handleFirestoreError(err, OperationType.UPDATE, path);
+                                                }
+                                              }}
+                                              className="px-2.5 py-1.5 bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold text-[9px] uppercase tracking-wider rounded-lg transition-all cursor-pointer border-none"
+                                            >
+                                              🔄 Estender
+                                            </button>
+                                          </div>
+
+                                          <div className="flex items-center gap-2">
+                                            <button
+                                              onClick={handleManterMostrando}
+                                              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
+                                                theme === 'light' 
+                                                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300' 
+                                                  : 'bg-slate-950 hover:bg-slate-900 text-slate-200 border-white/5'
+                                              }`}
+                                            >
+                                              📌 Manter Gasto
+                                            </button>
+                                            
+                                            <button
+                                              onClick={handleQuitarTudo}
+                                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shadow-sm shadow-emerald-600/10 active:scale-95 transition-all"
+                                            >
+                                              💰 Quitar tudo
+                                            </button>
+                                          </div>
                                         </div>
                                       </div>
                                     )}

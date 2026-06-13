@@ -56,6 +56,9 @@ service cloud.firestore {
         && (!data.keys().hasAny(['masterId']) || (data.masterId is string && data.masterId.size() <= 128))
         && (!data.keys().hasAny(['extra_gasto']) || (data.extra_gasto is number))
         && (!data.keys().hasAny(['keep_showing']) || (data.keep_showing is bool))
+        && (!data.keys().hasAny(['extension_months']) || (data.extension_months is number))
+        && (!data.keys().hasAny(['target_payoff_month']) || (data.target_payoff_month is string && data.target_payoff_month.size() <= 10))
+        && (!data.keys().hasAny(['target_payoff_date']) || (data.target_payoff_date is string && data.target_payoff_date.size() <= 15))
         && (!data.keys().hasAny(['createdAt']) || (data.createdAt is string && data.createdAt.size() <= 100))
         && (!data.keys().hasAny(['updatedAt']) || (data.updatedAt is string && data.updatedAt.size() <= 100));
     }

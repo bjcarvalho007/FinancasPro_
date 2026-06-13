@@ -17,6 +17,7 @@ export interface Transaction {
   createdAt?: string;
   updatedAt?: string;
   is_skipped?: boolean;
+  keep_showing?: boolean;
 }
 
 export interface Category {

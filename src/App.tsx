@@ -1150,16 +1150,14 @@ export default function App() {
             
           const totalDevedorRestante = Math.max(0, totalOriginal - totalPaidAcrossMonths);
 
-          const countPaidBefore = transactions.filter(t => 
-            !t.is_skipped &&
-            (t.paid_amount || 0) > 0 &&
-            (t.id === masterId || t.masterId === masterId) &&
-            t.monthKey < currentMonthKey
-          ).length;
-
-          if (countPaidBefore >= masterTx.installmentsCount && totalDevedorRestante <= 0.05) {
+          if (totalDevedorRestante <= 0.05) {
             // All installments are already paid and debt is fully settled! Do not project more.
             return;
+          }
+
+          if (monthsDiff >= masterTx.installmentsCount) {
+            // Standard months ended, but debt is still unpaid or they selected keep_showing
+            // (If they chose keep_showing, or if it is unpaid, we keep projecting to allow interaction / visibility)
           }
         }
 
@@ -1193,7 +1191,8 @@ export default function App() {
           establishment: masterTx.establishment,
           installmentsCount: masterTx.installmentsCount,
           createdAt: masterTx.createdAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
+          keep_showing: masterTx.keep_showing
         };
         enrichedTransactions.push(virtualTx);
       }
@@ -2398,6 +2397,9 @@ export default function App() {
                                   
                                 const totalDevedorRestante = Math.max(0, totalOriginal - totalPaidAcrossMonths);
 
+                                const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? masterTx.createdAt.substring(0, 7) : currentMonthKey);
+                                const monthsDiff = getMonthsDiff(startMonthKey, currentMonthKey);
+
                                 const handleLancarPagamento = async () => {
                                   const currentValStr = installmentInputs[tx.id] !== undefined
                                     ? installmentInputs[tx.id]
@@ -2447,11 +2449,102 @@ export default function App() {
                                     onConfirm: executePayment
                                   });
                                 };
+
+                                const handleManterMostrando = async () => {
+                                  const path = `transactions/${masterId}`;
+                                  try {
+                                    const docRef = doc(db, 'transactions', masterId);
+                                    await updateDoc(docRef, {
+                                      keep_showing: true,
+                                      updatedAt: new Date().toISOString()
+                                    });
+                                    triggerToast(`Gasto "${tx.name}" mantido ativo com sucesso e sem avisos!`, 'success');
+                                  } catch (err) {
+                                    handleFirestoreError(err, OperationType.UPDATE, path);
+                                  }
+                                };
+
+                                const handleQuitarTudo = () => {
+                                  const newVal = totalDevedorRestante;
+                                  if (newVal <= 0) return;
+
+                                  const executePayment = async () => {
+                                    const updatedTx = { 
+                                      ...tx, 
+                                      amount: newVal,
+                                      paid_amount: newVal, 
+                                      paid_at: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                                      updatedAt: new Date().toISOString() 
+                                    };
+                                    const path = `transactions/${tx.id}`;
+                                    try {
+                                      await setDoc(doc(db, 'transactions', tx.id), updatedTx);
+                                      triggerToast(`Quitação efetuada! Pagamento de ${formatCurrency(newVal)} lançado com sucesso.`, 'success');
+                                      
+                                      setCelebratedTx({ name: tx.name, amount: totalOriginalBase });
+                                      setShowCelebrationModal(true);
+                                    } catch (err) {
+                                      handleFirestoreError(err, OperationType.UPDATE, path);
+                                    }
+                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                  };
+
+                                  setConfirmModal({
+                                    isOpen: true,
+                                    title: '💰 Quitar Lançamento',
+                                    message: `Você deseja pagar todo o saldo devedor restante de ${formatCurrency(newVal)} para o parcelamento "${tx.name}"? Isso liquidará totalmente a dívida.`,
+                                    confirmText: 'Sim, quitar valor total',
+                                    cancelText: 'Cancelar',
+                                    classNameConfirm: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+                                    onConfirm: executePayment
+                                  });
+                                };
                                 
                                 return (
                                   <div className={`pt-3.5 border-t border-dashed ${theme === 'light' ? 'border-slate-150' : 'border-white/5'} flex flex-col gap-4 mt-1.5 p-4 rounded-2xl ${
                                     theme === 'light' ? 'bg-indigo-50/20 border border-slate-200' : 'bg-indigo-950/10 border border-white/5'
                                   }`}>
+                                    {/* Warn end of installment count */}
+                                    {masterTx.installmentsCount && monthsDiff >= masterTx.installmentsCount && !masterTx.keep_showing && (
+                                      <div className={`p-4 rounded-2xl border ${
+                                        theme === 'light' 
+                                          ? 'bg-amber-50 border-amber-200 text-amber-900 shadow-md shadow-amber-100/30' 
+                                          : 'bg-amber-500/10 border border-amber-500/20 text-amber-300'
+                                      } flex flex-col gap-3 ml-0`}>
+                                        <div className="flex items-start gap-2.5">
+                                          <span className="text-base shrink-0">⚠️</span>
+                                          <div className="space-y-1">
+                                            <h5 className="font-display font-extrabold text-xs uppercase tracking-wider">
+                                              Fim do período de parcelas atingido!
+                                            </h5>
+                                            <p className="text-[11px] leading-relaxed opacity-90">
+                                              Este parcelamento chegou ao fim dos <strong className="font-bold">{masterTx.installmentsCount} meses</strong> planejados para o pagamento de todas as parcelas. O saldo devedor pendente para quitação é de <strong className="font-black">{formatCurrency(totalDevedorRestante)}</strong>.
+                                            </p>
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="flex flex-wrap gap-2 pt-1 border-t border-dashed border-amber-500/20 pt-2">
+                                          <button
+                                            onClick={handleManterMostrando}
+                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer border ${
+                                              theme === 'light' 
+                                                ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300' 
+                                                : 'bg-slate-900 hover:bg-slate-805 text-slate-200 border-white/5'
+                                            }`}
+                                          >
+                                            📌 Manter mostrando gasto
+                                          </button>
+                                          
+                                          <button
+                                            onClick={handleQuitarTudo}
+                                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-705 text-white rounded-lg text-[10px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer border-none shadow-sm shadow-emerald-600/10 active:scale-95 transition-all"
+                                          >
+                                            💰 Pagar tudo ({formatCurrency(totalDevedorRestante)})
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
                                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                                       <div className="space-y-1">
                                         <span className={`text-[10px] font-extrabold uppercase tracking-wider block ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>

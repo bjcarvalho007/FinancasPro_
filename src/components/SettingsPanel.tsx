@@ -162,7 +162,22 @@ export default function SettingsPanel({
       if (masterTx.type === 'parcelas' && masterTx.installmentsCount) {
         const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? masterTx.createdAt.substring(0, 7) : currentMonthKey);
         const monthsDiff = getMonthsDiff(startMonthKey, currentMonthKey);
-        if (monthsDiff < 0 || monthsDiff >= masterTx.installmentsCount) {
+        if (monthsDiff < 0) {
+          return;
+        }
+
+        const masterId = masterTx.masterId || masterTx.id;
+        const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+        const totalExtraGasto = masterTx.extra_gasto || 0;
+        const totalOriginal = totalOriginalBase + totalExtraGasto;
+        
+        const totalPaidAcrossMonths = transactions
+          .filter(t => !t.is_skipped && t.type === 'parcelas' && (t.id === masterId || t.masterId === masterId))
+          .reduce((sum, t) => sum + (t.paid_amount || 0), 0);
+          
+        const totalDevedorRestante = Math.max(0, totalOriginal - totalPaidAcrossMonths);
+
+        if (totalDevedorRestante <= 0.05) {
           return;
         }
       }
@@ -196,7 +211,8 @@ export default function SettingsPanel({
         establishment: masterTx.establishment,
         installmentsCount: masterTx.installmentsCount,
         createdAt: masterTx.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        keep_showing: masterTx.keep_showing
       };
       enrichedTransactions.push(virtualTx);
     }

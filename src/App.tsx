@@ -517,11 +517,8 @@ export default function App() {
     } else {
       // It is not paid, so the upcoming installment to pay is (countPaidBefore + 1)
       const nextIndex = countPaidBefore + 1;
-      if (nextIndex <= tx.installmentsCount) {
-        return `${nextIndex}/${tx.installmentsCount}`;
-      }
+      return `${nextIndex}/${tx.installmentsCount}`;
     }
-    return '';
   };
 
   // Switch ledger timeline month helper
@@ -1138,6 +1135,17 @@ export default function App() {
         // Verify installments bounds for type 'parcelas'
         if (masterTx.type === 'parcelas' && masterTx.installmentsCount) {
           const masterId = masterTx.masterId || masterTx.id;
+          
+          const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+          const totalExtraGasto = masterTx.extra_gasto || 0;
+          const totalOriginal = totalOriginalBase + totalExtraGasto;
+          
+          const totalPaidAcrossMonths = transactions
+            .filter(t => !t.is_skipped && t.type === 'parcelas' && (t.id === masterId || t.masterId === masterId))
+            .reduce((sum, t) => sum + (t.paid_amount || 0), 0);
+            
+          const totalDevedorRestante = Math.max(0, totalOriginal - totalPaidAcrossMonths);
+
           const countPaidBefore = transactions.filter(t => 
             !t.is_skipped &&
             (t.paid_amount || 0) > 0 &&
@@ -1145,8 +1153,8 @@ export default function App() {
             t.monthKey < currentMonthKey
           ).length;
 
-          if (countPaidBefore >= masterTx.installmentsCount) {
-            // All installments are already paid! Do not project more.
+          if (countPaidBefore >= masterTx.installmentsCount && totalDevedorRestante <= 0.05) {
+            // All installments are already paid and debt is fully settled! Do not project more.
             return;
           }
         }
@@ -1157,7 +1165,7 @@ export default function App() {
         let defaultAmount = 0;
         if (masterTx.type === 'parcelas') {
           if (masterTx.installmentsCount) {
-            defaultAmount = (masterTx.total_parcelado || masterTx.amount || 0) / masterTx.installmentsCount;
+            defaultAmount = ((masterTx.total_parcelado || masterTx.amount || 0) + (masterTx.extra_gasto || 0)) / masterTx.installmentsCount;
           } else {
             defaultAmount = 0;
           }
@@ -1177,7 +1185,7 @@ export default function App() {
           paid_at: '',
           masterId: masterTx.masterId || masterTx.id,
           monthKey: currentMonthKey,
-          total_parcelado: masterTx.type === 'parcelas' ? (masterTx.total_parcelado || masterTx.amount) : undefined,
+          total_parcelado: masterTx.type === 'parcelas' ? ((masterTx.total_parcelado || masterTx.amount) + (masterTx.extra_gasto || 0)) : undefined,
           establishment: masterTx.establishment,
           installmentsCount: masterTx.installmentsCount,
           createdAt: masterTx.createdAt || new Date().toISOString(),
@@ -2476,15 +2484,15 @@ export default function App() {
                                               type="text"
                                               inputMode="numeric"
                                               placeholder="R$ 0,00"
-                                              value={extraGastoInputs[tx.id] || ''}
+                                              value={extraGastoInputs[masterId] || ''}
                                               onChange={(e) => {
                                                 const masked = handleMaskMoney(e.target.value);
-                                                setExtraGastoInputs(prev => ({ ...prev, [tx.id]: masked }));
+                                                setExtraGastoInputs(prev => ({ ...prev, [masterId]: masked }));
                                               }}
                                               onKeyDown={async (e) => {
                                                 if (e.key === 'Enter') {
                                                   e.preventDefault();
-                                                  const valStr = extraGastoInputs[tx.id];
+                                                  const valStr = extraGastoInputs[masterId];
                                                   if (!valStr || valStr === 'R$ 0,00') return;
                                                   const valueToAdd = handleParseMoney(valStr);
                                                   if (valueToAdd <= 0) return;
@@ -2496,7 +2504,7 @@ export default function App() {
                                                       extra_gasto: totalExtraGasto + valueToAdd,
                                                       updatedAt: new Date().toISOString()
                                                     });
-                                                    setExtraGastoInputs(prev => ({ ...prev, [tx.id]: '' }));
+                                                    setExtraGastoInputs(prev => ({ ...prev, [masterId]: '' }));
                                                     triggerToast(`Gasto extra de ${formatCurrency(valueToAdd)} adicionado com sucesso!`, 'success');
                                                   } catch (err) {
                                                     handleFirestoreError(err, OperationType.UPDATE, path);
@@ -2510,7 +2518,7 @@ export default function App() {
                                           </div>
                                           <button
                                             onClick={async () => {
-                                              const valStr = extraGastoInputs[tx.id];
+                                              const valStr = extraGastoInputs[masterId];
                                               if (!valStr || valStr === 'R$ 0,00') return;
                                               const valueToAdd = handleParseMoney(valStr);
                                               if (valueToAdd <= 0) return;
@@ -2522,7 +2530,7 @@ export default function App() {
                                                   extra_gasto: totalExtraGasto + valueToAdd,
                                                   updatedAt: new Date().toISOString()
                                                 });
-                                                setExtraGastoInputs(prev => ({ ...prev, [tx.id]: '' }));
+                                                setExtraGastoInputs(prev => ({ ...prev, [masterId]: '' }));
                                                 triggerToast(`Gasto extra de ${formatCurrency(valueToAdd)} adicionado com sucesso!`, 'success');
                                               } catch (err) {
                                                 handleFirestoreError(err, OperationType.UPDATE, path);

@@ -172,7 +172,7 @@ export default function SettingsPanel({
       let defaultAmount = 0;
       if (masterTx.type === 'parcelas') {
         if (masterTx.installmentsCount) {
-          defaultAmount = (masterTx.total_parcelado || masterTx.amount || 0) / masterTx.installmentsCount;
+          defaultAmount = ((masterTx.total_parcelado || masterTx.amount || 0) + (masterTx.extra_gasto || 0)) / masterTx.installmentsCount;
         } else {
           defaultAmount = 0;
         }
@@ -192,7 +192,7 @@ export default function SettingsPanel({
         paid_at: '',
         masterId: masterTx.masterId || masterTx.id,
         monthKey: currentMonthKey,
-        total_parcelado: masterTx.type === 'parcelas' ? (masterTx.total_parcelado || masterTx.amount) : undefined,
+        total_parcelado: masterTx.type === 'parcelas' ? ((masterTx.total_parcelado || masterTx.amount) + (masterTx.extra_gasto || 0)) : undefined,
         establishment: masterTx.establishment,
         installmentsCount: masterTx.installmentsCount,
         createdAt: masterTx.createdAt || new Date().toISOString(),

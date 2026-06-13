@@ -100,7 +100,11 @@ export default function DashboardAnalytics({
     .filter(t => !t.monthKey || t.monthKey <= currentMonthKey)
     .map(t => {
       if (t.type === 'parcelas') {
-        const totalVal = t.total_parcelado || t.amount || 0;
+        const masterId = t.masterId || t.id;
+        const masterTx = listAllRaw.find(m => m.id === masterId) || t;
+        const extraGasto = masterTx.extra_gasto || 0;
+
+        const totalVal = (t.total_parcelado || t.amount || 0) + extraGasto;
         const count = t.installmentsCount || 1;
         const installmentValue = totalVal / count;
         return {

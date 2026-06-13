@@ -1068,7 +1068,11 @@ export default function App() {
     // Normalize real transactions of the current month to correctly use their single-month installment value
     const normalizedRealTransactions = realTransactionsThisMonth.map(t => {
       if (t.type === 'parcelas') {
-        const totalVal = t.total_parcelado || t.amount || 0;
+        const masterId = t.masterId || t.id;
+        const masterTx = transactions.find(m => m.id === masterId) || t;
+        const extraGasto = masterTx.extra_gasto || 0;
+
+        const totalVal = (t.total_parcelado || t.amount || 0) + extraGasto;
         const count = t.installmentsCount || 1;
         const installmentValue = totalVal / count;
         return {

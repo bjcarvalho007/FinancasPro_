@@ -53,6 +53,7 @@ export default function DashboardAnalytics({
 }: DashboardAnalyticsProps) {
   // Toggle between active month 'current' or total lifetime records 'history'
   const [activeDashboardMode, setActiveDashboardMode] = useState<'current' | 'history'>('current');
+  const [metricsScope, setMetricsScope] = useState<'month' | 'general'>('month');
   const [showAssistantTip, setShowAssistantTip] = useState(false);
   const [hoveredBar, setHoveredBar] = useState<string | null>(null);
   const [showIntelligentAlertsModal, setShowIntelligentAlertsModal] = useState(false);
@@ -1237,8 +1238,84 @@ export default function DashboardAnalytics({
         )}
       </AnimatePresence>
 
+      {/* SECTION 3: KEY METRICS FILTER CONTROLS */}
+      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-3xl border transition-all duration-300 ${
+        isLight 
+          ? 'bg-white border-slate-200 shadow-md shadow-slate-100/40 text-slate-800' 
+          : 'bg-gradient-to-r from-[#0a0f1d] to-[#070b16] border-white/5 text-slate-100'
+      }`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+            isLight 
+              ? 'bg-indigo-50 border-indigo-150 text-indigo-600' 
+              : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+          }`}>
+            <Activity className="w-4 h-4 animate-pulse" />
+          </div>
+          <div>
+            <span className={`text-[9px] font-black uppercase tracking-widest block leading-none ${
+              isLight ? 'text-indigo-600' : 'text-indigo-400'
+            }`}>
+              Análise Avançada
+            </span>
+            <h4 className={`font-display font-black text-xs sm:text-sm tracking-tight leading-tight mt-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>
+              Escopo Ativo de Métricas do Painel
+            </h4>
+          </div>
+        </div>
+
+        <div className={`flex p-1 rounded-2xl border ${isLight ? 'bg-slate-100 border-slate-200/80' : 'bg-slate-950/45 border-white/5'} self-start sm:self-auto`}>
+          <button
+            onClick={() => setMetricsScope('month')}
+            className={`px-4.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer border-none flex items-center gap-2 ${
+              metricsScope === 'month'
+                ? isLight
+                  ? 'bg-indigo-600 text-white shadow-md font-extrabold'
+                  : 'bg-indigo-550 text-white shadow-lg font-extrabold'
+                : isLight
+                  ? 'bg-transparent text-slate-500 hover:text-slate-800'
+                  : 'bg-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            📅 Análise do Mês
+          </button>
+          <button
+            onClick={() => setMetricsScope('general')}
+            className={`px-4.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer border-none flex items-center gap-2 ${
+              metricsScope === 'general'
+                ? isLight
+                  ? 'bg-indigo-600 text-white shadow-md font-extrabold'
+                  : 'bg-indigo-550 text-white shadow-lg font-extrabold'
+                : isLight
+                  ? 'bg-transparent text-slate-500 hover:text-slate-800'
+                  : 'bg-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🌍 Análise Geral
+          </button>
+        </div>
+      </div>
+
       {/* SECTION 3: KEY METRICS GRID */}
       {(() => {
+        const isScopeMonth = metricsScope === 'month';
+        const scopeTransactions = isScopeMonth ? listActive : listAll;
+
+        // Calculate highest expense item based on active scopeTransactions
+        let highestExpense = { name: 'Nenhum', amount: 0, cat: 'outros' };
+        scopeTransactions.forEach(t => {
+          if (t.amount > highestExpense.amount) {
+            highestExpense = { name: t.name, amount: t.amount, cat: t.cat };
+          }
+        });
+
+        const totalSpentVal = isScopeMonth ? totalSpentMonth : totalSpentAll;
+        const totalPaidVal = isScopeMonth ? totalPaidMonth : totalPaidAll;
+        const totalUnpaidVal = isScopeMonth ? totalUnpaidMonth : totalUnpaidAll;
+
+        // Calculate average cost per items based on active scopeTransactions and total spent
+        const averageCost = scopeTransactions.length > 0 ? (totalSpentVal / scopeTransactions.length) : 0;
+
         const historicalTotalInflow = uniqueMonths.reduce((sum, mKey) => {
           const mIncome = settings?.monthlyIncome?.[mKey] ?? 0;
           const mBalance = settings?.monthlyBalance?.[mKey] ?? 0;
@@ -1246,81 +1323,129 @@ export default function DashboardAnalytics({
           return sum + mIncome + mBalance + mExtra;
         }, 0);
         const historicalLeftover = historicalTotalInflow - totalSpentAll;
-        const estimatedSurplus = activeDashboardMode === 'current' ? leftover : historicalLeftover;
+        const estimatedSurplus = isScopeMonth ? leftover : historicalLeftover;
 
         return (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             
-            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+            <div className={`p-4 rounded-2xl border flex flex-col justify-between ${
+              isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-white/2 border-white/5'
+            }`}>
               <div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Custo Crítico / Maior</span>
-                <span className="text-base font-mono font-extrabold text-rose-400 truncate block mb-0.5" title={highestExpenseItem.name}>
-                  {fmt(highestExpenseItem.amount)}
+                <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
+                  isLight ? 'text-slate-500' : 'text-slate-400'
+                }`}>Custo Crítico / Maior</span>
+                <span className={`text-base font-mono font-extrabold truncate block mb-0.5 ${
+                  isLight ? 'text-rose-600' : 'text-rose-400'
+                }`} title={highestExpense.name}>
+                  {fmt(highestExpense.amount)}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500 truncate block font-bold uppercase tracking-wider">
-                {highestExpenseItem.name}
+              <span className={`text-[10px] truncate block font-bold uppercase tracking-wider ${
+                isLight ? 'text-slate-700' : 'text-slate-500'
+              }`}>
+                {highestExpense.name}
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+            <div className={`p-4 rounded-2xl border flex flex-col justify-between ${
+              isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-white/2 border-white/5'
+            }`}>
               <div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Média por gastos</span>
-                <span className="text-base font-mono font-extrabold text-slate-200 block mb-0.5">
-                  {fmt(averageItemCost)}
+                <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
+                  isLight ? 'text-slate-500' : 'text-slate-400'
+                }`}>Média por gastos</span>
+                <span className={`text-base font-mono font-extrabold block mb-0.5 ${
+                  isLight ? 'text-slate-800' : 'text-slate-200'
+                }`}>
+                  {fmt(averageCost)}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
-                Total {currentModeTransactions.length} registros
+              <span className={`text-[10px] block font-bold uppercase tracking-wider ${
+                isLight ? 'text-slate-700' : 'text-slate-500'
+              }`}>
+                Total {scopeTransactions.length} registros
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+            <div className={`p-4 rounded-2xl border flex flex-col justify-between ${
+              isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-white/2 border-white/5'
+            }`}>
               <div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Relação Comprometida</span>
-                <span className="text-base font-mono font-extrabold text-amber-400 block mb-0.5">
-                  {fmt(activeScores.totalSpent)}
+                <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
+                  isLight ? 'text-slate-500' : 'text-slate-400'
+                }`}>Relação Comprometida</span>
+                <span className={`text-base font-mono font-extrabold block mb-0.5 ${
+                  isLight ? 'text-amber-600 font-bold' : 'text-amber-400'
+                }`}>
+                  {fmt(totalSpentVal)}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
+              <span className={`text-[10px] block font-bold uppercase tracking-wider ${
+                isLight ? 'text-slate-700' : 'text-slate-500'
+              }`}>
                 Obrigações registradas
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+            <div className={`p-4 rounded-2xl border flex flex-col justify-between ${
+              isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-white/2 border-white/5'
+            }`}>
               <div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Saldo Liquidado Real</span>
-                <span className="text-base font-mono font-extrabold text-emerald-400 block mb-0.5">
-                  {fmt(activeScores.totalPaid)}
+                <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
+                  isLight ? 'text-slate-500' : 'text-slate-400'
+                }`}>Saldo Liquidado Real</span>
+                <span className={`text-base font-mono font-extrabold block mb-0.5 ${
+                  isLight ? 'text-emerald-600' : 'text-emerald-400'
+                }`}>
+                  {fmt(totalPaidVal)}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
+              <span className={`text-[10px] block font-bold uppercase tracking-wider ${
+                isLight ? 'text-slate-700' : 'text-slate-500'
+              }`}>
                 Quitado até o momento
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+            <div className={`p-4 rounded-2xl border flex flex-col justify-between ${
+              isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-white/2 border-white/5'
+            }`}>
               <div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">A Pagar Pendente</span>
-                <span className="text-base font-mono font-extrabold text-orange-400 block mb-0.5">
-                  {fmt(activeScores.totalUnpaid)}
+                <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
+                  isLight ? 'text-slate-500' : 'text-slate-400'
+                }`}>A Pagar Pendente</span>
+                <span className={`text-base font-mono font-extrabold block mb-0.5 ${
+                  isLight ? 'text-orange-600' : 'text-orange-400'
+                }`}>
+                  {fmt(totalUnpaidVal)}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
+              <span className={`text-[10px] block font-bold uppercase tracking-wider ${
+                isLight ? 'text-slate-700' : 'text-slate-500'
+              }`}>
                 Pendente de quitação
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 flex flex-col justify-between">
+            <div className={`p-4 rounded-2xl border flex flex-col justify-between ${
+              isLight ? 'bg-slate-50/80 border-slate-200' : 'bg-white/2 border-white/5'
+            }`}>
               <div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 font-black">Sobra Estimada</span>
+                <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 font-black ${
+                  isLight ? 'text-slate-500' : 'text-slate-400'
+                }`}>Sobra Estimada</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
-                  estimatedSurplus >= 0 ? 'text-emerald-400' : 'text-rose-450'
+                  estimatedSurplus >= 0 
+                    ? isLight ? 'text-emerald-600' : 'text-emerald-400' 
+                    : 'text-rose-500'
                 }`}>
                   {fmt(estimatedSurplus)}
                 </span>
               </div>
-              <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">
+              <span className={`text-[10px] block font-bold uppercase tracking-wider ${
+                isLight ? 'text-slate-700' : 'text-slate-500'
+              }`}>
                 Saldo livre projetado
               </span>
             </div>

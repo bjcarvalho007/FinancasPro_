@@ -220,7 +220,7 @@ export default function DashboardAnalytics({
     : 45;
   const adimplenciaScoreMonth = Math.round(paidInMonthRatio);
 
-  const overdueMonthTransactions = listActive.filter(t => (t.paid_amount || 0) < t.amount && t.due < todayStr);
+  const overdueMonthTransactions = listActive.filter(t => (t.paid_amount || 0) < t.amount && t.due && t.due < todayStr);
   const pontualidadeScoreMonth = Math.max(15, Math.min(100, 100 - overdueMonthTransactions.length * 25));
 
   // Nota de controle do mês
@@ -353,7 +353,7 @@ export default function DashboardAnalytics({
   const quitacaoScoreAll = totalSpentAll > 0 ? Math.round((totalPaidAll / totalSpentAll) * 100) : 100;
   
   // Find all unpaid historical transactions with PAST due dates (unreconciled past items)
-  const pastUnreconciledTx = listAll.filter(t => (t.paid_amount || 0) < t.amount && t.due < todayStr);
+  const pastUnreconciledTx = listAll.filter(t => (t.paid_amount || 0) < t.amount && t.due && t.due < todayStr);
   const conciliacaoScoreAll = Math.max(10, Math.min(100, 100 - pastUnreconciledTx.length * 10));
 
   // Installment strain: percentage of installments against all record values

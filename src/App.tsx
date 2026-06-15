@@ -564,14 +564,46 @@ export default function App() {
     total_parcelado?: number;
     establishment?: string;
     installmentsCount?: number;
-  }) => {
+  }, forcePaidState?: 'paid' | 'unpaid') => {
     if (!user) return;
+
+    if (!editingTransaction && data.type === 'variaveis' && !forcePaidState) {
+      setConfirmModal({
+        isOpen: true,
+        title: 'Gasto variável já pago?',
+        message: `O seu gasto variável "${data.name}" no valor de ${formatCurrency(data.amount)} já está pago ou deseja deixá-lo pendente para quitação posterior?`,
+        showThreeButtons: true,
+        confirmText: '✔️ Sim, já foi pago',
+        confirmText2: '⏳ Não, deixar pendente',
+        cancelText: 'Cancelar',
+        classNameConfirm: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+        classNameConfirm2: 'bg-indigo-600 hover:bg-indigo-700 text-white border-none',
+        onConfirm: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          handleSaveTransaction(data, 'paid');
+        },
+        onConfirm2: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          handleSaveTransaction(data, 'unpaid');
+        }
+      });
+      return;
+    }
+
     const docId = editingTransaction ? editingTransaction.id : `tx_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const path = `transactions/${docId}`;
     
     // Merge existing item status if editing
-    const fallbackPaid = editingTransaction ? editingTransaction.paid_amount : 0;
-    const fallbackPaidAt = editingTransaction ? editingTransaction.paid_at : '';
+    let fallbackPaid = editingTransaction ? editingTransaction.paid_amount : 0;
+    let fallbackPaidAt = editingTransaction ? editingTransaction.paid_at : '';
+
+    if (forcePaidState === 'paid') {
+      fallbackPaid = data.amount;
+      fallbackPaidAt = new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } else if (forcePaidState === 'unpaid') {
+      fallbackPaid = 0;
+      fallbackPaidAt = '';
+    }
 
     // Determine robust masterId identifier if this belongs to a series
     let inferredMasterId = editingTransaction?.masterId;

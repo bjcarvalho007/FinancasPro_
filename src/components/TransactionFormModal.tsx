@@ -62,7 +62,7 @@ export default function TransactionFormModal({
         setAmountStr('');
         setType(defaultType);
         setCat('moradia');
-        setDue('Dia 10');
+        setDue('');
         setEstablishment('');
         setInstallmentsCount('');
       }
@@ -117,7 +117,7 @@ export default function TransactionFormModal({
       amount: type === 'parcelas' ? (initialData ? (initialData.amount || 0) : 0) : amountVal,
       type,
       cat,
-      due: due || 'Dia 10',
+      due: due.trim() || '',
       total_parcelado: totalVal || undefined,
       establishment: establishment.trim() || undefined,
       installmentsCount: installmentsNum || undefined

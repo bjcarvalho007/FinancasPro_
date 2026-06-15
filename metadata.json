@@ -1,6 +1,6 @@
 {
-  "name": "Financas Pro",
-  "description": "Sistema financeiro completo premium integrado com Firebase Auth e Firestore Database.",
+  "name": "Finanças Pro",
+  "description": "O sistema premium de alta previsibilidade financeira. Simule sobras reais, acompanhe parcelas inteligentes, receba alertas em tempo real e domine o seu caixa.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

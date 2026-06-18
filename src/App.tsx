@@ -83,6 +83,21 @@ const defaultCategories = [
   { icon: '📦', label: 'Outros', value: 'outros' }
 ];
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
@@ -241,19 +256,62 @@ export default function App() {
     testConnection();
   }, []);
 
+  const silentAutoSubscribe = async (currentUser: User) => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+
+      if (!sub) {
+        const keyResponse = await fetch('/api/push/vapid-public-key');
+        if (!keyResponse.ok) return;
+        const { publicKey } = await keyResponse.json();
+        
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey)
+        });
+      }
+
+      const cleanEndpoint = sub.endpoint
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .substring(sub.endpoint.length - 60);
+      const subId = `sub_${currentUser.uid}_${cleanEndpoint}`;
+
+      await setDoc(doc(db, 'push_subscriptions', subId), {
+        id: subId,
+        userId: currentUser.uid,
+        subscription: JSON.stringify(sub),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      console.log('👷 Auto-inscrição de push do usuário ativa no Firestore.');
+    } catch (e) {
+      console.warn('Falha silenciosa ao atualizar inscrição de push:', e);
+    }
+  };
+
   // Listen to Auth State
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoadingUser(false);
 
-      // Request notification permissions automatically on login/load to enable background PWA notifications
-      if (currentUser && 'Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission().then((perm) => {
-          if (perm === 'granted') {
-            console.log('Notificações ativadas pelo usuário!');
+      if (currentUser) {
+        if ('Notification' in window) {
+          if (Notification.permission === 'granted') {
+            silentAutoSubscribe(currentUser);
+          } else if (Notification.permission === 'default') {
+            Notification.requestPermission().then((perm) => {
+              if (perm === 'granted') {
+                console.log('Notificações ativadas pelo usuário!');
+                silentAutoSubscribe(currentUser);
+              }
+            });
           }
-        });
+        }
       }
     });
     return unsubscribe;

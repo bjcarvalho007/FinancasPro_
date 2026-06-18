@@ -53,6 +53,134 @@ export default function SettingsPanel({
   const [isAlertSimulatorOpen, setIsAlertSimulatorOpen] = useState<boolean>(false);
   const [simulatorChannel, setSimulatorChannel] = useState<'email' | 'whatsapp' | null>(null);
 
+  // Web Push states & helper functions
+  const [isPushSupported, setIsPushSupported] = useState(false);
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/\-/g, '+')
+      .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  // Detect Web Push capabilities and current state on load
+  useEffect(() => {
+    if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) {
+      setIsPushSupported(true);
+      navigator.serviceWorker.ready.then((reg) => {
+        reg.pushManager.getSubscription().then((sub) => {
+          setIsPushSubscribed(!!sub);
+        });
+      });
+    }
+  }, []);
+
+  const togglePushSubscription = async () => {
+    if (!isPushSupported) return;
+    setPushLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (isPushSubscribed) {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await sub.unsubscribe();
+        }
+        setIsPushSubscribed(false);
+        showToast('Inscrição do Web Push removida para este dispositivo.', 'success');
+      } else {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          showToast('Permissão de notificações negada pelo navegador.', 'warning');
+          setPushLoading(false);
+          return;
+        }
+
+        const keyRes = await fetch('/api/push/vapid-public-key');
+        if (!keyRes.ok) {
+          throw new Error('Falha ao buscar chave VAPID');
+        }
+        const { publicKey } = await keyRes.json();
+        
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey)
+        });
+
+        if (auth.currentUser) {
+          const cleanEndpoint = sub.endpoint
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .substring(sub.endpoint.length - 60);
+          const subId = `sub_${auth.currentUser.uid}_${cleanEndpoint}`;
+
+          await setDoc(doc(db, 'push_subscriptions', subId), {
+            id: subId,
+            userId: auth.currentUser.uid,
+            subscription: JSON.stringify(sub),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        }
+
+        setIsPushSubscribed(true);
+        showToast('Dispositivo inscrito para receber notificações em tempo real!', 'success');
+      }
+    } catch (err) {
+      console.error('Erro ao alternar Web Push:', err);
+      showToast('Falha ao configurar Web Push de notificações.', 'error');
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const triggerTestPush = async () => {
+    if (!isPushSubscribed) {
+      showToast('Por favor, ative a notificação Web Push primeiro.', 'warning');
+      return;
+    }
+    setPushLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        showToast('Assinatura não localizada no navegador.', 'error');
+        return;
+      }
+
+      const res = await fetch('/api/notify/email-and-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: auth.currentUser?.email || '',
+          title: '🚨 Teste de Notificação - FinançasPro',
+          body: 'As notificações em tempo real estão configuradas e prontas no servidor! Você receberá alertas mesmo com o app fechado.',
+          pushSubscriptions: [sub],
+          detailedTransactions: []
+        })
+      });
+
+      if (res.ok) {
+        showToast('Alerta de teste enviado com sucesso!', 'success');
+      } else {
+        showToast('Falha ao acionar despacho da notificação.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Falha na comunicação com o servidor.', 'error');
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
   // Sync state values when settings object loads/changes
   useEffect(() => {
     if (settings) {
@@ -467,6 +595,57 @@ export default function SettingsPanel({
               <option value="10">10 dias antes</option>
               <option value="15">15 dias antes</option>
             </select>
+          </div>
+
+          {/* Web Push configuration section */}
+          <div className="pt-4 border-t border-white/5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="max-w-[70%]">
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${isPushSubscribed ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                  Alertas em Segundo Plano (PWA)
+                </span>
+                <span className="text-[10px] text-slate-500 block leading-normal mt-0.5">
+                  Receba avisos instantâneos mesmo se o navegador ou app estiverem fechados.
+                </span>
+              </div>
+              <button
+                onClick={togglePushSubscription}
+                disabled={!isPushSupported || pushLoading}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  isPushSubscribed ? 'bg-indigo-600' : 'bg-slate-800'
+                } ${(!isPushSupported || pushLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    isPushSubscribed ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {isPushSupported && isPushSubscribed && (
+              <div className="flex gap-2">
+                <button
+                  onClick={triggerTestPush}
+                  disabled={pushLoading}
+                  className="bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 font-bold py-2 px-4 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  {pushLoading ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Smartphone className="w-3.5 h-3.5" />
+                  )}
+                  Disparar Notificação de Teste
+                </button>
+              </div>
+            )}
+
+            {!isPushSupported && (
+              <p className="text-[9.5px] text-amber-500/80 bg-amber-500/5 border border-amber-500/10 p-2.5 rounded-xl leading-normal">
+                ⚠️ As notificações push de segundo plano não são suportadas neste navegador ou dispositivo. Instale como PWA para garantir suporte total.
+              </p>
+            )}
           </div>
         </div>
       </div>

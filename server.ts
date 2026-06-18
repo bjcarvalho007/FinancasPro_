@@ -106,6 +106,134 @@ if (needGenerate) {
   );
 }
 
+// Background Checker Task for push notifications when browser is closed
+async function runBackgroundPushNotificationChecker() {
+  console.log("⏰ [BACKGROUND SWEEPER] Iniciando varredura automatizada de vencimentos...");
+  try {
+    const db = admin.firestore();
+    const subsSnapshot = await db.collection("push_subscriptions").get();
+    if (subsSnapshot.empty) {
+      console.log("ℹ️ [BACKGROUND SWEEPER] Nenhuma assinatura de PWA cadastrada.");
+      return;
+    }
+
+    // Group subscriptions by user ID to prevent redundant transaction queries
+    const userSubsMap: { [userId: string]: any[] } = {};
+    subsSnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data && data.userId && data.subscription) {
+        try {
+          const subParsed = JSON.parse(data.subscription);
+          if (!userSubsMap[data.userId]) {
+            userSubsMap[data.userId] = [];
+          }
+          userSubsMap[data.userId].push(subParsed);
+        } catch (e) {
+          console.warn("⚠️ Falha ao analisar assinatura do push:", doc.id, e);
+        }
+      }
+    });
+
+    const now = new Date();
+    const currentDay = now.getDate();
+    const todayStr = now.toISOString().substring(0, 10);
+
+    for (const userId of Object.keys(userSubsMap)) {
+      const subs = userSubsMap[userId];
+      if (!subs || subs.length === 0) continue;
+
+      // Query unpaid transactions for this user
+      const txSnapshot = await db.collection("transactions").where("userId", "==", userId).get();
+      if (txSnapshot.empty) continue;
+
+      for (const docTx of txSnapshot.docs) {
+        const tx = docTx.data();
+        if (!tx || !tx.name || !tx.due) continue;
+
+        const amount = Number(tx.amount) || 0;
+        const paid_amount = Number(tx.paid_amount) || 0;
+        
+        // Skip if already fully paid
+        if (paid_amount >= amount) continue;
+
+        let isNearDue = false;
+        let daysRemainingText = "";
+
+        const dueStr = String(tx.due).trim();
+        if (dueStr.includes("-")) {
+          // Format YYYY-MM-DD
+          const dueParts = dueStr.split("-");
+          const dueDate = new Date(Number(dueParts[0]), Number(dueParts[1]) - 1, Number(dueParts[2]), 12, 0, 0);
+          const diffTime = dueDate.getTime() - now.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          if (diffDays >= 0 && diffDays <= 3) {
+            isNearDue = true;
+            daysRemainingText = diffDays === 0 ? "hoje" : `em ${diffDays} dias`;
+          }
+        } else {
+          // Day number (e.g. "12")
+          const dueDay = parseInt(dueStr, 10);
+          if (!isNaN(dueDay)) {
+            const diffDays = dueDay - currentDay;
+            if (diffDays >= 0 && diffDays <= 3) {
+              isNearDue = true;
+              daysRemainingText = diffDays === 0 ? "hoje" : `em ${diffDays} dias`;
+            }
+          }
+        }
+
+        if (isNearDue) {
+          const alertDateKey = `push_alert_${userId}_${tx.id}_${todayStr}`;
+          
+          // Use isNearDue tracking schema inside Firestore to avoid spamming multiple notifications on the same calendar day
+          const alertRef = db.collection("notified_alerts").doc(alertDateKey);
+          const alertDoc = await alertRef.get();
+          
+          if (!alertDoc.exists) {
+            console.log(`🚀 [BACKGROUND ALERT] Despachando pushes por vencimento iminente de "${tx.name}" para usuário: ${userId}`);
+            
+            const remaining = amount - paid_amount;
+            const messagePayload = JSON.stringify({
+              title: "🚨 Conta Próxima do Vencimento - FinançasPro",
+              body: `O lançamento "${tx.name}" vence ${daysRemainingText}. Resta pagar R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`,
+              icon: "/app_icon.png",
+              badge: "/app_icon.png",
+              data: { url: "/" }
+            });
+
+            // Try dispatching to each subscribed device for this user
+            for (const sub of subs) {
+              try {
+                await webpush.sendNotification(sub, messagePayload);
+              } catch (subErr) {
+                console.warn(`⚠️ Falha ao despachar push de background para dispositivo do usuário ${userId}:`, subErr);
+              }
+            }
+
+            // Lock this alert day in Firestore
+            await alertRef.set({
+              userId,
+              transactionId: tx.id,
+              dispatchedAt: new Date().toISOString()
+            });
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("❌ Falha crítica no runBackgroundPushNotificationChecker:", err);
+  }
+}
+
+// Check on boot (after a 10s cooldown to allow server initialization) and reschedule every 3 hours
+setTimeout(() => {
+  runBackgroundPushNotificationChecker().catch(console.error);
+}, 10000);
+
+setInterval(() => {
+  runBackgroundPushNotificationChecker().catch(console.error);
+}, 1000 * 60 * 60 * 3); // 3 hours
+
 // API route 1: Healthcheck
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

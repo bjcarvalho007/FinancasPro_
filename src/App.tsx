@@ -1588,14 +1588,10 @@ export default function App() {
         <div className="w-full max-w-4xl mx-auto flex items-center justify-between py-4 border-b border-white/5 mb-6 select-none">
           <div className="flex items-center gap-2.5">
             <img 
-              src="https://docs.google.com/uc?export=download&id=1T378zkUiwNTSniqvuW6fgUiitJobHajU" 
+              src="/app_icon.png" 
               alt="FinançasPro Logo" 
               className="w-9 h-9 rounded-xl object-cover border border-white/10 shrink-0 shadow-lg shadow-emerald-500/5 glow-emerald"
               referrerPolicy="no-referrer"
-              onError={(e) => {
-                e.currentTarget.onerror = null;
-                e.currentTarget.src = "/app_icon.png";
-              }}
             />
             <div>
               <span className="font-display font-extrabold text-[17px] tracking-tight text-white leading-none">
@@ -1961,14 +1957,10 @@ export default function App() {
           }`}>
             <div className="flex items-center gap-2.5">
               <img 
-                src="https://docs.google.com/uc?export=download&id=1T378zkUiwNTSniqvuW6fgUiitJobHajU" 
+                src="/app_icon.png" 
                 alt="FinançasPro Logo" 
                 className="w-11 h-11 rounded-2xl object-cover border border-white/5 shrink-0 shadow-lg shadow-emerald-500/5 glow-emerald"
                 referrerPolicy="no-referrer"
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = "/app_icon.png";
-                }}
               />
               <div className="min-w-0">
                 <h2 className={`font-display font-black text-[17px] sm:text-lg tracking-tight leading-none ${

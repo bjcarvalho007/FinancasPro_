@@ -72,14 +72,10 @@ export default function SplashLoader() {
 
           {/* Actual Application Logo */}
           <img 
-            src="https://docs.google.com/uc?export=download&id=1T378zkUiwNTSniqvuW6fgUiitJobHajU" 
+            src="/app_icon.png" 
             alt="FinançasPro Logo" 
             className="w-full h-full object-cover rounded-[34px] shadow-inner"
             referrerPolicy="no-referrer"
-            onError={(e) => {
-              e.currentTarget.onerror = null;
-              e.currentTarget.src = "/app_icon.png";
-            }}
           />
         </motion.div>
 

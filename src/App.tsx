@@ -18,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { Transaction, Category, Goal, Setting, AppNotification, ExtraEarning } from './types';
 import AuthScreen from './components/AuthScreen';
+import SplashLoader from './components/SplashLoader';
 import TransactionFormModal from './components/TransactionFormModal';
 import DashboardAnalytics from './components/DashboardAnalytics';
 import GoalsPanel from './components/GoalsPanel';
@@ -1561,17 +1562,7 @@ export default function App() {
   const isLoadingAll = loadingUser || (user ? loadingProfile : false);
 
   if (isLoadingAll) {
-    return (
-      <div className="min-h-screen bg-[#070a13] flex flex-col items-center justify-center space-y-6">
-        <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center glow-indigo animate-pulse">
-          <TrendingUp className="w-8 h-8 text-indigo-400" />
-        </div>
-        <div className="text-center space-y-1.5 animate-pulse">
-          <h3 className="font-display font-extrabold text-white text-base tracking-tight">FINANÇAS<span className="text-indigo-400">PRO</span></h3>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">Carregando cofre criptografado</p>
-        </div>
-      </div>
-    );
+    return <SplashLoader />;
   }
 
   if (!user) {

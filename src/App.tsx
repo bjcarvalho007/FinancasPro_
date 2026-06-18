@@ -2053,18 +2053,6 @@ export default function App() {
         {/* Bottom Section */}
         <div className="space-y-4">
           
-          {/* Quick Support Option */}
-          <button
-            onClick={() => setIsSupportOpen(true)}
-            className="w-full flex items-center justify-between p-3 rounded-2xl border text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/15 transition-all text-left cursor-pointer"
-          >
-            <span className="flex items-center gap-2">
-              <MessageCircle className="w-4 h-4 shrink-0" />
-              <span>Dúvidas / Suporte</span>
-            </span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-
           {/* Theme switcher */}
           <div className={`p-1 rounded-2xl border flex items-center transition-all ${
             theme === 'light' ? 'bg-slate-100/80 border-slate-200' : 'bg-white/3 border-white/5'

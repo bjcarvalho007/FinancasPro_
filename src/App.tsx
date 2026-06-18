@@ -114,11 +114,11 @@ export default function App() {
   const [isFirebaseOffline, setIsFirebaseOffline] = useState<boolean>(false);
   const [minSplashLoading, setMinSplashLoading] = useState<boolean>(true);
   
-  // Enforce a minimum display duration of 5.5s so users can view the premium animation sequence fully
+  // Enforce a minimum display duration of 1.5s for a snappier startup experience
   useEffect(() => {
     const timer = setTimeout(() => {
       setMinSplashLoading(false);
-    }, 5500);
+    }, 1500);
     return () => clearTimeout(timer);
   }, []);
   
@@ -1982,7 +1982,7 @@ export default function App() {
         theme === 'light' 
           ? 'bg-white border-slate-200/85 text-slate-900' 
           : 'bg-[#0b0f1a] border-white/5 text-slate-100'
-      } p-6 select-none z-[51]`}>
+      } p-6 select-none z-30`}>
         
         {/* Top: Branding */}
         <div className="space-y-6">

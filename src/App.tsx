@@ -48,7 +48,8 @@ import {
   CreditCard,
   ShieldCheck,
   Zap,
-  ArrowRight
+  ArrowRight,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -146,6 +147,9 @@ export default function App() {
     setPrevMonthKey(currentMonthKey);
     setDismissedAlerts({});
   }
+
+  // Floating Action Support Widget State
+  const [isSupportOpen, setIsSupportOpen] = useState<boolean>(false);
 
   // Modal display parameters
   const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
@@ -1626,6 +1630,123 @@ export default function App() {
     );
   };
 
+  const getSupportWhatsappUrl = (type: 'payment_release' | 'general_doubt' | 'tech_support') => {
+    const phone = "5563992092699";
+    let text = "";
+    if (type === 'payment_release') {
+      text = `Olá! Realizei o pagamento do plano premium do FinançasPro${user?.email ? ` com o e-mail: ${user.email}` : ''}. Poderia realizar a conferência e liberação do meu acesso?`;
+    } else if (type === 'general_doubt') {
+      text = "Olá! Tenho algumas dúvidas sobre o funcionamento do FinançasPro e gostaria de esclarecê-las.";
+    } else {
+      text = `Olá! Necessito de suporte técnico na plataforma FinançasPro${user?.email ? ` para o usuário: ${user.email}` : ''}.`;
+    }
+    return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+  };
+
+  const renderSupportWidget = () => {
+    return (
+      <div className="fixed bottom-24 lg:bottom-6 right-4 md:right-6 z-[60] flex flex-col items-end gap-3 font-sans">
+        <AnimatePresence>
+          {isSupportOpen && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 15 }}
+              className={`w-72 rounded-3xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.35)] border backdrop-blur-xl mb-1 text-left ${
+                theme === 'light'
+                  ? 'bg-white/95 border-slate-200/80 text-slate-900 shadow-slate-200/40'
+                  : 'bg-[#0b101f]/95 border-white/10 text-slate-100 shadow-emerald-500/5'
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-center gap-2 border-b border-white/5 pb-2.5 mb-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                  <MessageCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className={`text-xs font-black uppercase tracking-wider ${theme === 'light' ? 'text-slate-800' : 'text-white'}`}>Suporte FinançasPro</h4>
+                  <p className="text-[9.5px] text-slate-400 mt-0.5">Atendimento imediato via WhatsApp</p>
+                </div>
+              </div>
+
+              <p className={`text-[10.5px] leading-normal mb-3 ${theme === 'light' ? 'text-slate-600' : 'text-slate-450'}`}>
+                Seja bem-vindo! Tem alguma dúvida ou realizou seu pagamento e ainda não está liberado? Toque na opção abaixo:
+              </p>
+
+              <div className="space-y-2">
+                <a
+                  href={getSupportWhatsappUrl('payment_release')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsSupportOpen(false)}
+                  className="w-full p-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/15 flex items-center justify-between text-[11.5px] font-extrabold tracking-tight transition-all no-underline cursor-pointer group"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span>💳</span>
+                    <span className="text-left leading-tight">Já paguei, liberar meu acesso</span>
+                  </span>
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                </a>
+
+                <a
+                  href={getSupportWhatsappUrl('general_doubt')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsSupportOpen(false)}
+                  className={`w-full p-2.5 rounded-xl border flex items-center justify-between text-[11.5px] font-extrabold tracking-tight transition-all no-underline cursor-pointer group ${
+                    theme === 'light'
+                      ? 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                      : 'bg-white/5 hover:bg-white/10 text-white border-white/5'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span>❓</span>
+                    <span>Tirar dúvidas gerais</span>
+                  </span>
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                </a>
+
+                <a
+                  href={getSupportWhatsappUrl('tech_support')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsSupportOpen(false)}
+                  className={`w-full p-2.5 rounded-xl border flex items-center justify-between text-[11.5px] font-extrabold tracking-tight transition-all no-underline cursor-pointer group ${
+                    theme === 'light'
+                      ? 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                      : 'bg-white/5 hover:bg-white/10 text-white border-white/5'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span>🛠️</span>
+                    <span>Ajuda com suporte técnico</span>
+                  </span>
+                  <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                </a>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setIsSupportOpen(!isSupportOpen)}
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-xl shadow-emerald-500/10 cursor-pointer border-none z-[60] focus:outline-none select-none font-extrabold text-[11px] uppercase tracking-wider"
+          style={{
+            boxShadow: "0 10px 25px -5px rgba(16, 185, 129, 0.45)"
+          }}
+        >
+          <div className="relative flex items-center justify-center">
+            <span className="absolute w-2 h-2 bg-white rounded-full animate-ping opacity-75 -top-0.5 -right-0.5" />
+            <MessageCircle className="w-4.5 h-4.5 shrink-0" />
+          </div>
+          <span>Precisa de Ajuda?</span>
+        </motion.button>
+      </div>
+    );
+  };
+
   const isLoadingAll = loadingUser || (user ? loadingProfile : false) || minSplashLoading;
 
   if (isLoadingAll) {
@@ -1633,7 +1754,12 @@ export default function App() {
   }
 
   if (!user) {
-    return <AuthScreen onSuccess={() => window.location.reload()} showToast={triggerToast} />;
+    return (
+      <>
+        <AuthScreen onSuccess={() => window.location.reload()} showToast={triggerToast} />
+        {renderSupportWidget()}
+      </>
+    );
   }
 
   if (user && isBlocked) {
@@ -1847,9 +1973,168 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen w-full flex flex-col transition-colors duration-300 ${
+    <div className={`min-h-screen w-full flex flex-col lg:flex-row transition-colors duration-300 ${
       theme === 'light' ? 'bg-[#f4f7fa] text-slate-900 font-sans' : 'bg-[#070a13] text-slate-100 font-sans'
     }`}>
+
+      {/* PROFESSIONAL DESKTOP SIDEBAR PANEL (SITE VIEW) */}
+      <aside className={`hidden lg:flex w-72 h-screen sticky top-0 flex-col justify-between border-r shrink-0 transition-colors duration-300 ${
+        theme === 'light' 
+          ? 'bg-white border-slate-200/85 text-slate-900' 
+          : 'bg-[#0b0f1a] border-white/5 text-slate-100'
+      } p-6 select-none z-[51]`}>
+        
+        {/* Top: Branding */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <img 
+              src="/app_icon.png" 
+              alt="FinançasPro Logo" 
+              className="w-10 h-10 rounded-2xl object-cover border border-white/5 shrink-0 shadow-lg"
+              referrerPolicy="no-referrer"
+            />
+            <div className="min-w-0">
+              <h1 className="font-display font-black text-[15px] tracking-tight leading-none">
+                FINANÇAS<span className="text-emerald-400 font-extrabold ml-0.5">PRO</span>
+              </h1>
+              {isVIP ? (
+                <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-400 font-black uppercase tracking-wider mt-1.5">
+                  ★ Membro VIP
+                </span>
+              ) : hasActiveSubscription ? (
+                <span className="inline-flex items-center gap-0.5 text-[9px] text-indigo-400 font-black uppercase tracking-wider mt-1.5">
+                  ★ Assinante PRO
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-500 font-black uppercase tracking-wider mt-1.5">
+                  ⚡ Conta Grátis
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Web Navigation Menu */}
+          <nav className="space-y-1.5 pt-4">
+            {( () => {
+              const menuItems = [
+                { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+                { id: 'contas', label: 'Contas Fixas', icon: Receipt },
+                { id: 'variaveis', label: 'Gasto Variável', icon: Coins },
+                { id: 'parcelas', label: 'Parcelados', icon: CreditCard },
+                { id: 'goals', label: 'Metas', icon: Target },
+                { id: 'settings', label: 'Configurações', icon: Settings }
+              ];
+              return menuItems;
+            })().map((item) => {
+              const isSelected = activeTab === item.id;
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id as any)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-[11.5px] font-black uppercase tracking-wider transition-all border border-transparent text-left cursor-pointer ${
+                    isSelected
+                      ? theme === 'light'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                        : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/20'
+                      : theme === 'light'
+                        ? 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <Icon className={`w-4.5 h-4.5 shrink-0 ${isSelected ? '' : 'text-slate-450'}`} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Bottom Section */}
+        <div className="space-y-4">
+          
+          {/* Quick Support Option */}
+          <button
+            onClick={() => setIsSupportOpen(true)}
+            className="w-full flex items-center justify-between p-3 rounded-2xl border text-[10px] font-extrabold uppercase tracking-wider text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/15 transition-all text-left cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <MessageCircle className="w-4 h-4 shrink-0" />
+              <span>Dúvidas / Suporte</span>
+            </span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Theme switcher */}
+          <div className={`p-1 rounded-2xl border flex items-center transition-all ${
+            theme === 'light' ? 'bg-slate-100/80 border-slate-200' : 'bg-white/3 border-white/5'
+          }`}>
+            <button
+              onClick={() => handleThemeModify('light')}
+              className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                theme === 'light'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              ☀️ Claro
+            </button>
+            <button
+              onClick={() => handleThemeModify('dark')}
+              className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                theme === 'dark'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-indigo-400'
+              }`}
+            >
+              🌙 Escuro
+            </button>
+          </div>
+
+          {/* Active User Level Info */}
+          <div className={`p-3 rounded-2xl border flex items-center justify-between gap-2.5 ${
+            theme === 'light' ? 'bg-slate-50 border-slate-200/60' : 'bg-white/3 border-white/5'
+          }`}>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className={`w-8.5 h-8.5 rounded-xl flex items-center justify-center font-black text-[11px] shrink-0 select-none ${
+                isVIP 
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : hasActiveSubscription
+                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                  : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+              }`}>
+                {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
+              </div>
+              <div className="min-w-0 text-left">
+                <span className={`text-[8px] uppercase font-black tracking-wider block leading-tight ${
+                  isVIP ? 'text-emerald-400' : hasActiveSubscription ? 'text-indigo-400' : 'text-amber-500'
+                }`}>
+                  {isVIP ? 'Membro VIP' : hasActiveSubscription ? 'Assinante' : 'Grátis'}
+                </span>
+                <p className="text-[10px] font-bold truncate leading-tight text-slate-400" title={user.email || ''}>
+                  {user.email || 'Usuário'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleUserLogout}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
+                theme === 'light'
+                  ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-700'
+                  : 'bg-rose-500/5 hover:bg-rose-500/15 border-rose-500/10 text-rose-450'
+              }`}
+              title="Sair"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+        </div>
+      </aside>
+
+      {/* Right Content Container */}
+      <div className="flex-1 flex flex-col min-w-0 relative">
 
       {/* Dynamic Animated Toast */}
       {showToast && (
@@ -1861,8 +2146,8 @@ export default function App() {
             toastType === 'error' 
               ? 'bg-rose-500 text-white' 
               : toastType === 'warning' 
-                ? 'bg-amber-500 text-slate-950' 
-                : 'bg-emerald-500 text-white shadow-emerald-500/15 border border-emerald-400/20'
+              ? 'bg-amber-500 text-slate-950' 
+              : 'bg-emerald-500 text-white shadow-emerald-500/15 border border-emerald-400/20'
           }`}
         >
           {toastType === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
@@ -1890,7 +2175,7 @@ export default function App() {
             <div className="flex gap-3.5 items-start">
               <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500/10 to-amber-500/10 border border-rose-500/15 flex items-center justify-center text-rose-500 shrink-0 relative shadow-inner">
                 <span className="absolute inset-0 rounded-2xl bg-rose-500/5 animate-ping opacity-75" />
-                <Bell className="w-5 h-5 text-rose-550 relative z-10 animate-swing" />
+                <Bell className="w-5 h-5 text-rose-500 relative z-10 animate-swing" />
               </div>
               <div className="space-y-1.5">
                 <h5 className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${theme === 'light' ? 'text-rose-600' : 'text-rose-400 font-display'}`}>
@@ -1910,7 +2195,7 @@ export default function App() {
                 setFloatingAlert(null);
               }}
               className={`p-1.5 rounded-xl transition-all cursor-pointer text-xs font-bold hover:scale-110 active:scale-95 ${
-                theme === 'light' ? 'hover:bg-slate-105 text-slate-500 hover:text-slate-900' : 'hover:bg-white/5 text-slate-500 hover:text-white'
+                theme === 'light' ? 'hover:bg-slate-100 text-slate-500 hover:text-slate-900' : 'hover:bg-white/5 text-slate-500 hover:text-white'
               }`}
               title="Dispensar alerta"
             >
@@ -1964,7 +2249,7 @@ export default function App() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto h-screen pb-28 lg:pb-28"
+        className="flex-1 overflow-y-auto h-screen pb-28 lg:pb-12"
       >
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 md:py-8 space-y-6">
           {isFirebaseOffline && (
@@ -3427,7 +3712,7 @@ export default function App() {
         )}
       </AnimatePresence>
       {/* UNIFIED FULLY-RESPONSIVE DOCKED BOTTOM BAR (BOTH PC & MOBILE) */}
-      <div className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl transition-all duration-300 ${
+      <div className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl transition-all duration-300 lg:hidden ${
         theme === 'light' 
           ? 'bg-white/95 border-slate-200/80 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] text-slate-850' 
           : 'bg-[#090d1af5] border-white/5 shadow-[0_-8px_30px_rgb(0,0,0,0.4)] text-slate-100'
@@ -3626,6 +3911,8 @@ export default function App() {
           </motion.div>
         </div>
       )}
+
+      </div>
 
       <OnboardingTutorial 
         theme={theme} 

@@ -287,9 +287,12 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       {/* Upper Navigation Header bar across the access screen */}
       <div className="w-full max-w-6xl flex items-center justify-between py-4 border-b border-white/5 mb-2 select-none">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center glow-emerald shadow-emerald-500/10 shrink-0">
-            <TrendingUp className="w-5 h-5 text-emerald-400" />
-          </div>
+          <img 
+            src="/app_icon.png" 
+            alt="FinançasPro Logo" 
+            className="w-9 h-9 rounded-xl object-cover border border-white/10 shrink-0 shadow-lg shadow-emerald-500/5 glow-emerald"
+            referrerPolicy="no-referrer"
+          />
           <div>
             <span className="font-display font-extrabold text-[17px] tracking-tight text-white leading-none">
               FINANÇAS<span className="text-emerald-400 font-black ml-0.5">PRO</span>

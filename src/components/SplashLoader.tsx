@@ -15,7 +15,7 @@ export default function SplashLoader() {
   ];
 
   useEffect(() => {
-    const intervals = [600, 1000, 1400, 1800, 2200];
+    const intervals = [1200, 2200, 3200, 4200, 4900];
     const timers: NodeJS.Timeout[] = [];
 
     intervals.forEach((delay, idx) => {
@@ -121,7 +121,7 @@ export default function SplashLoader() {
                 transition={{ duration: 0.25 }}
                 className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none flex items-center gap-1.5 justify-center"
               >
-                {statusIdx < 4 ? (
+                {statusIdx < 5 ? (
                   <Cpu className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
                 ) : (
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />

@@ -96,6 +96,15 @@ export default function App() {
   const [settings, setSettings] = useState<Setting | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isFirebaseOffline, setIsFirebaseOffline] = useState<boolean>(false);
+  const [minSplashLoading, setMinSplashLoading] = useState<boolean>(true);
+  
+  // Enforce a minimum display duration of 5.5s so users can view the premium animation sequence fully
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMinSplashLoading(false);
+    }, 5500);
+    return () => clearTimeout(timer);
+  }, []);
   
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [currency, setCurrency] = useState<'BRL' | 'USD' | 'EUR'>('BRL');
@@ -1559,7 +1568,7 @@ export default function App() {
     );
   };
 
-  const isLoadingAll = loadingUser || (user ? loadingProfile : false);
+  const isLoadingAll = loadingUser || (user ? loadingProfile : false) || minSplashLoading;
 
   if (isLoadingAll) {
     return <SplashLoader />;

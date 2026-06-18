@@ -149,3 +149,13 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(clickPromise);
 });
+
+// Standard Fetch proxy event interceptor to satisfy PWA installation audits
+self.addEventListener('fetch', (event) => {
+  // Let the browser fetch standard assets naturally; fallback if completely offline
+  event.respondWith(
+    fetch(event.request).catch(() => {
+      return caches.match(event.request);
+    })
+  );
+});

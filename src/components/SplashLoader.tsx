@@ -15,8 +15,8 @@ export default function SplashLoader() {
   ];
 
   useEffect(() => {
-    // Elegant progression matching the sporty Copa theme
-    const intervals = [300, 600, 950, 1200, 1400];
+    // Elegant progression matching the sporty Copa theme spanned perfectly across 3 seconds
+    const intervals = [500, 1000, 1500, 2000, 2500];
     const timers: NodeJS.Timeout[] = [];
 
     intervals.forEach((delay, idx) => {

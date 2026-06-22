@@ -25,7 +25,6 @@ import GoalsPanel from './components/GoalsPanel';
 import SettingsPanel from './components/SettingsPanel';
 import OnboardingTutorial from './components/OnboardingTutorial';
 import ExtraEarningsManager from './components/ExtraEarningsManager';
-import CopaDoMundoEffects from './components/CopaDoMundoEffects';
 import { 
   TrendingUp, 
   Plus, 
@@ -3909,8 +3908,6 @@ export default function App() {
         onClose={() => setIsTutorialOpen(false)} 
         onOpen={() => setIsTutorialOpen(true)} 
       />
-
-      <CopaDoMundoEffects theme={theme} />
     </div>
   );
 }

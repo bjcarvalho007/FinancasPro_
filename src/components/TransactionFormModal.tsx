@@ -39,6 +39,7 @@ export default function TransactionFormModal({
   const [error, setError] = useState<string | null>(null);
   const [establishment, setEstablishment] = useState<string>('');
   const [installmentsCount, setInstallmentsCount] = useState<string>('');
+  const [installmentAmountStr, setInstallmentAmountStr] = useState<string>('');
   
   // Custom interactive sub-state for creating categories on the flow
   const [showCatDropdown, setShowCatDropdown] = useState<boolean>(false);
@@ -57,6 +58,7 @@ export default function TransactionFormModal({
         setDue(initialData.due || '');
         setEstablishment(initialData.establishment || '');
         setInstallmentsCount(initialData.installmentsCount ? String(initialData.installmentsCount) : '');
+        setInstallmentAmountStr(initialData.type === 'parcelas' ? formatMoney(initialData.amount || 0) : '');
       } else {
         setName('');
         setAmountStr('');
@@ -65,12 +67,29 @@ export default function TransactionFormModal({
         setDue('');
         setEstablishment('');
         setInstallmentsCount('');
+        setInstallmentAmountStr('');
       }
       setShowCatDropdown(false);
       setShowAddCustomCat(false);
       setCustomCatName('');
     }
   }, [isOpen, initialData, defaultType]);
+
+  // Dynamically calculate and pre-fill monthly installment if total or count changes (if not already custom modified by user)
+  useEffect(() => {
+    if (type === 'parcelas' && amountStr) {
+      const totalVal = parseMoney(amountStr);
+      const count = parseInt(installmentsCount, 10);
+      if (totalVal > 0) {
+        if (count > 0) {
+          const calculated = totalVal / count;
+          setInstallmentAmountStr(formatMoney(calculated));
+        } else {
+          setInstallmentAmountStr(formatMoney(totalVal));
+        }
+      }
+    }
+  }, [amountStr, installmentsCount, type]);
 
   const formatMoney = (val: number): string => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -112,9 +131,14 @@ export default function TransactionFormModal({
       return;
     }
 
+    const finalInstallmentAmt = type === 'parcelas' ? parseMoney(installmentAmountStr) : undefined;
+    const computedAmt = type === 'parcelas'
+      ? (finalInstallmentAmt && finalInstallmentAmt > 0 ? finalInstallmentAmt : (installmentsNum ? amountVal / installmentsNum : amountVal))
+      : amountVal;
+
     onSave({
       name,
-      amount: type === 'parcelas' ? (initialData ? (initialData.amount || 0) : 0) : amountVal,
+      amount: computedAmt,
       type,
       cat,
       due: due.trim() || '',
@@ -231,25 +255,54 @@ export default function TransactionFormModal({
               />
             </div>
 
-            {/* Quantity of Installments (only for parcelas) */}
+            {/* Quantity of Installments & Monthly Installment Amount (only for parcelas) */}
             {type === 'parcelas' && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
-                className="overflow-hidden"
+                className="overflow-hidden space-y-4"
               >
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  🔢 Quantidade de Parcelas
-                </label>
-                <input
-                  id="modal-installments-count-input"
-                  type="number"
-                  min="1"
-                  placeholder="Ex: 5, 10, 12, etc."
-                  value={installmentsCount}
-                  onChange={(e) => setInstallmentsCount(e.target.value)}
-                  className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold"
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                      🔢 Quantidade de Parcelas
+                    </label>
+                    <input
+                      id="modal-installments-count-input"
+                      type="number"
+                      min="1"
+                      placeholder="Ex: 5, 10, 12, etc."
+                      value={installmentsCount}
+                      onChange={(e) => setInstallmentsCount(e.target.value)}
+                      className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-yellow-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 font-bold">
+                      💡 Valor da Parcela deste Mês (R$)
+                    </label>
+                    <input
+                      id="modal-installment-amount-input"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="R$ 0,00"
+                      value={installmentAmountStr}
+                      onChange={(e) => {
+                        let numeric = e.target.value.replace(/\D/g, "");
+                        if (!numeric) {
+                          setInstallmentAmountStr("");
+                          return;
+                        }
+                        const valFloat = parseFloat(numeric) / 100;
+                        setInstallmentAmountStr(formatMoney(valFloat));
+                      }}
+                      className="w-full bg-slate-950/50 border border-yellow-500/20 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500 text-yellow-400 text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold"
+                    />
+                    <p className="text-[9px] text-slate-400 mt-1">
+                      O sistema usará este valor para calcular a sobra do mês.
+                    </p>
+                  </div>
+                </div>
               </motion.div>
             )}
 

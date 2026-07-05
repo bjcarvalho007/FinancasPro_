@@ -345,16 +345,20 @@ export default function SettingsPanel({
       
       let defaultAmount = 0;
       if (masterTx.type === 'parcelas') {
-        const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
-        const totalExtraGasto = masterTx.extra_gasto || 0;
-        const totalOriginal = totalOriginalBase + totalExtraGasto;
-
-        if (masterTx.installmentsCount) {
-          defaultAmount = totalOriginal / masterTx.installmentsCount;
+        if (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0)) {
+          defaultAmount = masterTx.amount;
         } else {
-          const standardEndMonthKey = masterTx.target_payoff_month || (masterTx.target_payoff_date ? masterTx.target_payoff_date.substring(0, 7) : currentMonthKey);
-          const monthsCount = getMonthsDiff(startMonthKey, standardEndMonthKey) + 1;
-          defaultAmount = totalOriginal / Math.max(1, monthsCount);
+          const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+          const totalExtraGasto = masterTx.extra_gasto || 0;
+          const totalOriginal = totalOriginalBase + totalExtraGasto;
+
+          if (masterTx.installmentsCount) {
+            defaultAmount = totalOriginal / masterTx.installmentsCount;
+          } else {
+            const standardEndMonthKey = masterTx.target_payoff_month || (masterTx.target_payoff_date ? masterTx.target_payoff_date.substring(0, 7) : currentMonthKey);
+            const monthsCount = getMonthsDiff(startMonthKey, standardEndMonthKey) + 1;
+            defaultAmount = totalOriginal / Math.max(1, monthsCount);
+          }
         }
       } else {
         defaultAmount = masterTx.amount;

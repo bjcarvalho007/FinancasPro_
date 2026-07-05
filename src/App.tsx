@@ -1204,7 +1204,12 @@ export default function App() {
 
         const totalVal = (t.total_parcelado || t.amount || 0) + extraGasto;
         const count = t.installmentsCount || 1;
-        const installmentValue = totalVal / count;
+        
+        // Use custom monthly installment if stored, otherwise divide totalVal by count
+        const installmentValue = (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0))
+          ? masterTx.amount
+          : (totalVal / count);
+
         return {
           ...t,
           amount: t.paid_amount > 0 ? t.paid_amount : installmentValue,
@@ -1307,16 +1312,20 @@ export default function App() {
         
         let defaultAmount = 0;
         if (masterTx.type === 'parcelas') {
-          const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
-          const totalExtraGasto = masterTx.extra_gasto || 0;
-          const totalOriginal = totalOriginalBase + totalExtraGasto;
-          
-          if (masterTx.installmentsCount) {
-            defaultAmount = totalOriginal / masterTx.installmentsCount;
+          if (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0)) {
+            defaultAmount = masterTx.amount;
           } else {
-            const standardEndMonthKey = masterTx.target_payoff_month || (masterTx.target_payoff_date ? masterTx.target_payoff_date.substring(0, 7) : currentMonthKey);
-            const monthsCount = getMonthsDiff(startMonthKey, standardEndMonthKey) + 1;
-            defaultAmount = totalOriginal / Math.max(1, monthsCount);
+            const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+            const totalExtraGasto = masterTx.extra_gasto || 0;
+            const totalOriginal = totalOriginalBase + totalExtraGasto;
+            
+            if (masterTx.installmentsCount) {
+              defaultAmount = totalOriginal / masterTx.installmentsCount;
+            } else {
+              const standardEndMonthKey = masterTx.target_payoff_month || (masterTx.target_payoff_date ? masterTx.target_payoff_date.substring(0, 7) : currentMonthKey);
+              const monthsCount = getMonthsDiff(startMonthKey, standardEndMonthKey) + 1;
+              defaultAmount = totalOriginal / Math.max(1, monthsCount);
+            }
           }
         } else {
           defaultAmount = masterTx.amount;
@@ -1367,7 +1376,7 @@ export default function App() {
       // Avoid alerting if already dismissed by user
       if (dismissedAlerts[item.id]) return;
 
-      const itemAmount = item.amount > 0 ? item.amount : (item.type === 'parcelas' ? (item.installmentsCount ? (item.total_parcelado || 0) / item.installmentsCount : (item.total_parcelado || 0)) : 0);
+      const itemAmount = item.amount;
       const remainingDeficit = itemAmount - (item.paid_amount || 0);
 
       if (remainingDeficit > 0 && item.due) {
@@ -1515,11 +1524,11 @@ export default function App() {
     .reduce((sum, t) => sum + t.amount, 0);
   const leftoverCash = totalInflowsSum - totalSpentInMonth;
 
-  // Unpaid total estimate for fixed and variables of the month only
-  const activeMonthFixAndVar = activeMonthTransactions.filter(t => t.type === 'fixos' || t.type === 'variaveis');
-  const spentFixAndVar = activeMonthFixAndVar.reduce((sum, t) => sum + t.amount, 0);
-  const paidFixAndVar = activeMonthFixAndVar.reduce((sum, t) => sum + (t?.paid_amount || 0), 0);
-  const pendingTotalDebt = Math.max(0, spentFixAndVar - paidFixAndVar);
+  // Unpaid total estimate for fixed, variables, and installments of the month
+  const activeMonthDebits = activeMonthTransactions.filter(t => t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas');
+  const spentDebits = activeMonthDebits.reduce((sum, t) => sum + t.amount, 0);
+  const paidDebits = activeMonthDebits.reduce((sum, t) => sum + (t?.paid_amount || 0), 0);
+  const pendingTotalDebt = Math.max(0, spentDebits - paidDebits);
 
   // Categorical summaries for quick widgets
   const fixosSum = activeMonthTransactions.filter(t => t.type === 'fixos').reduce((sum, t) => sum + t.amount, 0);
@@ -3282,7 +3291,7 @@ export default function App() {
 
               <div className="overflow-y-auto flex-1 pr-1 space-y-3 max-h-[50vh] min-h-[200px]">
                 {activeMonthTransactions.filter(
-                  t => (t.type === 'fixos' || t.type === 'variaveis') && (t.paid_amount || 0) < t.amount
+                  t => (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas') && (t.paid_amount || 0) < t.amount
                 ).length === 0 ? (
                   <div className="p-8 text-center border border-dashed border-white/5 rounded-2xl text-slate-400 text-xs py-12 flex flex-col items-center justify-center h-full">
                     <CheckCircle className="w-8 h-8 text-emerald-500 mb-3 animate-pulse" />
@@ -3290,7 +3299,7 @@ export default function App() {
                   </div>
                 ) : (
                   activeMonthTransactions
-                    .filter(t => (t.type === 'fixos' || t.type === 'variaveis') && (t.paid_amount || 0) < t.amount)
+                    .filter(t => (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas') && (t.paid_amount || 0) < t.amount)
                     .map((tx) => {
                       const categoryObj = activeMonthCategoryList.find(c => c.value === tx.cat) || { icon: '📦', label: tx.cat || 'Outros' };
                       const remDue = tx.amount - (tx.paid_amount || 0);

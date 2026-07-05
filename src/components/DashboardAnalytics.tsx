@@ -107,7 +107,12 @@ export default function DashboardAnalytics({
 
         const totalVal = (t.total_parcelado || t.amount || 0) + extraGasto;
         const count = t.installmentsCount || 1;
-        const installmentValue = totalVal / count;
+        
+        // Use custom monthly installment if stored, otherwise divide totalVal by count
+        const installmentValue = (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0))
+          ? masterTx.amount
+          : (totalVal / count);
+
         return {
           ...t,
           amount: t.paid_amount > 0 ? t.paid_amount : installmentValue,

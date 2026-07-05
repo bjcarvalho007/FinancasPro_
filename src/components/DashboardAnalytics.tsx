@@ -20,7 +20,10 @@ import {
   Activity,
   ChevronRight,
   Info,
-  X
+  X,
+  Receipt,
+  Coins,
+  CreditCard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -776,8 +779,238 @@ export default function DashboardAnalytics({
     );
   }
 
+  const maxMonthVal = Math.max(totalFixosMonth, totalVariaveisMonth, totalParcelasMonth);
+  const countFixosMonth = listActive.filter(t => t.type === 'fixos').length;
+  const countVariaveisMonth = listActive.filter(t => t.type === 'variaveis').length;
+  const countParcelasMonth = listActive.filter(t => t.type === 'parcelas').length;
+  const pctFixos = totalSpentMonth > 0 ? Math.round((totalFixosMonth / totalSpentMonth) * 100) : 0;
+  const pctVariaveis = totalSpentMonth > 0 ? Math.round((totalVariaveisMonth / totalSpentMonth) * 100) : 0;
+  const pctParcelas = totalSpentMonth > 0 ? Math.round((totalParcelasMonth / totalSpentMonth) * 100) : 0;
+
   return (
     <div className="space-y-6">
+      
+      {/* COMPARATIVO DE COMPROMISSOS DE GASTOS POR ABAS */}
+      <div className={`p-5 rounded-3xl border transition-all ${
+        isLight 
+          ? 'bg-white border-slate-200/90 shadow-sm shadow-slate-100/50' 
+          : 'bg-[#090d1c]/80 border-white/5 shadow-2xl shadow-black/30'
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3.5 border-b border-dashed border-slate-200 dark:border-white/5">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-0.5">
+              ⚖️ Rateio de Despesas do Mês
+            </span>
+            <h4 className={`font-display font-black text-sm md:text-base tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+              Distribuição Financeira por Aba ({formatMonthKey(currentMonthKey)})
+            </h4>
+            <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'} font-medium`}>
+              Identifique em tempo real qual tipo de compromisso está consumindo a maior parte do seu orçamento.
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-1.5 self-start sm:self-center shrink-0">
+            <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+            <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-450">
+              Total Comprometido: {fmt(totalSpentMonth)}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Card 1: Contas Fixas */}
+          <motion.div
+            whileHover={{ scale: 1.015 }}
+            className={`p-4 rounded-2xl border transition-all flex flex-col justify-between relative overflow-hidden ${
+              totalFixosMonth === maxMonthVal && maxMonthVal > 0
+                ? isLight 
+                  ? 'bg-rose-50/30 border-rose-250 hover:border-rose-350' 
+                  : 'bg-rose-950/10 border-rose-500/30 hover:border-rose-500/50'
+                : isLight
+                  ? 'bg-slate-50/40 border-slate-200/80 hover:border-slate-300'
+                  : 'bg-white/2 border-white/5 hover:border-white/10'
+            }`}
+          >
+            {totalFixosMonth === maxMonthVal && maxMonthVal > 0 && (
+              <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl pointer-events-none" />
+            )}
+            
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                  totalFixosMonth === maxMonthVal && maxMonthVal > 0
+                    ? 'bg-rose-500/15 text-rose-500'
+                    : 'bg-indigo-500/10 text-indigo-400'
+                }`}>
+                  <Receipt className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h5 className={`font-display font-black text-xs uppercase tracking-wider ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                    Contas Fixas
+                  </h5>
+                  <span className={`text-[9.5px] font-bold ${isLight ? 'text-slate-450' : 'text-slate-500'} block`}>
+                    {countFixosMonth} {countFixosMonth === 1 ? 'lançamento ativo' : 'lançamentos ativos'}
+                  </span>
+                </div>
+              </div>
+
+              {totalFixosMonth === maxMonthVal && maxMonthVal > 0 && (
+                <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-500 border border-rose-500/10 shrink-0">
+                  ⚠️ Maior Gasto
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2 mt-2">
+              <div className="flex items-baseline gap-1.5">
+                <span className={`font-mono text-xl font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                  {fmt(totalFixosMonth)}
+                </span>
+                <span className="text-[10px] text-slate-450 font-bold font-mono">
+                  ({pctFixos}%)
+                </span>
+              </div>
+              
+              <div className="w-full h-1.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    totalFixosMonth === maxMonthVal && maxMonthVal > 0 ? 'bg-rose-500' : 'bg-indigo-500'
+                  }`}
+                  style={{ width: `${pctFixos}%` }}
+                />
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Card 2: Gastos Variáveis */}
+          <motion.div
+            whileHover={{ scale: 1.015 }}
+            className={`p-4 rounded-2xl border transition-all flex flex-col justify-between relative overflow-hidden ${
+              totalVariaveisMonth === maxMonthVal && maxMonthVal > 0
+                ? isLight 
+                  ? 'bg-rose-50/30 border-rose-250 hover:border-rose-350' 
+                  : 'bg-rose-950/10 border-rose-500/30 hover:border-rose-500/50'
+                : isLight
+                  ? 'bg-slate-50/40 border-slate-200/80 hover:border-slate-300'
+                  : 'bg-white/2 border-white/5 hover:border-white/10'
+            }`}
+          >
+            {totalVariaveisMonth === maxMonthVal && maxMonthVal > 0 && (
+              <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl pointer-events-none" />
+            )}
+            
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                  totalVariaveisMonth === maxMonthVal && maxMonthVal > 0
+                    ? 'bg-rose-500/15 text-rose-500'
+                    : 'bg-indigo-500/10 text-indigo-400'
+                }`}>
+                  <Coins className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h5 className={`font-display font-black text-xs uppercase tracking-wider ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                    Gastos Variáveis
+                  </h5>
+                  <span className={`text-[9.5px] font-bold ${isLight ? 'text-slate-450' : 'text-slate-500'} block`}>
+                    {countVariaveisMonth} {countVariaveisMonth === 1 ? 'lançamento ativo' : 'lançamentos ativos'}
+                  </span>
+                </div>
+              </div>
+
+              {totalVariaveisMonth === maxMonthVal && maxMonthVal > 0 && (
+                <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-500 border border-rose-500/10 shrink-0">
+                  ⚠️ Maior Gasto
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2 mt-2">
+              <div className="flex items-baseline gap-1.5">
+                <span className={`font-mono text-xl font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                  {fmt(totalVariaveisMonth)}
+                </span>
+                <span className="text-[10px] text-slate-450 font-bold font-mono">
+                  ({pctVariaveis}%)
+                </span>
+              </div>
+              
+              <div className="w-full h-1.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    totalVariaveisMonth === maxMonthVal && maxMonthVal > 0 ? 'bg-rose-500' : 'bg-indigo-500'
+                  }`}
+                  style={{ width: `${pctVariaveis}%` }}
+                />
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Card 3: Parcelados */}
+          <motion.div
+            whileHover={{ scale: 1.015 }}
+            className={`p-4 rounded-2xl border transition-all flex flex-col justify-between relative overflow-hidden ${
+              totalParcelasMonth === maxMonthVal && maxMonthVal > 0
+                ? isLight 
+                  ? 'bg-rose-50/30 border-rose-250 hover:border-rose-350' 
+                  : 'bg-rose-950/10 border-rose-500/30 hover:border-rose-500/50'
+                : isLight
+                  ? 'bg-slate-50/40 border-slate-200/80 hover:border-slate-300'
+                  : 'bg-white/2 border-white/5 hover:border-white/10'
+            }`}
+          >
+            {totalParcelasMonth === maxMonthVal && maxMonthVal > 0 && (
+              <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl pointer-events-none" />
+            )}
+            
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                  totalParcelasMonth === maxMonthVal && maxMonthVal > 0
+                    ? 'bg-rose-500/15 text-rose-500'
+                    : 'bg-indigo-500/10 text-indigo-400'
+                }`}>
+                  <CreditCard className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h5 className={`font-display font-black text-xs uppercase tracking-wider ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                    Gastos Parcelados
+                  </h5>
+                  <span className={`text-[9.5px] font-bold ${isLight ? 'text-slate-450' : 'text-slate-500'} block`}>
+                    {countParcelasMonth} {countParcelasMonth === 1 ? 'parcela este mês' : 'parcelas este mês'}
+                  </span>
+                </div>
+              </div>
+
+              {totalParcelasMonth === maxMonthVal && maxMonthVal > 0 && (
+                <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-500 border border-rose-500/10 shrink-0">
+                  ⚠️ Maior Gasto
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2 mt-2">
+              <div className="flex items-baseline gap-1.5">
+                <span className={`font-mono text-xl font-black tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                  {fmt(totalParcelasMonth)}
+                </span>
+                <span className="text-[10px] text-slate-450 font-bold font-mono">
+                  ({pctParcelas}%)
+                </span>
+              </div>
+              
+              <div className="w-full h-1.5 bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    totalParcelasMonth === maxMonthVal && maxMonthVal > 0 ? 'bg-rose-500' : 'bg-indigo-500'
+                  }`}
+                  style={{ width: `${pctParcelas}%` }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </div>
       
       {/* SECTION 1: SUPERIOR INTUITIVE BENTO CONTROLS (DIVERGENT POINTS CARDS) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

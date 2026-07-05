@@ -4387,7 +4387,7 @@ export default function App() {
               setEditingTransaction(null);
               setIsAddOpen(true);
             }}
-            className="fixed bottom-20 md:bottom-8 right-6 md:right-8 z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3.5 rounded-full md:rounded-2xl flex items-center gap-2 cursor-pointer shadow-2xl shadow-indigo-600/30 transition-all font-black text-xs uppercase tracking-wider border-none"
+            className="fixed bottom-36 right-6 z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3.5 rounded-full flex items-center gap-2 cursor-pointer shadow-2xl shadow-indigo-600/30 transition-all font-black text-xs uppercase tracking-wider border-none"
             title="Novo Gasto"
           >
             <Plus className="w-5 h-5 shrink-0 text-white" />

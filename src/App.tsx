@@ -4316,14 +4316,30 @@ export default function App() {
                   </div>
 
                   <div className={`p-4 rounded-2xl border flex gap-3.5 transition-all ${
+                    theme === 'light' ? 'bg-amber-50/40 border-amber-100/70' : 'bg-amber-500/5 border-amber-500/10'
+                  }`}>
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-500 shrink-0 mt-0.5">
+                      <LayoutDashboard className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                        Distribuição de Gastos por Abas
+                      </h4>
+                      <p className="text-[11px] text-slate-550 dark:text-slate-300 font-medium leading-relaxed mt-1">
+                        Veja em tempo real o rateio de <strong>Contas Fixas, Variáveis e Parcelados</strong> no Dashboard. Saiba na hora o peso de cada categoria e qual delas é a responsável por consumir mais o seu orçamento mensal.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-2xl border flex gap-3.5 transition-all ${
                     theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/40 border-white/5'
                   }`}>
                     <div className="w-8 h-8 rounded-xl bg-slate-500/15 flex items-center justify-center text-slate-400 shrink-0 mt-0.5">
-                      <Zap className="w-4.5 h-4.5 text-amber-500" />
+                      <Zap className="w-4.5 h-4.5 text-indigo-500" />
                     </div>
                     <div>
                       <h4 className="text-xs font-black uppercase tracking-wider text-slate-755 dark:text-slate-300">
-                        Isolamento Inteligente de Gastos Extras
+                        Isolamento de Gastos Extras
                       </h4>
                       <p className="text-[11px] text-slate-550 dark:text-slate-300 font-medium leading-relaxed mt-1">
                         A inclusão de "gastos extras" é somada somente no mês solicitado e mantida de forma isolada, evitando erros de duplicidade nas somas e projeções financeiras do Dashboard.

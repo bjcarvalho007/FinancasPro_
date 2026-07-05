@@ -153,6 +153,9 @@ export default function App() {
 
   // Modal display parameters
   const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
+  const [isQuickInstallmentOpen, setIsQuickInstallmentOpen] = useState<boolean>(false);
+  const [quickInstallmentTxId, setQuickInstallmentTxId] = useState<string>('');
+  const [quickInstallmentValueStr, setQuickInstallmentValueStr] = useState<string>('');
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   
   // Custom confirmation dialog state
@@ -3908,6 +3911,250 @@ export default function App() {
           </motion.div>
         </div>
       )}
+
+      {/* Botão flutuante na aba de parcelados */}
+      {activeTab === 'parcelas' && (
+        <motion.button
+          initial={{ scale: 0, opacity: 0, y: 50 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0, opacity: 0, y: 50 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => {
+            setIsQuickInstallmentOpen(true);
+            const firstParcela = activeMonthTransactions.find(t => t.type === 'parcelas');
+            if (firstParcela) {
+              setQuickInstallmentTxId(firstParcela.id);
+              setQuickInstallmentValueStr(formatCurrency(firstParcela.amount));
+            } else {
+              setQuickInstallmentTxId('');
+              setQuickInstallmentValueStr('');
+            }
+          }}
+          className="fixed bottom-36 lg:bottom-20 right-4 md:right-6 z-[50] bg-pink-600 hover:bg-pink-700 text-white font-black px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 cursor-pointer transition-all border border-pink-500/20 text-[11px] uppercase tracking-wider font-display"
+          title="Definir Valor da Parcela do Mês"
+          id="btn-quick-installment-trigger"
+          style={{
+            boxShadow: "0 10px 25px -5px rgba(219, 39, 119, 0.45)"
+          }}
+        >
+          <span className="text-sm">💸</span> Parcela do Mês
+        </motion.button>
+      )}
+
+      {/* Quick Installment Update Modal */}
+      <AnimatePresence>
+        {isQuickInstallmentOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsQuickInstallmentOpen(false)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-45"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 20, opacity: 0 }}
+              className={`w-full max-w-md rounded-3xl p-6 shadow-2xl relative z-50 border transition-all ${
+                theme === 'light'
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-100/40'
+                  : 'bg-[#0f1524] border-white/10 text-white shadow-black/50'
+              }`}
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-dashed border-white/5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">💸</span>
+                  <h4 className={`font-display font-extrabold text-sm uppercase tracking-wider ${
+                    theme === 'light' ? 'text-slate-800' : 'text-white'
+                  }`}>
+                    Parcela deste Mês
+                  </h4>
+                </div>
+                <button
+                  onClick={() => setIsQuickInstallmentOpen(false)}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                    theme === 'light' ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-white/5 text-slate-400'
+                  }`}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Form Content */}
+              <div className="space-y-4 pt-4 text-left">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                    💳 Selecionar Parcelamento Ativo
+                  </label>
+                  {activeMonthTransactions.filter(t => t.type === 'parcelas').length === 0 ? (
+                    <div className="p-6 text-center border border-dashed border-white/5 rounded-2xl text-slate-400 text-xs">
+                      Nenhum parcelamento ativo encontrado neste mês.
+                    </div>
+                  ) : (
+                    <select
+                      value={quickInstallmentTxId}
+                      onChange={(e) => {
+                        const txId = e.target.value;
+                        setQuickInstallmentTxId(txId);
+                        const selectedTx = activeMonthTransactions.find(t => t.id === txId);
+                        if (selectedTx) {
+                          setQuickInstallmentValueStr(formatCurrency(selectedTx.amount));
+                        }
+                      }}
+                      className={`w-full border focus:outline-none focus:ring-1 text-sm px-4 py-3.5 rounded-xl transition-all font-semibold ${
+                        theme === 'light'
+                          ? 'bg-slate-55 border-slate-200 text-slate-800 focus:border-indigo-500 focus:ring-indigo-500'
+                          : 'bg-slate-950/50 border-white/5 focus:border-indigo-500 focus:ring-indigo-500 text-slate-100'
+                      }`}
+                    >
+                      <option value="" disabled className={theme === 'light' ? 'text-slate-500' : 'text-slate-400'}>
+                        Selecione o parcelamento...
+                      </option>
+                      {activeMonthTransactions
+                        .filter(t => t.type === 'parcelas')
+                        .map((t) => {
+                          const idx = getInstallmentIndex(t, currentMonthKey) || 'Ativo';
+                          const isPaid = (t.paid_amount || 0) >= t.amount;
+                          return (
+                            <option key={t.id} value={t.id} className={theme === 'light' ? 'text-slate-800' : 'text-slate-100'}>
+                              {t.name} (Parcela {idx}) - {formatCurrency(t.amount)} {isPaid ? '✓' : ''}
+                            </option>
+                          );
+                        })}
+                    </select>
+                  )}
+                </div>
+
+                {quickInstallmentTxId && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] font-bold text-yellow-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                        💡 Valor da Parcela deste Mês
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="R$ 0,00"
+                        value={quickInstallmentValueStr}
+                        onChange={(e) => {
+                          let numeric = e.target.value.replace(/\D/g, "");
+                          if (!numeric) {
+                            setQuickInstallmentValueStr("");
+                            return;
+                          }
+                          const valFloat = parseFloat(numeric) / 100;
+                          setQuickInstallmentValueStr(formatCurrency(valFloat));
+                        }}
+                        className={`w-full border text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold ${
+                          theme === 'light'
+                            ? 'bg-slate-50 border-yellow-500/30 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-yellow-600'
+                            : 'bg-slate-950/50 border-yellow-500/20 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-yellow-450'
+                        }`}
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed">
+                        Defina o valor real que será pago este mês. O sistema atualizará os cálculos de débitos automaticamente.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-4">
+                      <button
+                        onClick={async () => {
+                          const val = handleParseMoney(quickInstallmentValueStr);
+                          if (val <= 0) {
+                            triggerToast('Por favor, digite um valor maior que zero!', 'error');
+                            return;
+                          }
+                          const targetTx = activeMonthTransactions.find(t => t.id === quickInstallmentTxId);
+                          if (!targetTx) return;
+
+                          const updatedTx = {
+                            ...targetTx,
+                            amount: val,
+                            paid_amount: 0,
+                            paid_at: '',
+                            updatedAt: new Date().toISOString()
+                          };
+
+                          try {
+                            await setDoc(doc(db, 'transactions', targetTx.id), updatedTx);
+                            triggerToast('Valor da parcela atualizado com sucesso (Pagar Depois)!', 'success');
+                            setIsQuickInstallmentOpen(false);
+                          } catch (err) {
+                            handleFirestoreError(err, OperationType.UPDATE, `transactions/${targetTx.id}`);
+                          }
+                        }}
+                        className={`py-3.5 rounded-2xl text-[10.5px] font-black uppercase tracking-wider transition-all cursor-pointer text-center flex items-center justify-center gap-1.5 border ${
+                          theme === 'light'
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                            : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/5'
+                        }`}
+                      >
+                        ⏳ Pagar Depois
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          const val = handleParseMoney(quickInstallmentValueStr);
+                          if (val <= 0) {
+                            triggerToast('Por favor, digite um valor maior que zero!', 'error');
+                            return;
+                          }
+                          const targetTx = activeMonthTransactions.find(t => t.id === quickInstallmentTxId);
+                          if (!targetTx) return;
+
+                          const updatedTx = {
+                            ...targetTx,
+                            amount: val,
+                            paid_amount: val,
+                            paid_at: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                            updatedAt: new Date().toISOString()
+                          };
+
+                          try {
+                            await setDoc(doc(db, 'transactions', targetTx.id), updatedTx);
+                            
+                            // Verificar se é a última parcela do parcelamento
+                            const masterId = targetTx.masterId || targetTx.id;
+                            const masterTx = transactions.find(t => t.id === masterId) || targetTx;
+                            const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+                            const totalExtraGasto = masterTx.extra_gasto || 0;
+                            const totalOriginal = totalOriginalBase + totalExtraGasto;
+                            
+                            const totalPaidAcrossMonths = transactions
+                              .filter(t => t.type === 'parcelas' && (t.id === masterId || t.masterId === masterId))
+                              .reduce((sum, t) => sum + (t.paid_amount || 0), 0) + (val - (targetTx.paid_amount || 0));
+                              
+                            const totalDevedorRestante = Math.max(0, totalOriginal - totalPaidAcrossMonths);
+                            const idxStr = getInstallmentIndex(targetTx, currentMonthKey) || '';
+                            const isLastIdx = idxStr ? (idxStr.split('/')[0] === idxStr.split('/')[1] || idxStr.split('/')[0] === String(targetTx.installmentsCount)) : false;
+
+                            if (isLastIdx || totalDevedorRestante <= 0.05) {
+                              setCelebratedTx({ name: targetTx.name, amount: totalOriginalBase });
+                              setShowCelebrationModal(true);
+                            } else {
+                              triggerToast('Lançamento da parcela pago com sucesso!', 'success');
+                            }
+                            
+                            setIsQuickInstallmentOpen(false);
+                          } catch (err) {
+                            handleFirestoreError(err, OperationType.UPDATE, `transactions/${targetTx.id}`);
+                          }
+                        }}
+                        className="py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-450 text-white font-black text-[10.5px] uppercase tracking-wider rounded-2xl transition-all cursor-pointer shadow-lg shadow-emerald-500/15 flex items-center justify-center gap-1.5 border-none"
+                      >
+                        ✅ Pagar Agora
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       </div>
 

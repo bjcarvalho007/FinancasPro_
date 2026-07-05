@@ -142,6 +142,7 @@ export default function App() {
   const [showToast, setShowToast] = useState<boolean>(false);
   const [floatingAlert, setFloatingAlert] = useState<{ id: string; title: string; desc: string; type: string } | null>(null);
   const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, boolean>>({});
+  const [showUpdateAlert, setShowUpdateAlert] = useState<boolean>(false);
   const [prevMonthKey, setPrevMonthKey] = useState(currentMonthKey);
   if (currentMonthKey !== prevMonthKey) {
     setPrevMonthKey(currentMonthKey);
@@ -520,6 +521,33 @@ export default function App() {
       unsubNotifications();
     };
   }, [user]);
+
+  // Determine if we should show the new features update alert (shows for 2 days or until dismissed)
+  useEffect(() => {
+    if (user && !isBlocked) {
+      const viewTimeKey = `update_alert_first_seen_${user.uid}`;
+      const dismissedKey = `update_alert_dismissed_${user.uid}`;
+      
+      const isDismissed = localStorage.getItem(dismissedKey) === 'true';
+      if (!isDismissed) {
+        let firstSeen = localStorage.getItem(viewTimeKey);
+        if (!firstSeen) {
+          firstSeen = new Date().toISOString();
+          localStorage.setItem(viewTimeKey, firstSeen);
+        }
+        
+        const firstSeenMs = Date.parse(firstSeen);
+        const diffMs = Date.now() - firstSeenMs;
+        const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+        
+        if (diffMs >= 0 && diffMs < twoDaysMs) {
+          setShowUpdateAlert(true);
+        }
+      }
+    } else {
+      setShowUpdateAlert(false);
+    }
+  }, [user, isBlocked]);
 
   // Alert triggers relocated beneath activeMonthTransactions definition for dynamic virtual projection compatibility
 
@@ -4182,6 +4210,150 @@ export default function App() {
                     </div>
                   </>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Alert for new updates */}
+      <AnimatePresence>
+        {showUpdateAlert && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (user) {
+                  localStorage.setItem(`update_alert_dismissed_${user.uid}`, 'true');
+                  setShowUpdateAlert(false);
+                }
+              }}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-45"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 20, opacity: 0 }}
+              className={`w-full max-w-lg rounded-3xl p-6 md:p-8 shadow-2xl relative z-50 border transition-all overflow-hidden ${
+                theme === 'light'
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+                  : 'bg-[#0b0f1a] border-white/10 text-white shadow-black/80'
+              }`}
+            >
+              {/* Background accent decorations */}
+              <div className="absolute -top-16 -right-16 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-16 -left-16 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="flex items-start justify-between pb-4 border-b border-dashed border-slate-200 dark:border-white/5 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-black text-base md:text-lg tracking-tight leading-none text-slate-900 dark:text-white">
+                      Novas Atualizações! 🚀
+                    </h3>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-wider mt-1.5">
+                      FinançasPro Premium • Atualizado
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (user) {
+                      localStorage.setItem(`update_alert_dismissed_${user.uid}`, 'true');
+                      setShowUpdateAlert(false);
+                    }
+                  }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent ${
+                    theme === 'light' ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-white/5 text-slate-400'
+                  }`}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Updates List */}
+              <div className="space-y-4 pt-5 pb-6 text-left relative z-10 max-h-[60vh] overflow-y-auto pr-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+                  Trabalhamos em melhorias contínuas para tornar a organização do seu caixa mais segura, integrada e inteligente. Veja as novidades implementadas nos módulos de parcelamento e cálculos:
+                </p>
+
+                <div className="space-y-3.5">
+                  <div className={`p-4 rounded-2xl border flex gap-3.5 transition-all ${
+                    theme === 'light' ? 'bg-indigo-50/40 border-indigo-100/70' : 'bg-indigo-500/5 border-indigo-500/10'
+                  }`}>
+                    <div className="w-8 h-8 rounded-xl bg-indigo-500/15 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5">
+                      <CreditCard className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                        Sincronização Avançada de Parcelas
+                      </h4>
+                      <p className="text-[11px] text-slate-550 dark:text-slate-300 font-medium leading-relaxed mt-1">
+                        Ao editar informações como <strong>nome, categoria ou dia de vencimento</strong> em uma parcela de qualquer mês, as atualizações são replicadas de forma inteligente para as parcelas futuras e para o modelo mestre.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-2xl border flex gap-3.5 transition-all ${
+                    theme === 'light' ? 'bg-emerald-50/40 border-emerald-100/70' : 'bg-emerald-500/5 border-emerald-500/10'
+                  }`}>
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-500 shrink-0 mt-0.5">
+                      <CheckCircle className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                        Valores Customizados Preservados
+                      </h4>
+                      <p className="text-[11px] text-slate-550 dark:text-slate-300 font-medium leading-relaxed mt-1">
+                        Edições manuais de valores de parcelas em meses individuais agora são <strong>preservadas integralmente</strong>. A abertura e o recálculo do editor de lançamentos não sobrescreverão mais seus ajustes pontuais.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-2xl border flex gap-3.5 transition-all ${
+                    theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/40 border-white/5'
+                  }`}>
+                    <div className="w-8 h-8 rounded-xl bg-slate-500/15 flex items-center justify-center text-slate-400 shrink-0 mt-0.5">
+                      <Zap className="w-4.5 h-4.5 text-amber-500" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-755 dark:text-slate-300">
+                        Isolamento Inteligente de Gastos Extras
+                      </h4>
+                      <p className="text-[11px] text-slate-550 dark:text-slate-300 font-medium leading-relaxed mt-1">
+                        A inclusão de "gastos extras" é somada somente no mês solicitado e mantida de forma isolada, evitando erros de duplicidade nas somas e projeções financeiras do Dashboard.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                  <p className="text-[10px] text-amber-650 dark:text-amber-400 font-medium">
+                    Este informativo ficará disponível por 2 dias a partir de hoje ou até você marcá-lo como lido.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-3 border-t border-slate-100 dark:border-white/5 relative z-10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (user) {
+                      localStorage.setItem(`update_alert_dismissed_${user.uid}`, 'true');
+                      setShowUpdateAlert(false);
+                    }
+                  }}
+                  className="flex-1 py-3.5 bg-indigo-650 hover:bg-indigo-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all cursor-pointer shadow-lg shadow-indigo-600/15 text-center border-none"
+                >
+                  Entendido, Excelente!
+                </button>
               </div>
             </motion.div>
           </div>

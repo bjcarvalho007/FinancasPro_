@@ -23,7 +23,9 @@ import {
   Target,
   ArrowLeft,
   ChevronRight,
-  Info
+  Info,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -49,6 +51,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
   const [loading, setLoading] = useState<boolean>(false);
   const [errorAlert, setErrorAlert] = useState<string | null>(null);
   const [shakeTrigger, setShakeTrigger] = useState<number>(0);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState<boolean>(false);
 
   const [isGmailPromptOpen, setIsGmailPromptOpen] = useState<boolean>(false);
   const [promptGmailEmail, setPromptGmailEmail] = useState<string>('');
@@ -437,13 +441,25 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       <div className="relative">
                         <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
                         <input 
-                          type="password" 
+                          type={showRegisterPassword ? "text" : "password"} 
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="Minimo de 6 caracteres"
                           required
-                          className="w-full bg-[#030610] border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-100 placeholder-slate-500 text-[13px] pl-11 pr-4 py-3 rounded-xl transition-all"
+                          className="w-full bg-[#030610] border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-100 placeholder-slate-500 text-[13px] pl-11 pr-11 py-3 rounded-xl transition-all"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5 flex items-center justify-center cursor-pointer z-10"
+                          title={showRegisterPassword ? "Ocultar senha" : "Ver senha"}
+                        >
+                          {showRegisterPassword ? (
+                            <EyeOff className="w-4.5 h-4.5" />
+                          ) : (
+                            <Eye className="w-4.5 h-4.5" />
+                          )}
+                        </button>
                       </div>
                     </div>
 
@@ -663,13 +679,25 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
                         <input 
                           id="auth-password-input"
-                          type="password" 
+                          type={showPassword ? "text" : "password"} 
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="••••••••"
                           required={!isResetMode}
-                          className="w-full bg-slate-950/70 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-100 placeholder-slate-500 text-[13px] pl-11 pr-4 py-3 rounded-xl transition-all"
+                          className="w-full bg-slate-950/70 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-100 placeholder-slate-500 text-[13px] pl-11 pr-11 py-3 rounded-xl transition-all"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/5 flex items-center justify-center cursor-pointer z-10"
+                          title={showPassword ? "Ocultar senha" : "Ver senha"}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="w-4.5 h-4.5" />
+                          ) : (
+                            <Eye className="w-4.5 h-4.5" />
+                          )}
+                        </button>
                       </div>
                     </div>
                   )}

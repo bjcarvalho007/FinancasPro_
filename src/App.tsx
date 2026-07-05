@@ -143,6 +143,7 @@ export default function App() {
   const [floatingAlert, setFloatingAlert] = useState<{ id: string; title: string; desc: string; type: string } | null>(null);
   const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, boolean>>({});
   const [showUpdateAlert, setShowUpdateAlert] = useState<boolean>(false);
+  const [sessionClosedAlert, setSessionClosedAlert] = useState<boolean>(false);
   const [prevMonthKey, setPrevMonthKey] = useState(currentMonthKey);
   if (currentMonthKey !== prevMonthKey) {
     setPrevMonthKey(currentMonthKey);
@@ -524,7 +525,7 @@ export default function App() {
 
   // Determine if we should show the new features update alert (shows for 2 days or until dismissed)
   useEffect(() => {
-    if (user && !isBlocked) {
+    if (user && !isBlocked && !sessionClosedAlert) {
       const viewTimeKey = `update_alert_first_seen_${user.uid}`;
       const dismissedKey = `update_alert_dismissed_${user.uid}`;
       
@@ -542,12 +543,16 @@ export default function App() {
         
         if (diffMs >= 0 && diffMs < twoDaysMs) {
           setShowUpdateAlert(true);
+        } else {
+          setShowUpdateAlert(false);
         }
+      } else {
+        setShowUpdateAlert(false);
       }
     } else {
       setShowUpdateAlert(false);
     }
-  }, [user, isBlocked]);
+  }, [user, isBlocked, sessionClosedAlert]);
 
   // Alert triggers relocated beneath activeMonthTransactions definition for dynamic virtual projection compatibility
 
@@ -4225,10 +4230,8 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => {
-                if (user) {
-                  localStorage.setItem(`update_alert_dismissed_${user.uid}`, 'true');
-                  setShowUpdateAlert(false);
-                }
+                setSessionClosedAlert(true);
+                setShowUpdateAlert(false);
               }}
               className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-45"
             />
@@ -4246,7 +4249,7 @@ export default function App() {
               {/* Background accent decorations */}
               <div className="absolute -top-16 -right-16 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute -bottom-16 -left-16 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
+ 
               <div className="flex items-start justify-between pb-4 border-b border-dashed border-slate-200 dark:border-white/5 relative z-10">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 shrink-0">
@@ -4263,14 +4266,13 @@ export default function App() {
                 </div>
                 <button
                   onClick={() => {
-                    if (user) {
-                      localStorage.setItem(`update_alert_dismissed_${user.uid}`, 'true');
-                      setShowUpdateAlert(false);
-                    }
+                    setSessionClosedAlert(true);
+                    setShowUpdateAlert(false);
                   }}
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent ${
                     theme === 'light' ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-white/5 text-slate-400'
                   }`}
+                  title="Fechar temporariamente"
                 >
                   ✕
                 </button>
@@ -4357,7 +4359,17 @@ export default function App() {
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-3 pt-3 border-t border-slate-100 dark:border-white/5 relative z-10">
+              <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-slate-100 dark:border-white/5 relative z-10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionClosedAlert(true);
+                    setShowUpdateAlert(false);
+                  }}
+                  className="flex-1 py-3 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white font-bold text-xs uppercase tracking-wider rounded-2xl transition-all cursor-pointer text-center bg-transparent border border-slate-200 dark:border-white/10"
+                >
+                  Fechar Temporariamente
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -4368,7 +4380,7 @@ export default function App() {
                   }}
                   className="flex-1 py-3.5 bg-indigo-650 hover:bg-indigo-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all cursor-pointer shadow-lg shadow-indigo-600/15 text-center border-none"
                 >
-                  Entendido, Excelente!
+                  Marcar como Lido ✔
                 </button>
               </div>
             </motion.div>

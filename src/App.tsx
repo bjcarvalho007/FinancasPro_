@@ -2531,11 +2531,11 @@ export default function App() {
           )}
 
           {/* Ledger Calendar Month Navigator */}
-          <div className={`flex items-center justify-between p-3.5 rounded-2xl border ${
+          <div className={`flex items-center justify-center p-3.5 rounded-2xl border ${
             theme === 'light' ? 'bg-white border-slate-205 shadow-sm text-slate-900' : 'bg-white/3 border-white/5 text-white'
           } mb-4`}>
             {/* Centered Month Navigator alignment */}
-            <div className={`flex items-center gap-3 ${(activeTab === 'dashboard' || activeTab === 'contas' || activeTab === 'variaveis' || activeTab === 'parcelas' || activeTab === 'fixos') ? 'mx-auto md:translate-x-[48px]' : ''}`}>
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => handleMonthTurn(-1)}
                 className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
@@ -2562,21 +2562,6 @@ export default function App() {
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
-
-            {/* Novo button showing only for lists or offset container */}
-            {(activeTab === 'contas' || activeTab === 'variaveis' || activeTab === 'parcelas' || activeTab === 'fixos') ? (
-              <button
-                onClick={() => {
-                  setEditingTransaction(null);
-                  setIsAddOpen(true);
-                }}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold leading-none select-none flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/15"
-              >
-                <Plus className="w-4 h-4" /> Novo
-              </button>
-            ) : (
-              <div className="hidden md:block w-24 shrink-0" />
-            )}
           </div>
 
 
@@ -4385,6 +4370,30 @@ export default function App() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Action Button (FAB) for adding transactions */}
+      <AnimatePresence>
+        {(activeTab === 'contas' || activeTab === 'variaveis' || activeTab === 'parcelas' || activeTab === 'fixos') && !isAddOpen && (
+          <motion.button
+            id="floating-add-btn"
+            initial={{ scale: 0, opacity: 0, y: 50 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0, opacity: 0, y: 50 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              setEditingTransaction(null);
+              setIsAddOpen(true);
+            }}
+            className="fixed bottom-20 md:bottom-8 right-6 md:right-8 z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3.5 rounded-full md:rounded-2xl flex items-center gap-2 cursor-pointer shadow-2xl shadow-indigo-600/30 transition-all font-black text-xs uppercase tracking-wider border-none"
+            title="Novo Gasto"
+          >
+            <Plus className="w-5 h-5 shrink-0 text-white" />
+            <span className="hidden md:inline font-bold">Novo Lançamento</span>
+            <span className="md:hidden font-bold">Novo</span>
+          </motion.button>
         )}
       </AnimatePresence>
 

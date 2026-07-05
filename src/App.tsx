@@ -1271,8 +1271,12 @@ export default function App() {
         const totalVal = totalOriginalBase + extraGasto;
         const count = masterTx.installmentsCount || 1;
         
-        // If the specific month transaction t has its own custom amount, prioritize it!
-        const installmentValue = (t.amount && t.amount > 0)
+        // If the transaction's stored amount is equal to the total parcelado, it represents the entire plan amount, not a single month's custom installment.
+        // Therefore, we only treat it as a custom monthly override if it is different from the total_parcelado.
+        const isTotalPlanAmount = t.amount === totalOriginalBase;
+        const hasCustomInstallmentAmount = t.amount && t.amount > 0 && !isTotalPlanAmount;
+
+        const installmentValue = hasCustomInstallmentAmount
           ? t.amount
           : ( (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0))
               ? masterTx.amount
@@ -1280,7 +1284,7 @@ export default function App() {
 
         return {
           ...t,
-          amount: t.paid_amount > 0 ? t.paid_amount : installmentValue,
+          amount: installmentValue,
           total_parcelado: totalOriginalBase
         };
       }

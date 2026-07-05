@@ -740,6 +740,35 @@ export default function App() {
 
     try {
       await setDoc(doc(db, 'transactions', docId), newTx);
+      
+      // If we are editing a child transaction, also update its master template so all months stay synchronized
+      if (inferredMasterId && inferredMasterId !== docId && (data.type === 'parcelas' || data.type === 'fixos')) {
+        const masterRef = doc(db, 'transactions', inferredMasterId);
+        const masterUpdate: any = {
+          name: data.name,
+          cat: data.cat,
+          due: data.due,
+          updatedAt: new Date().toISOString()
+        };
+        if (data.total_parcelado !== undefined) {
+          masterUpdate.total_parcelado = data.total_parcelado;
+        }
+        if (data.installmentsCount !== undefined) {
+          masterUpdate.installmentsCount = data.installmentsCount;
+        }
+        if (data.type === 'parcelas') {
+          // If editing installment value in full modal, synchronize default installment amount
+          masterUpdate.amount = data.amount;
+        } else {
+          masterUpdate.amount = data.amount;
+        }
+        try {
+          await updateDoc(masterRef, masterUpdate);
+        } catch (mErr) {
+          console.warn('Could not update master transaction template:', mErr);
+        }
+      }
+
       triggerToast('Gasto registrado com segurança no Firestore!', 'success');
       setEditingTransaction(null);
     } catch (e) {
@@ -1205,18 +1234,21 @@ export default function App() {
         const masterTx = transactions.find(m => m.id === masterId) || t;
         const extraGasto = masterTx.extra_gasto || 0;
 
-        const totalVal = (t.total_parcelado || t.amount || 0) + extraGasto;
-        const count = t.installmentsCount || 1;
+        const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+        const totalVal = totalOriginalBase + extraGasto;
+        const count = masterTx.installmentsCount || 1;
         
-        // Use custom monthly installment if stored, otherwise divide totalVal by count
-        const installmentValue = (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0))
-          ? masterTx.amount
-          : (totalVal / count);
+        // If the specific month transaction t has its own custom amount, prioritize it!
+        const installmentValue = (t.amount && t.amount > 0)
+          ? t.amount
+          : ( (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0))
+              ? masterTx.amount
+              : (totalVal / count) );
 
         return {
           ...t,
           amount: t.paid_amount > 0 ? t.paid_amount : installmentValue,
-          total_parcelado: totalVal
+          total_parcelado: totalOriginalBase
         };
       }
       return t;
@@ -1346,7 +1378,7 @@ export default function App() {
           paid_at: '',
           masterId: masterTx.masterId || masterTx.id,
           monthKey: currentMonthKey,
-          total_parcelado: masterTx.type === 'parcelas' ? ((masterTx.total_parcelado || masterTx.amount) + (masterTx.extra_gasto || 0)) : undefined,
+          total_parcelado: masterTx.type === 'parcelas' ? (masterTx.total_parcelado || masterTx.amount || 0) : undefined,
           establishment: masterTx.establishment,
           installmentsCount: masterTx.installmentsCount,
           createdAt: masterTx.createdAt || new Date().toISOString(),

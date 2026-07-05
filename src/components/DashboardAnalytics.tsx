@@ -105,18 +105,21 @@ export default function DashboardAnalytics({
         const masterTx = listAllRaw.find(m => m.id === masterId) || t;
         const extraGasto = masterTx.extra_gasto || 0;
 
-        const totalVal = (t.total_parcelado || t.amount || 0) + extraGasto;
-        const count = t.installmentsCount || 1;
+        const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+        const totalVal = totalOriginalBase + extraGasto;
+        const count = masterTx.installmentsCount || 1;
         
-        // Use custom monthly installment if stored, otherwise divide totalVal by count
-        const installmentValue = (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0))
-          ? masterTx.amount
-          : (totalVal / count);
+        // If the specific month transaction t has its own custom amount, prioritize it!
+        const installmentValue = (t.amount && t.amount > 0)
+          ? t.amount
+          : ( (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0))
+              ? masterTx.amount
+              : (totalVal / count) );
 
         return {
           ...t,
           amount: t.paid_amount > 0 ? t.paid_amount : installmentValue,
-          total_parcelado: totalVal
+          total_parcelado: totalOriginalBase
         };
       }
       return t;

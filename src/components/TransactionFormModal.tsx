@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Transaction, Category } from '../types';
 import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,9 +47,12 @@ export default function TransactionFormModal({
   const [customCatIcon, setCustomCatIcon] = useState<string>('🏷️');
   const [customCatName, setCustomCatName] = useState<string>('');
 
+  const justOpenedRef = useRef<boolean>(true);
+
   useEffect(() => {
     if (isOpen) {
       setError(null);
+      justOpenedRef.current = true;
       if (initialData) {
         setName(initialData.name);
         setAmountStr(formatMoney(initialData.type === 'parcelas' ? (initialData.total_parcelado || initialData.amount) : initialData.amount));
@@ -78,6 +81,13 @@ export default function TransactionFormModal({
   // Dynamically calculate and pre-fill monthly installment if total or count changes (if not already custom modified by user)
   useEffect(() => {
     if (type === 'parcelas' && amountStr) {
+      if (justOpenedRef.current && initialData) {
+        // If we just opened the modal to edit an existing item, do NOT recalculate and overwrite the custom loaded value
+        justOpenedRef.current = false;
+        return;
+      }
+      justOpenedRef.current = false;
+
       const totalVal = parseMoney(amountStr);
       const count = parseInt(installmentsCount, 10);
       if (totalVal > 0) {

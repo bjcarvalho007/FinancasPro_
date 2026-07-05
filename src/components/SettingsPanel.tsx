@@ -376,7 +376,7 @@ export default function SettingsPanel({
         paid_at: '',
         masterId: masterTx.masterId || masterTx.id,
         monthKey: currentMonthKey,
-        total_parcelado: masterTx.type === 'parcelas' ? ((masterTx.total_parcelado || masterTx.amount) + (masterTx.extra_gasto || 0)) : undefined,
+        total_parcelado: masterTx.type === 'parcelas' ? (masterTx.total_parcelado || masterTx.amount || 0) : undefined,
         establishment: masterTx.establishment,
         installmentsCount: masterTx.installmentsCount,
         createdAt: masterTx.createdAt || new Date().toISOString(),

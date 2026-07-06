@@ -899,7 +899,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                     Lote Promocional de Estreia
                   </h5>
                   <p className="text-[9.5px] text-amber-300 font-semibold mt-1">
-                    10 primeiras assinaturas garantem o valor especial de 11,99 mensal após o preenchimento das vagas promocionais, novas assinaturas serão realizadas pelo valor regular do plano.
+                    Apenas 8 assinaturas promocionais disponíveis! Restam apenas 5 vagas promocionais com valor especial de R$ 11,99 mensal. Após o preenchimento destas vagas, novas assinaturas serão realizadas pelo valor regular do plano.
                   </p>
                 </div>
               </div>
@@ -907,14 +907,14 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
               <div className="space-y-0.5 bg-slate-950/50 p-2.5 rounded-xl border border-white/5 text-center">
                 <p className="text-[9.5px] text-slate-500 font-black uppercase tracking-wider">Você garante o valor de:</p>
                 <div className="flex items-center justify-center gap-1.5 mt-0.5">
-                  <span className="text-[11px] text-slate-450 line-through font-bold">R$ 32,99</span>
+                  <span className="text-[11px] text-slate-450 line-through font-bold">R$ 28,99</span>
                   <span className="text-lg font-black text-emerald-400">R$ 11,99</span>
                   <span className="text-[9.5px] text-slate-400 font-semibold">/ mês</span>
                 </div>
               </div>
 
               <p className="text-[11px] text-slate-300 leading-normal font-light">
-                As <strong className="font-bold text-white">10 primeiras assinaturas</strong> garantem o valor especial de <strong className="font-bold text-emerald-400">R$ 11,99 mensal</strong>. Após o preenchimento das vagas promocionais, novas assinaturas serão realizadas pelo valor regular do plano.
+                O lote promocional possui apenas <strong className="font-bold text-white">8 vagas</strong> e restam apenas <strong className="font-bold text-yellow-400">5 vagas promocionais</strong>. Garanta seu valor especial de <strong className="font-bold text-emerald-400">R$ 11,99 mensal</strong> antes que esgote!
               </p>
             </div>
 

@@ -6,12 +6,12 @@ export default function SplashLoader() {
   const [statusIdx, setStatusIdx] = useState(0);
 
   const loadingStatuses = [
-    'Conectando ao gramado virtual...',
-    'Calibrando a bola oficial da Copa...',
-    'Escalando a Seleção Brasileira...',
-    'Aquecendo a torcida verde e amarela...',
+    'Conectando ao gramado oficial...',
+    'Calibrando a bola oficial do torneio...',
+    'Escalando as equipes do maior campeonato...',
+    'Aquecendo a torcida nas arquibancadas...',
     'Preparando o grito de GOOOL!...',
-    'FinançasPro escalado para o Hexa! 🇧🇷'
+    'FinançasPro no clima do maior torneio! 🏆'
   ];
 
   useEffect(() => {
@@ -98,25 +98,11 @@ export default function SplashLoader() {
           className="absolute inset-0 bg-gradient-to-tr from-emerald-500/15 via-yellow-500/10 to-indigo-500/15 rounded-full blur-3xl filter -m-6"
         />
 
-        {/* 5 pentacampeão stars on top with pulsing 6th star (Rumo ao Hexa) */}
+        {/* Elegant championship stars */}
         <div className="flex items-center gap-1.5 mb-5">
           <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 animate-[pulse_1.5s_infinite]" />
-          <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 animate-[pulse_1.5s_infinite_0.2s]" />
-          <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 animate-[pulse_1.5s_infinite_0.4s]" />
+          <Star className="w-5 h-5 text-yellow-400 fill-yellow-400 animate-[pulse_1.5s_infinite_0.3s]" />
           <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 animate-[pulse_1.5s_infinite_0.6s]" />
-          <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 animate-[pulse_1.5s_infinite_0.8s]" />
-          {/* Pulsing outline star representing the future Hexa! */}
-          <motion.div
-            animate={{ scale: [1, 1.35, 1], opacity: [0.5, 1, 0.5] }}
-            transition={{ repeat: Infinity, duration: 1 }}
-            className="relative"
-          >
-            <Star className="w-5 h-5 text-emerald-400 fill-emerald-500/30 font-bold" />
-            <span className="absolute -top-1 -right-1 flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-yellow-500"></span>
-            </span>
-          </motion.div>
         </div>
 
         {/* Golden Trophy Arena */}
@@ -162,7 +148,7 @@ export default function SplashLoader() {
             <div className="flex items-center justify-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
               <p className="text-[9px] text-emerald-400 font-black uppercase tracking-[0.25em]">
-                Rumo ao HeXa na Copa • 2026🇧🇷
+                No Clima da Copa do Mundo • 2026 🏆
               </p>
             </div>
           </motion.div>
@@ -212,8 +198,8 @@ export default function SplashLoader() {
       
       {/* Subtle branding footer */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-none opacity-30">
-        <span className="text-[9px] font-mono font-bold tracking-widest text-[#22c55e] uppercase">
-          🇧🇷 SELEÇÃO FINANÇASPRO • TORCIDA OFICIAL 🇧🇷
+        <span className="text-[9px] font-mono font-bold tracking-widest text-emerald-400 uppercase">
+          🏆 FINANÇASPRO • NO CLIMA DA COPA DO MUNDO 🏆
         </span>
       </div>
     </div>

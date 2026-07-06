@@ -3984,7 +3984,7 @@ export default function App() {
               setQuickInstallmentValueStr('');
             }
           }}
-          className="fixed bottom-36 lg:bottom-20 right-4 md:right-6 z-[50] bg-pink-600 hover:bg-pink-700 text-white font-black px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 cursor-pointer transition-all border border-pink-500/20 text-[11px] uppercase tracking-wider font-display"
+          className="fixed bottom-52 lg:bottom-20 right-4 md:right-6 z-[50] bg-pink-600 hover:bg-pink-700 text-white font-black px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 cursor-pointer transition-all border border-pink-500/20 text-[11px] uppercase tracking-wider font-display"
           title="Definir Valor da Parcela do Mês"
           id="btn-quick-installment-trigger"
           style={{

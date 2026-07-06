@@ -272,7 +272,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         console.warn("URL cleanup bypassed in iframe:", e);
       }
 
-      showToast(isTrialSignUp ? "Teste Grátis Ativado! Sua conta de Teste de 2 Dias foi criada com sucesso." : "Garantia activa. Sua conta de Membro Premium foi gerada com sucesso!", "success");
+      showToast(isTrialSignUp ? "Teste Grátis Ativado! Sua conta de Teste de 5 Dias foi criada com sucesso." : "Garantia activa. Sua conta de Membro Premium foi gerada com sucesso!", "success");
       onSuccess();
     } catch (err: any) {
       console.error("Erro ao registrar no Firebase Auth:", err);
@@ -353,7 +353,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 <div className="text-center mb-6">
                   {isTrialSignUp ? (
                     <span className="text-[9px] text-indigo-400 font-extrabold uppercase tracking-widest bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
-                      ⚡ Teste Grátis de 2 Dias Ativado
+                      ⚡ Teste Grátis de 5 Dias Ativado
                     </span>
                   ) : (
                     <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
@@ -365,7 +365,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                   </h2>
                   <p className="text-xs text-slate-400 mt-1.5 font-light leading-relaxed">
                     {isTrialSignUp 
-                      ? 'Defina abaixo suas credenciais para iniciar seu teste gratuito de 2 dias hoje mesmo.'
+                      ? 'Defina abaixo suas credenciais para iniciar seu teste gratuito de 5 dias hoje mesmo.'
                       : 'Defina abaixo sua senha privada para começar a organizar suas finanças de forma premium hoje mesmo.'}
                   </p>
                 </div>
@@ -752,7 +752,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         }}
                         className="w-full bg-slate-900 hover:bg-slate-850 border border-white/10 hover:border-white/20 text-slate-300 hover:text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        Criar Conta (Teste de 2 Dias)
+                        Criar Conta (Teste de 5 Dias)
                       </button>
                     </div>
                   )}

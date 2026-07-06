@@ -213,7 +213,7 @@ export default function App() {
     return !!(user && user.email && VIP_EMAILS.includes(user.email.toLowerCase().trim()));
   }, [user, VIP_EMAILS]);
 
-  const isWithinTwoDaysTrial = useMemo(() => {
+  const isWithinFiveDaysTrial = useMemo(() => {
     if (!user) return false;
     let creationDateStr = userProfile?.createdAt;
     
@@ -225,8 +225,8 @@ export default function App() {
     }
     
     const diff = Date.now() - creationTime;
-    const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
-    return diff >= 0 && diff < twoDaysInMs;
+    const fiveDaysInMs = 5 * 24 * 60 * 60 * 1000;
+    return diff >= 0 && diff < fiveDaysInMs;
   }, [user, userProfile]);
 
   const hasActiveSubscription = useMemo(() => {
@@ -245,7 +245,7 @@ export default function App() {
     return Date.now() <= expiryTime;
   }, [user, userProfile]);
 
-  const hasAccess = isVIP || isWithinTwoDaysTrial || hasActiveSubscription;
+  const hasAccess = isVIP || isWithinFiveDaysTrial || hasActiveSubscription;
   const isBlocked = !!(user && !hasAccess);
 
   // Validate Firestore Access on Boot as mandated by Skill rules
@@ -2406,7 +2406,7 @@ export default function App() {
             {/* Top Right Controls - Pro visual layout */}
             <div className="flex items-center gap-3">
               {/* Hot button to subscribe for desktop trial accounts */}
-              {isWithinTwoDaysTrial && !isVIP && !hasActiveSubscription && (
+              {isWithinFiveDaysTrial && !isVIP && !hasActiveSubscription && (
                 <button
                   onClick={() => setShowPaymentInfoModal(true)}
                   className="hidden md:flex px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white items-center gap-2 cursor-pointer border border-emerald-500/25 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shrink-0"

@@ -153,30 +153,44 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
 
     try {
       setSavingSetup(true);
-      const profileData: BusinessProfile = {
+      const profileData: any = {
         userId,
-        name: bizName,
-        description: bizDescription,
-        phone: bizPhone,
-        address: bizAddress,
-        workingDays: bizWorkingDays,
-        workingHoursStart: bizHoursStart,
-        workingHoursEnd: bizHoursEnd,
-        lunchStart: bizLunchStart || undefined,
-        lunchEnd: bizLunchEnd || undefined,
-        active: bizActive,
+        name: bizName.trim(),
+        description: (bizDescription || '').trim(),
+        workingDays: bizWorkingDays || ['seg', 'ter', 'qua', 'qui', 'sex'],
+        workingHoursStart: bizHoursStart || '08:00',
+        workingHoursEnd: bizHoursEnd || '18:00',
+        active: bizActive === undefined ? true : bizActive,
         updatedAt: new Date().toISOString()
       };
 
       if (!profile) {
         profileData.createdAt = new Date().toISOString();
+      } else if (profile.createdAt) {
+        profileData.createdAt = profile.createdAt;
+      } else {
+        profileData.createdAt = new Date().toISOString();
+      }
+
+      if (bizPhone && bizPhone.trim()) {
+        profileData.phone = bizPhone.trim();
+      }
+      if (bizAddress && bizAddress.trim()) {
+        profileData.address = bizAddress.trim();
+      }
+      if (bizLunchStart && bizLunchStart.trim()) {
+        profileData.lunchStart = bizLunchStart.trim();
+      }
+      if (bizLunchEnd && bizLunchEnd.trim()) {
+        profileData.lunchEnd = bizLunchEnd.trim();
       }
 
       await setDoc(doc(db, 'business_profiles', userId), profileData);
       triggerToast('Configurações da agenda salvas com sucesso!', 'success');
     } catch (err) {
       console.error('Error saving profile:', err);
-      triggerToast('Erro ao salvar configurações.', 'error');
+      const msg = err instanceof Error ? err.message : String(err);
+      triggerToast(`Erro ao salvar configurações: ${msg}`, 'error');
     } finally {
       setSavingSetup(false);
     }

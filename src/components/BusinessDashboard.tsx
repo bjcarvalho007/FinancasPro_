@@ -80,6 +80,7 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
   const [bizLunchEnd, setBizLunchEnd] = useState('13:00');
   const [bizActive, setBizActive] = useState(true);
   const [savingSetup, setSavingSetup] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   // Filter & Search states for Appointments
   const [bookingFilter, setBookingFilter] = useState<'all' | 'pending' | 'accepted' | 'completed' | 'cancelled'>('all');
@@ -88,6 +89,7 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
   // Real-time listener for profile, services, and bookings
   useEffect(() => {
     setLoading(true);
+    setLocalError(null);
 
     // 1. Listen to Profile
     const profileRef = doc(db, 'business_profiles', userId);
@@ -111,6 +113,9 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
         // Business Profile doesn't exist yet, we will offer to initialize it
         setProfile(null);
       }
+    }, (err) => {
+      console.error('Error listening to profile:', err);
+      setLocalError(`Erro ao carregar perfil (onSnapshot): ${err.message}`);
     });
 
     // 2. Listen to Services
@@ -119,6 +124,9 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
     const unsubServices = onSnapshot(servicesQuery, (snap) => {
       const list = snap.docs.map(d => ({ ...d.data(), id: d.id })) as BusinessService[];
       setServices(list);
+    }, (err) => {
+      console.error('Error listening to services:', err);
+      setLocalError(`Erro ao carregar serviços (onSnapshot): ${err.message}`);
     });
 
     // 3. Listen to Bookings
@@ -134,6 +142,10 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
       });
       setBookings(list);
       setLoading(false);
+    }, (err) => {
+      console.error('Error listening to bookings:', err);
+      setLocalError(`Erro ao carregar agendamentos (onSnapshot): ${err.message}`);
+      setLoading(false);
     });
 
     return () => {
@@ -146,6 +158,7 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
   // Create or Update Business Profile
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLocalError(null);
     if (!bizName.trim()) {
       triggerToast('O nome do negócio é obrigatório.', 'warning');
       return;
@@ -187,9 +200,11 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
 
       await setDoc(doc(db, 'business_profiles', userId), profileData);
       triggerToast('Configurações da agenda salvas com sucesso!', 'success');
+      setLocalError(null);
     } catch (err) {
       console.error('Error saving profile:', err);
       const msg = err instanceof Error ? err.message : String(err);
+      setLocalError(`Erro ao salvar configurações: ${msg}`);
       triggerToast(`Erro ao salvar configurações: ${msg}`, 'error');
     } finally {
       setSavingSetup(false);
@@ -555,6 +570,13 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
                   className="w-full bg-slate-950/50 border border-white/10 hover:border-white/15 focus:border-indigo-500 focus:outline-none rounded-xl p-3 text-xs text-white resize-none font-light"
                 />
               </div>
+
+              {localError && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-xl font-bold leading-relaxed flex items-start gap-2">
+                  <span className="shrink-0">⚠️</span>
+                  <span>{localError}</span>
+                </div>
+              )}
 
               <button
                 type="submit"

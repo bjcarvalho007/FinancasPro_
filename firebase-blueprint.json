@@ -103,6 +103,66 @@
         "usedAt": { "type": "string", "format": "date-time", "description": "Claim/usage timestamp" }
       },
       "required": ["token", "email", "used"]
+    },
+    "business_profile": {
+      "title": "Business Profile",
+      "description": "Information and working hours settings for professional business owners",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "name": { "type": "string", "description": "Name of the business" },
+        "description": { "type": "string", "description": "A short summary of what the business does" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "workingDays": { "type": "array" },
+        "workingHoursStart": { "type": "string" },
+        "workingHoursEnd": { "type": "string" },
+        "lunchStart": { "type": "string" },
+        "lunchEnd": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "workingDays", "workingHoursStart", "workingHoursEnd", "active"]
+    },
+    "business_service": {
+      "title": "Business Service",
+      "description": "Services and treatments offered by the business owner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "description": "Owner UID" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "duration": { "type": "number" },
+        "description": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name", "price", "duration", "active"]
+    },
+    "business_booking": {
+      "title": "Business Booking",
+      "description": "Bookings/appointments made by clients for services offered by the business",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "description": "Owner UID" },
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "serviceName": { "type": "string" },
+        "servicePrice": { "type": "number" },
+        "serviceDuration": { "type": "number" },
+        "date": { "type": "string", "description": "YYYY-MM-DD" },
+        "time": { "type": "string", "description": "HH:MM" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected", "completed", "cancelled"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "clientName", "clientEmail", "clientPhone", "serviceId", "serviceName", "servicePrice", "serviceDuration", "date", "time", "status"]
     }
   },
   "firestore": {
@@ -133,6 +193,18 @@
     "/tokens_pagos/{tokenId}": {
       "schema": "token_pago",
       "description": "Secure paid tokens for restricted registrations"
+    },
+    "/business_profiles/{userId}": {
+      "schema": "business_profile",
+      "description": "Profile settings for professional businesses"
+    },
+    "/business_services/{serviceId}": {
+      "schema": "business_service",
+      "description": "Services list offered by business owners"
+    },
+    "/business_bookings/{bookingId}": {
+      "schema": "business_booking",
+      "description": "Bookings schedule for services"
     }
   }
 }

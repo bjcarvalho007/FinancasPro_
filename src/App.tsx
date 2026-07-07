@@ -25,6 +25,8 @@ import GoalsPanel from './components/GoalsPanel';
 import SettingsPanel from './components/SettingsPanel';
 import OnboardingTutorial from './components/OnboardingTutorial';
 import ExtraEarningsManager from './components/ExtraEarningsManager';
+import { BusinessDashboard } from './components/BusinessDashboard';
+import { PublicBookingPortal } from './components/PublicBookingPortal';
 import { 
   TrendingUp, 
   Plus, 
@@ -49,7 +51,8 @@ import {
   ShieldCheck,
   Zap,
   ArrowRight,
-  MessageCircle
+  MessageCircle,
+  Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -105,6 +108,12 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loadingProfile, setLoadingProfile] = useState<boolean>(true);
   
+  // Public booking page routing state
+  const [publicAgendaOwnerId, setPublicAgendaOwnerId] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('agenda');
+  });
+  
   // App Data State loaded directly from Firestore
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -130,7 +139,7 @@ export default function App() {
   const currentMonthKey = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, '0')}`;
 
   // Tabs context
-  const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings' | 'admin'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings' | 'admin' | 'negocio'>('dashboard');
   
   // Layout and sorting settings for transactions categories (fixos, variaveis, parcelas)
   const [tabLayout, setTabLayout] = useState<'detalhado' | 'lista'>('detalhado');
@@ -1606,7 +1615,7 @@ export default function App() {
   const variableSum = activeMonthTransactions.filter(t => t.type === 'variaveis').reduce((sum, t) => sum + t.amount, 0);
   const parcelasSum = activeMonthTransactions.filter(t => t.type === 'parcelas').reduce((sum, t) => sum + t.amount, 0);
   const renderSummaryCardsMobile = () => {
-    if (activeTab === 'goals' || activeTab === 'settings' || activeTab === 'admin') {
+    if (activeTab === 'goals' || activeTab === 'settings' || activeTab === 'admin' || activeTab === 'negocio') {
       return null;
     }
     return (
@@ -1831,6 +1840,15 @@ export default function App() {
 
   if (isLoadingAll) {
     return <SplashLoader />;
+  }
+
+  if (publicAgendaOwnerId) {
+    return (
+      <PublicBookingPortal 
+        ownerId={publicAgendaOwnerId} 
+        onBackToApp={user ? () => setPublicAgendaOwnerId(null) : undefined} 
+      />
+    );
   }
 
   if (!user) {
@@ -2102,6 +2120,7 @@ export default function App() {
                 { id: 'variaveis', label: 'Gasto Variável', icon: Coins },
                 { id: 'parcelas', label: 'Parcelados', icon: CreditCard },
                 { id: 'goals', label: 'Metas', icon: Target },
+                { id: 'negocio', label: 'Meu Negócio', icon: Briefcase },
                 { id: 'settings', label: 'Configurações', icon: Settings }
               ];
               return menuItems;
@@ -3283,6 +3302,11 @@ export default function App() {
                     onUpdateGoalProgress={handleUpdateGoalProgress}
                     onDeleteGoal={handleDeleteGoal}
                   />
+                ) : activeTab === 'negocio' ? (
+                  <BusinessDashboard
+                    userId={user.uid}
+                    triggerToast={triggerToast}
+                  />
                 ) : (
                   <SettingsPanel
                     currentTheme={theme}
@@ -3778,6 +3802,7 @@ export default function App() {
               { id: 'variaveis', val: 'Variados', icon: Coins },
               { id: 'parcelas', val: 'Parcelados', icon: CreditCard },
               { id: 'goals', val: 'Metas', icon: Target },
+              { id: 'negocio', val: 'Negócio', icon: Briefcase },
               { id: 'settings', val: 'Ajustes', icon: Settings }
             ];
             return tabs;

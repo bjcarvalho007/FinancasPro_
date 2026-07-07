@@ -220,18 +220,27 @@ async function runBackgroundPushNotificationChecker() {
         }
       }
     }
-  } catch (err) {
-    console.error("❌ Falha crítica no runBackgroundPushNotificationChecker:", err);
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    if (errMsg.includes("PERMISSION_DENIED") || err?.code === 7 || errMsg.includes("permissions")) {
+      console.log("ℹ️ [BACKGROUND SWEEPER] Aviso: Sem credenciais administrativas (Service Account) configuradas para o Firebase Admin neste ambiente. A varredura de notificações em segundo plano foi ignorada de forma segura.");
+    } else {
+      console.log("⚠️ [BACKGROUND SWEEPER] Aviso ao executar varredura de notificações:", errMsg);
+    }
   }
 }
 
 // Check on boot (after a 10s cooldown to allow server initialization) and reschedule every 3 hours
 setTimeout(() => {
-  runBackgroundPushNotificationChecker().catch(console.error);
+  runBackgroundPushNotificationChecker().catch((err) => {
+    console.log("ℹ️ [BACKGROUND SWEEPER] Erro ao executar varredura de boot:", err?.message || err);
+  });
 }, 10000);
 
 setInterval(() => {
-  runBackgroundPushNotificationChecker().catch(console.error);
+  runBackgroundPushNotificationChecker().catch((err) => {
+    console.log("ℹ️ [BACKGROUND SWEEPER] Erro ao executar varredura agendada:", err?.message || err);
+  });
 }, 1000 * 60 * 60 * 3); // 3 hours
 
 // API route 1: Healthcheck

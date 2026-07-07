@@ -144,6 +144,9 @@ export default function App() {
   const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, boolean>>({});
   const [showUpdateAlert, setShowUpdateAlert] = useState<boolean>(false);
   const [isPremiumAlertDismissed, setIsPremiumAlertDismissed] = useState<boolean>(false);
+  const [showUsernamePromptModal, setShowUsernamePromptModal] = useState<boolean>(false);
+  const [newUsernameInput, setNewUsernameInput] = useState<string>('');
+  const [usernameSaving, setUsernameSaving] = useState<boolean>(false);
   const [sessionClosedAlert, setSessionClosedAlert] = useState<boolean>(false);
   const [prevMonthKey, setPrevMonthKey] = useState(currentMonthKey);
   if (currentMonthKey !== prevMonthKey) {
@@ -351,6 +354,15 @@ export default function App() {
       setIsPremiumAlertDismissed(false);
     }
   }, [user]);
+
+  // Monitor if user needs to configure a username (for both existing and new users after login)
+  useEffect(() => {
+    if (user && userProfile && !userProfile.username) {
+      setShowUsernamePromptModal(true);
+    } else {
+      setShowUsernamePromptModal(false);
+    }
+  }, [user, userProfile]);
 
   // Profile snapshot stream
   useEffect(() => {
@@ -2458,40 +2470,84 @@ export default function App() {
             theme === 'light' ? 'border-slate-200/80' : 'border-white/5'
           }`}>
             <div className="flex items-center gap-2.5">
-              <img 
-                src="/app_icon.png" 
-                alt="FinançasPro Logo" 
-                className="w-11 h-11 rounded-2xl object-cover border border-white/5 shrink-0 shadow-lg shadow-emerald-500/5 glow-emerald"
-                referrerPolicy="no-referrer"
-              />
-              <div className="min-w-0">
-                <h2 className={`font-display font-black text-[17px] sm:text-lg tracking-tight leading-none ${
-                  theme === 'light' ? 'text-slate-900' : 'text-white'
-                }`}>
-                  FINANÇAS<span className="text-emerald-400 font-extrabold ml-0.5">PRO</span>
-                </h2>
-                {isVIP ? (
-                  <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-1">
-                    <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
-                  </span>
-                ) : hasActiveSubscription ? (
-                  <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-1">
-                    <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
-                  </span>
-                ) : (
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
-                      <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
-                    </span>
-                    <button
-                      onClick={() => setShowPaymentInfoModal(true)}
-                      className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
-                    >
-                      Assinar
-                    </button>
+              {userProfile?.username ? (
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 border select-none ${
+                    isVIP 
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-lg shadow-emerald-500/5 glow-emerald'
+                      : hasActiveSubscription
+                      ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-lg shadow-indigo-500/5 glow-indigo'
+                      : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                  }`}>
+                    {userProfile.username.substring(0, 2).toUpperCase()}
                   </div>
-                )}
-              </div>
+                  <div className="min-w-0">
+                    <h2 className={`font-display font-black text-base sm:text-lg tracking-tight leading-none truncate max-w-[150px] sm:max-w-[220px] ${
+                      theme === 'light' ? 'text-slate-900' : 'text-white'
+                    }`} title={userProfile.username}>
+                      {userProfile.username}
+                    </h2>
+                    {isVIP ? (
+                      <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-1">
+                        <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
+                      </span>
+                    ) : hasActiveSubscription ? (
+                      <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-1">
+                        <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
+                        </span>
+                        <button
+                          onClick={() => setShowPaymentInfoModal(true)}
+                          className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
+                        >
+                          Assinar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <img 
+                    src="/app_icon.png" 
+                    alt="FinançasPro Logo" 
+                    className="w-11 h-11 rounded-2xl object-cover border border-white/5 shrink-0 shadow-lg shadow-emerald-500/5 glow-emerald"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="min-w-0">
+                    <h2 className={`font-display font-black text-[17px] sm:text-lg tracking-tight leading-none ${
+                      theme === 'light' ? 'text-slate-900' : 'text-white'
+                    }`}>
+                      FINANÇAS<span className="text-emerald-400 font-extrabold ml-0.5">PRO</span>
+                    </h2>
+                    {isVIP ? (
+                      <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-1">
+                        <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
+                      </span>
+                    ) : hasActiveSubscription ? (
+                      <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-1">
+                        <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
+                          <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
+                        </span>
+                        <button
+                          onClick={() => setShowPaymentInfoModal(true)}
+                          className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
+                        >
+                          Assinar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Top Right Controls - Pro visual layout */}
@@ -4461,6 +4517,117 @@ export default function App() {
                 >
                   Marcar como Lido ✔
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal para Adicionar Nome de Usuário (Amigável e Suave) */}
+      <AnimatePresence>
+        {showUsernamePromptModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-45"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 20, opacity: 0 }}
+              className={`w-full max-w-md rounded-3xl p-6 md:p-8 shadow-2xl relative z-50 border transition-all overflow-hidden ${
+                theme === 'light'
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+                  : 'bg-[#0b0f1a] border-white/10 text-white shadow-black/80'
+              }`}
+            >
+              <div className="absolute -top-16 -right-16 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+              
+              <div className="text-center space-y-4 relative z-10">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 mx-auto animate-bounce shrink-0">
+                  <Sparkles className="w-6 h-6 text-indigo-400" />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <h3 className="font-display font-black text-xl tracking-tight">
+                    Como deseja ser chamado? ✨
+                  </h3>
+                  <p className={`text-xs leading-relaxed font-light ${
+                    theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                  }`}>
+                    Olá! Para deixar sua experiência no <strong className="font-bold">FinançasPro</strong> ainda mais personalizada e amigável, escolha um nome ou apelido de usuário. Ele aparecerá no seu painel principal!
+                  </p>
+                </div>
+
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const trimmed = newUsernameInput.trim();
+                    if (!trimmed) {
+                      triggerToast('Por favor, informe um nome de usuário!', 'error');
+                      return;
+                    }
+                    if (trimmed.length < 3) {
+                      triggerToast('O nome de usuário deve ter pelo menos 3 caracteres.', 'error');
+                      return;
+                    }
+                    if (trimmed.length > 25) {
+                      triggerToast('O nome de usuário deve ter no máximo 25 caracteres.', 'error');
+                      return;
+                    }
+                    
+                    setUsernameSaving(true);
+                    try {
+                      const userRef = doc(db, 'users', user!.uid);
+                      await updateDoc(userRef, { 
+                        username: trimmed,
+                        updatedAt: new Date().toISOString()
+                      });
+                      triggerToast(`Bem-vindo, ${trimmed}! Seu nome foi configurado com sucesso.`, 'success');
+                      setShowUsernamePromptModal(false);
+                    } catch (err) {
+                      console.error("Erro ao salvar o nome de usuário:", err);
+                      triggerToast('Erro ao atualizar seu perfil. Tente novamente.', 'error');
+                    } finally {
+                      setUsernameSaving(false);
+                    }
+                  }}
+                  className="space-y-4 pt-2 text-left"
+                >
+                  <div>
+                    <label className={`block text-[10.5px] font-bold uppercase tracking-wider mb-2 ${
+                      theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                    }`}>
+                      Seu Nome ou Apelido
+                    </label>
+                    <input 
+                      type="text" 
+                      value={newUsernameInput}
+                      onChange={(e) => setNewUsernameInput(e.target.value)}
+                      placeholder="Ex: Pedro Carvalho"
+                      required
+                      autoFocus
+                      disabled={usernameSaving}
+                      className={`w-full border focus:outline-none focus:ring-2 text-sm px-4 py-3 rounded-xl transition-all font-semibold ${
+                        theme === 'light'
+                          ? 'bg-slate-50 border-slate-200 text-slate-800 focus:border-indigo-500 focus:ring-indigo-500/10'
+                          : 'bg-slate-950/50 border-white/5 focus:border-indigo-500 focus:ring-indigo-500/10 text-slate-100'
+                      }`}
+                    />
+                  </div>
+
+                  <button 
+                    type="submit"
+                    disabled={usernameSaving}
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 border-none animate-pulse"
+                  >
+                    {usernameSaving ? 'Salvando...' : 'Confirmar & Começar'}
+                    {!usernameSaving && <ArrowRight className="w-4 h-4" />}
+                  </button>
+                </form>
               </div>
             </motion.div>
           </div>

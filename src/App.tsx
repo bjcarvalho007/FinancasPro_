@@ -25,8 +25,6 @@ import GoalsPanel from './components/GoalsPanel';
 import SettingsPanel from './components/SettingsPanel';
 import OnboardingTutorial from './components/OnboardingTutorial';
 import ExtraEarningsManager from './components/ExtraEarningsManager';
-import { BusinessDashboard } from './components/BusinessDashboard';
-import { PublicBookingPortal } from './components/PublicBookingPortal';
 import { 
   TrendingUp, 
   Plus, 
@@ -51,8 +49,7 @@ import {
   ShieldCheck,
   Zap,
   ArrowRight,
-  MessageCircle,
-  Briefcase
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -107,18 +104,6 @@ export default function App() {
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
   const [userProfile, setUserProfile] = useState<any | null>(null);
   const [loadingProfile, setLoadingProfile] = useState<boolean>(true);
-
-  // Workspace Mode (Pessoal vs. Negócio) state
-  const [workspaceMode, setWorkspaceMode] = useState<'pessoal' | 'negocio' | null>(() => {
-    const saved = localStorage.getItem('financaspro_workspace_mode');
-    return (saved === 'pessoal' || saved === 'negocio') ? (saved as 'pessoal' | 'negocio') : null;
-  });
-  
-  // Public booking page routing state
-  const [publicAgendaOwnerId, setPublicAgendaOwnerId] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('agenda');
-  });
   
   // App Data State loaded directly from Firestore
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -145,11 +130,7 @@ export default function App() {
   const currentMonthKey = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, '0')}`;
 
   // Tabs context
-  const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings' | 'admin' | 'negocio'>(() => {
-    const savedMode = localStorage.getItem('financaspro_workspace_mode');
-    return savedMode === 'negocio' ? 'negocio' : 'dashboard';
-  });
-  const [financialScope, setFinancialScope] = useState<'todos' | 'pessoal' | 'profissional'>('todos');
+  const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings' | 'admin'>('dashboard');
   
   // Layout and sorting settings for transactions categories (fixos, variaveis, parcelas)
   const [tabLayout, setTabLayout] = useState<'detalhado' | 'lista'>('detalhado');
@@ -226,7 +207,7 @@ export default function App() {
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
 
-  const VIP_EMAILS = useMemo(() => ['bjcarvalho007@gmail.com', 'bjcarvalho07@gmail.com', 'msouzacintia600@gmail.com'], []);
+  const VIP_EMAILS = useMemo(() => ['bjcarvalho07@gmail.com', 'msouzacintia600@gmail.com'], []);
 
   const isVIP = useMemo(() => {
     return !!(user && user.email && VIP_EMAILS.includes(user.email.toLowerCase().trim()));
@@ -761,7 +742,6 @@ export default function App() {
       type: data.type,
       cat: data.cat,
       due: data.due,
-      classification: (data as any).classification || editingTransaction?.classification || 'pessoal',
       monthKey: editingTransaction ? editingTransaction.monthKey : currentMonthKey,
       paid_amount: fallbackPaid,
       paid_at: fallbackPaidAt || '',
@@ -1442,25 +1422,14 @@ export default function App() {
           keep_showing: masterTx.keep_showing,
           extension_months: masterTx.extension_months,
           target_payoff_month: masterTx.target_payoff_month,
-          target_payoff_date: masterTx.target_payoff_date,
-          classification: masterTx.classification || 'pessoal'
+          target_payoff_date: masterTx.target_payoff_date
         };
         enrichedTransactions.push(virtualTx);
       }
     });
 
-    const filteredByScope = enrichedTransactions.filter(t => !t.is_skipped).filter(t => {
-      if (financialScope === 'pessoal') {
-        return !t.classification || t.classification === 'pessoal';
-      }
-      if (financialScope === 'profissional') {
-        return t.classification === 'profissional';
-      }
-      return true;
-    });
-
-    return filteredByScope;
-  }, [transactions, currentMonthKey, financialScope]);
+    return enrichedTransactions.filter(t => !t.is_skipped);
+  }, [transactions, currentMonthKey]);
 
   // Alert triggers: Monitor upcoming / overdue bills due on mounting/ledger updates using activeMonthTransactions (enables virtual/projection compatibility)
   useEffect(() => {
@@ -1637,7 +1606,7 @@ export default function App() {
   const variableSum = activeMonthTransactions.filter(t => t.type === 'variaveis').reduce((sum, t) => sum + t.amount, 0);
   const parcelasSum = activeMonthTransactions.filter(t => t.type === 'parcelas').reduce((sum, t) => sum + t.amount, 0);
   const renderSummaryCardsMobile = () => {
-    if (activeTab === 'goals' || activeTab === 'settings' || activeTab === 'admin' || activeTab === 'negocio') {
+    if (activeTab === 'goals' || activeTab === 'settings' || activeTab === 'admin') {
       return null;
     }
     return (
@@ -1864,15 +1833,6 @@ export default function App() {
     return <SplashLoader />;
   }
 
-  if (publicAgendaOwnerId) {
-    return (
-      <PublicBookingPortal 
-        ownerId={publicAgendaOwnerId} 
-        onBackToApp={user ? () => setPublicAgendaOwnerId(null) : undefined} 
-      />
-    );
-  }
-
   if (!user) {
     return (
       <>
@@ -2092,211 +2052,6 @@ export default function App() {
     );
   }
 
-  // Render Workspace Mode Selector
-  const renderWorkspaceModeSelector = () => {
-    return (
-      <div className={`min-h-screen w-full flex flex-col justify-between p-4 md:p-8 overflow-y-auto ${
-        theme === 'light' 
-          ? 'bg-[#f4f7fa] text-slate-900 font-sans' 
-          : 'bg-[#070a13] text-slate-100 font-sans'
-      }`}>
-        {/* Header */}
-        <div className="w-full max-w-4xl mx-auto flex items-center justify-between py-4 border-b border-white/5 mb-6 select-none">
-          <div className="flex items-center gap-2.5">
-            <img 
-              src="/app_icon.png" 
-              alt="FinançasPro Logo" 
-              className="w-10 h-10 rounded-2xl object-cover border border-white/10 shrink-0 shadow-lg shadow-emerald-500/5 glow-emerald"
-              referrerPolicy="no-referrer"
-            />
-            <div>
-              <span className={`font-display font-extrabold text-[17px] tracking-tight leading-none ${
-                theme === 'light' ? 'text-slate-900' : 'text-white'
-              }`}>
-                FINANÇAS<span className="text-emerald-450 font-black ml-0.5">PRO</span>
-              </span>
-              <span className="text-[8.5px] text-slate-500 font-extrabold uppercase tracking-widest block leading-tight mt-0.5">Ecossistema Inteligente</span>
-            </div>
-          </div>
-          
-          <button
-            onClick={executeLogout}
-            className={`px-3 py-1.5 rounded-xl text-[10.5px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
-              theme === 'light'
-                ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-                : 'bg-rose-500/5 border border-rose-500/10 text-rose-400 hover:bg-rose-500/15'
-            }`}
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Sair</span>
-          </button>
-        </div>
-
-        {/* Content Body */}
-        <div className="flex-1 flex flex-col items-center justify-center max-w-4xl w-full mx-auto my-auto py-8">
-          <div className="text-center space-y-3 mb-10 max-w-xl">
-            <span className="text-[10px] text-indigo-400 font-extrabold uppercase tracking-widest bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-full inline-flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Escolha sua Área de Trabalho
-            </span>
-            <h2 className={`font-display font-black text-2xl md:text-3xl tracking-tight leading-tight ${
-              theme === 'light' ? 'text-slate-900' : 'text-white'
-            }`}>
-              Bem-vindo ao <span className="bg-gradient-to-r from-indigo-400 to-emerald-400 bg-clip-text text-transparent">FinançasPro</span>
-            </h2>
-            <p className="text-xs text-slate-450 leading-relaxed font-semibold">
-              Para onde deseja ir hoje? Selecione o perfil desejado para acessar seu painel dedicado. Você pode alternar entre eles a qualquer momento através do menu lateral.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-            
-            {/* PERFIL PESSOAL */}
-            <motion.div
-              whileHover={{ scale: 1.02, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                setWorkspaceMode('pessoal');
-                localStorage.setItem('financaspro_workspace_mode', 'pessoal');
-                setActiveTab('dashboard');
-                triggerToast('Perfil Pessoal carregado com sucesso!', 'success');
-              }}
-              className={`p-6 md:p-8 rounded-3xl border text-left cursor-pointer transition-all flex flex-col justify-between h-full group ${
-                theme === 'light'
-                  ? 'bg-white border-slate-200/80 shadow-md hover:shadow-indigo-600/5 hover:border-indigo-500'
-                  : 'bg-[#0b0f1a] border-white/5 hover:border-indigo-500/50 hover:bg-[#0f1424] shadow-[0_4px_30px_rgba(0,0,0,0.3)]'
-              }`}
-            >
-              <div className="space-y-6">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border transition-all ${
-                  theme === 'light'
-                    ? 'bg-indigo-50 border-indigo-100 text-indigo-600'
-                    : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400 group-hover:bg-indigo-500/20 group-hover:scale-110'
-                }`}>
-                  <TrendingUp className="w-7 h-7" />
-                </div>
-                
-                <div className="space-y-2">
-                  <h3 className={`font-display font-black text-lg md:text-xl tracking-tight ${
-                    theme === 'light' ? 'text-indigo-650' : 'text-indigo-400'
-                  }`}>
-                    Controle Pessoal
-                  </h3>
-                  <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                    Gerencie suas finanças individuais de forma simples e precisa. Acompanhe gastos, organize contas e alcance suas metas financeiras.
-                  </p>
-                </div>
-
-                <div className="space-y-2.5 pt-4 border-t border-slate-500/5 text-xs text-slate-450">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="font-semibold">Dashboard Financeiro Completo</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="font-semibold">Lançamentos Fixos e Variáveis</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="font-semibold">Controle de Compras Parceladas</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="font-semibold">Simulador de Metas e Poupança</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8 flex items-center justify-between text-xs font-black uppercase tracking-wider">
-                <span className={`${
-                  theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'
-                }`}>Acessar Painel Pessoal</span>
-                <ArrowRight className={`w-4 h-4 transition-transform group-hover:translate-x-1.5 ${
-                  theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'
-                }`} />
-              </div>
-            </motion.div>
-
-            {/* PERFIL DE NEGÓCIO */}
-            <motion.div
-              whileHover={{ scale: 1.02, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                setWorkspaceMode('negocio');
-                localStorage.setItem('financaspro_workspace_mode', 'negocio');
-                setActiveTab('negocio');
-                triggerToast('Perfil de Negócio carregado com sucesso!', 'success');
-              }}
-              className={`p-6 md:p-8 rounded-3xl border text-left cursor-pointer transition-all flex flex-col justify-between h-full group ${
-                theme === 'light'
-                  ? 'bg-white border-slate-200/80 shadow-md hover:shadow-emerald-600/5 hover:border-emerald-500'
-                  : 'bg-[#0b0f1a] border-white/5 hover:border-emerald-500/50 hover:bg-[#0f1424] shadow-[0_4px_30px_rgba(0,0,0,0.3)]'
-              }`}
-            >
-              <div className="space-y-6">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border transition-all ${
-                  theme === 'light'
-                    ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
-                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/20 group-hover:scale-110'
-                }`}>
-                  <Briefcase className="w-7 h-7" />
-                </div>
-                
-                <div className="space-y-2">
-                  <h3 className={`font-display font-black text-lg md:text-xl tracking-tight ${
-                    theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
-                  }`}>
-                    Gestão de Negócio
-                  </h3>
-                  <p className="text-xs text-slate-450 leading-relaxed font-medium">
-                    Centralize a agenda do seu negócio ou serviços autônomos. Crie catálogos, defina horários e compartilhe um link online de agendamentos.
-                  </p>
-                </div>
-
-                <div className="space-y-2.5 pt-4 border-t border-slate-500/5 text-xs text-slate-450">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="font-semibold">Painel Integrado de Agendamentos</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-450 shrink-0" />
-                    <span className="font-semibold">Catálogo e Cadastro de Serviços</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-450 shrink-0" />
-                    <span className="font-semibold">Expediente e Horários Personalizados</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-emerald-450 shrink-0" />
-                    <span className="font-semibold">Link Público de Agendamento Online</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8 flex items-center justify-between text-xs font-black uppercase tracking-wider">
-                <span className={`${
-                  theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
-                }`}>Acessar Área de Negócio</span>
-                <ArrowRight className={`w-4 h-4 transition-transform group-hover:translate-x-1.5 ${
-                  theme === 'light' ? 'text-emerald-600' : 'text-emerald-400'
-                }`} />
-              </div>
-            </motion.div>
-
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="w-full text-center py-6 border-t border-white/5 mt-8 text-[9px] text-slate-500 hover:text-slate-400 uppercase tracking-widest font-black transition-all select-none">
-          BJC DESENVOLVIMENTOS • FINANÇASPRO premium
-        </div>
-      </div>
-    );
-  };
-
-  if (user && !workspaceMode) {
-    return renderWorkspaceModeSelector();
-  }
-
   return (
     <div className={`min-h-screen w-full flex flex-col lg:flex-row transition-colors duration-300 ${
       theme === 'light' ? 'bg-[#f4f7fa] text-slate-900 font-sans' : 'bg-[#070a13] text-slate-100 font-sans'
@@ -2341,21 +2096,15 @@ export default function App() {
           {/* Web Navigation Menu */}
           <nav className="space-y-1.5 pt-4">
             {( () => {
-              if (workspaceMode === 'negocio') {
-                return [
-                  { id: 'negocio', label: 'Meu Negócio', icon: Briefcase },
-                  { id: 'settings', label: 'Configurações', icon: Settings }
-                ];
-              } else {
-                return [
-                  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-                  { id: 'contas', label: 'Contas Fixas', icon: Receipt },
-                  { id: 'variaveis', label: 'Gasto Variável', icon: Coins },
-                  { id: 'parcelas', label: 'Parcelados', icon: CreditCard },
-                  { id: 'goals', label: 'Metas', icon: Target },
-                  { id: 'settings', label: 'Configurações', icon: Settings }
-                ];
-              }
+              const menuItems = [
+                { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+                { id: 'contas', label: 'Contas Fixas', icon: Receipt },
+                { id: 'variaveis', label: 'Gasto Variável', icon: Coins },
+                { id: 'parcelas', label: 'Parcelados', icon: CreditCard },
+                { id: 'goals', label: 'Metas', icon: Target },
+                { id: 'settings', label: 'Configurações', icon: Settings }
+              ];
+              return menuItems;
             })().map((item) => {
               const isSelected = activeTab === item.id;
               const Icon = item.icon;
@@ -2378,60 +2127,6 @@ export default function App() {
                 </button>
               );
             })}
-
-            {/* QUICK TOGGLE PROFILE ACTION */}
-            <div className="pt-4 border-t border-slate-500/10 mt-4 space-y-2">
-              {workspaceMode === 'pessoal' ? (
-                <button
-                  onClick={() => {
-                    setWorkspaceMode('negocio');
-                    localStorage.setItem('financaspro_workspace_mode', 'negocio');
-                    setActiveTab('negocio');
-                    triggerToast('Perfil de Negócio ativo!', 'success');
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all border text-left cursor-pointer ${
-                    theme === 'light'
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 shadow-sm'
-                      : 'bg-emerald-500/10 border-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20'
-                  }`}
-                >
-                  <Briefcase className="w-4.5 h-4.5 shrink-0" />
-                  <span>Área de Negócio</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    setWorkspaceMode('pessoal');
-                    localStorage.setItem('financaspro_workspace_mode', 'pessoal');
-                    setActiveTab('dashboard');
-                    triggerToast('Perfil Pessoal ativo!', 'success');
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all border text-left cursor-pointer ${
-                    theme === 'light'
-                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 shadow-sm'
-                      : 'bg-indigo-500/10 border-indigo-500/15 text-indigo-400 hover:bg-indigo-500/20'
-                  }`}
-                >
-                  <LayoutDashboard className="w-4.5 h-4.5 shrink-0" />
-                  <span>Área Pessoal</span>
-                </button>
-              )}
-
-              {/* Back to selector choice */}
-              <button
-                onClick={() => {
-                  setWorkspaceMode(null);
-                  localStorage.removeItem('financaspro_workspace_mode');
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-wider transition-all border border-dashed text-left cursor-pointer ${
-                  theme === 'light'
-                    ? 'border-slate-300 text-slate-550 hover:bg-slate-100 hover:text-slate-800'
-                    : 'border-white/10 text-slate-400 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <span>🔄 Alterar Perfil</span>
-              </button>
-            </div>
           </nav>
         </div>
 
@@ -2872,55 +2567,9 @@ export default function App() {
             </div>
           </div>
 
-          {/* Financial Scope / Classification Filter (Pessoal vs Profissional vs Todos) */}
-          {(activeTab === 'dashboard' || activeTab === 'contas' || activeTab === 'variaveis' || activeTab === 'parcelas' || activeTab === 'fixos') && (
-            <div className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl border ${
-              theme === 'light' ? 'bg-white border-slate-205 shadow-sm text-slate-900' : 'bg-white/3 border-white/5 text-white'
-            } mb-4 gap-3`}>
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${financialScope === 'pessoal' ? 'bg-indigo-400' : financialScope === 'profissional' ? 'bg-teal-400' : 'bg-indigo-500'}`} />
-                <span className={`text-[10px] font-black uppercase tracking-wider ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
-                  Filtro do Caixa: <span className="text-white font-black">{financialScope === 'todos' ? 'Caixa Geral (Misto)' : financialScope === 'pessoal' ? 'Apenas Pessoal' : 'Apenas Negócio/Profissional'}</span>
-                </span>
-              </div>
-              <div className="flex gap-1 p-1 bg-slate-950/40 rounded-xl border border-white/5">
-                <button
-                  onClick={() => setFinancialScope('todos')}
-                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                    financialScope === 'todos'
-                      ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-400'
-                      : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                  }`}
-                >
-                  🌐 Ambos
-                </button>
-                <button
-                  onClick={() => setFinancialScope('pessoal')}
-                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                    financialScope === 'pessoal'
-                      ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-400'
-                      : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                  }`}
-                >
-                  👤 Pessoal
-                </button>
-                <button
-                  onClick={() => setFinancialScope('profissional')}
-                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                    financialScope === 'profissional'
-                      ? 'bg-teal-600/20 border border-teal-500/30 text-teal-400'
-                      : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                  }`}
-                >
-                  💼 Negócio
-                </button>
-              </div>
-            </div>
-          )}
-
 
           {/* Grid Layout that splits screen on PC, but rolls standard single col on Mobile */}
-          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' && activeTab !== 'negocio' ? (
+          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Main lists column */}
               <div className="lg:col-span-8 space-y-4">
@@ -3049,11 +2698,6 @@ export default function App() {
                                             Parcela {getInstallmentIndex(tx, currentMonthKey) || 'Ativa'}
                                           </span>
                                         )}
-                                        {tx.classification === 'profissional' ? (
-                                          <span className="text-[8.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 border border-teal-500/10">💼 Negócio</span>
-                                        ) : (
-                                          <span className="text-[8.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/10">👤 Pessoal</span>
-                                        )}
                                       </h4>
                                       <p className="text-[10px] text-slate-550/90 font-medium truncate mt-0.5 flex flex-wrap items-center gap-1">
                                         <span>{categoryObj.label} • {formatCurrency(tx.amount)}</span>
@@ -3147,11 +2791,6 @@ export default function App() {
                                         <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-500 border border-pink-500/20">
                                           Parcela {getInstallmentIndex(tx, currentMonthKey) || 'Ativa'}
                                         </span>
-                                      )}
-                                      {tx.classification === 'profissional' ? (
-                                        <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 border border-teal-500/20">💼 Negócio</span>
-                                      ) : (
-                                        <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/20">👤 Pessoal</span>
                                       )}
                                     </h4>
                                     <p className="text-[11.5px] text-slate-500 mt-1 uppercase font-semibold tracking-wider flex flex-wrap items-center gap-1">
@@ -3644,11 +3283,6 @@ export default function App() {
                     onUpdateGoalProgress={handleUpdateGoalProgress}
                     onDeleteGoal={handleDeleteGoal}
                   />
-                ) : activeTab === 'negocio' ? (
-                  <BusinessDashboard
-                    userId={user.uid}
-                    triggerToast={triggerToast}
-                  />
                 ) : (
                   <SettingsPanel
                     currentTheme={theme}
@@ -4138,17 +3772,13 @@ export default function App() {
       } px-1.5 pb-safe pt-2 flex items-center justify-around h-16`}>
         <div className="max-w-4xl w-full mx-auto flex items-center justify-around h-full">
           {( () => {
-            const tabs = workspaceMode === 'negocio' ? [
-              { id: 'negocio', val: 'Negócio', icon: Briefcase },
-              { id: 'settings', val: 'Ajustes', icon: Settings },
-              { id: 'switch_mode', val: 'Pessoal', icon: LayoutDashboard }
-            ] : [
+            const tabs = [
               { id: 'dashboard', val: 'Dashboard', icon: LayoutDashboard },
               { id: 'contas', val: 'Fixas', icon: Receipt },
               { id: 'variaveis', val: 'Variados', icon: Coins },
+              { id: 'parcelas', val: 'Parcelados', icon: CreditCard },
               { id: 'goals', val: 'Metas', icon: Target },
-              { id: 'settings', val: 'Ajustes', icon: Settings },
-              { id: 'switch_mode', val: 'Negócio', icon: Briefcase }
+              { id: 'settings', val: 'Ajustes', icon: Settings }
             ];
             return tabs;
           })().map((tab) => {
@@ -4157,17 +3787,7 @@ export default function App() {
             return (
               <button
                 key={tab.id}
-                onClick={() => {
-                  if (tab.id === 'switch_mode') {
-                    const newMode = workspaceMode === 'pessoal' ? 'negocio' : 'pessoal';
-                    setWorkspaceMode(newMode);
-                    localStorage.setItem('financaspro_workspace_mode', newMode);
-                    setActiveTab(newMode === 'pessoal' ? 'dashboard' : 'negocio');
-                    triggerToast(`Perfil ${newMode === 'pessoal' ? 'Pessoal' : 'de Negócio'} ativo!`, 'success');
-                  } else {
-                    setActiveTab(tab.id as any);
-                  }
-                }}
+                onClick={() => setActiveTab(tab.id as any)}
                 className="flex flex-col items-center justify-center flex-1 h-full py-1 cursor-pointer relative group transition-all"
               >
                 <div className={`p-1.5 rounded-xl transition-all duration-200 ${

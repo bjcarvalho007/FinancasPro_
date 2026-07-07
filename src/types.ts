@@ -21,7 +21,6 @@ export interface Transaction {
   extension_months?: number;
   target_payoff_month?: string;
   target_payoff_date?: string;
-  classification?: 'pessoal' | 'profissional'; // Pessoal ou Profissional (Negócio)
 }
 
 export interface Category {
@@ -79,49 +78,3 @@ export interface AppNotification {
   read: boolean;
   createdAt?: string;
 }
-
-export interface BusinessProfile {
-  userId: string; // matches the owner's UID
-  name: string;
-  description: string;
-  address?: string;
-  phone?: string;
-  workingDays: string[]; // e.g. ['seg', 'ter', 'qua', 'qui', 'sex', 'sab']
-  workingHoursStart: string; // e.g. '08:00'
-  workingHoursEnd: string; // e.g. '18:00'
-  lunchStart?: string; // e.g. '12:00'
-  lunchEnd?: string; // e.g. '13:00'
-  active: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface BusinessService {
-  id: string;
-  userId: string; // matches the owner's UID
-  name: string;
-  price: number;
-  duration: number; // in minutes
-  description?: string;
-  active: boolean;
-  createdAt?: string;
-}
-
-export interface BusinessBooking {
-  id: string;
-  userId: string; // matches the owner's UID
-  clientName: string;
-  clientEmail: string;
-  clientPhone: string;
-  serviceId: string;
-  serviceName: string;
-  servicePrice: number;
-  serviceDuration: number;
-  date: string; // YYYY-MM-DD
-  time: string; // HH:MM
-  status: 'pending' | 'accepted' | 'rejected' | 'completed' | 'cancelled';
-  notes?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-

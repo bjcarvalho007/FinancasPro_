@@ -1,6 +1,6 @@
 {
   "name": "Finanças Pro",
-  "description": "O sistema premium de alta previsibilidade financeira e negócios. Simule sobras reais, gerencie sua agenda profissional online, receba agendamentos e domine o seu fluxo de caixa.",
+  "description": "O sistema premium de alta previsibilidade financeira. Simule sobras reais, acompanhe parcelas inteligentes, receba alertas em tempo real e domine o seu caixa.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

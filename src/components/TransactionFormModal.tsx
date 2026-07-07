@@ -15,7 +15,6 @@ interface TransactionFormModalProps {
     total_parcelado?: number;
     establishment?: string;
     installmentsCount?: number;
-    classification?: 'pessoal' | 'profissional';
   }) => void;
   initialData?: Transaction | null;
   categoriesList: Category[];
@@ -37,7 +36,6 @@ export default function TransactionFormModal({
   const [type, setType] = useState<'fixos' | 'variaveis' | 'parcelas'>('fixos');
   const [cat, setCat] = useState<string>('moradia');
   const [due, setDue] = useState<string>('');
-  const [classification, setClassification] = useState<'pessoal' | 'profissional'>('pessoal');
   const [error, setError] = useState<string | null>(null);
   const [establishment, setEstablishment] = useState<string>('');
   const [installmentsCount, setInstallmentsCount] = useState<string>('');
@@ -61,7 +59,6 @@ export default function TransactionFormModal({
         setType(initialData.type);
         setCat(initialData.cat);
         setDue(initialData.due || '');
-        setClassification(initialData.classification || 'pessoal');
         setEstablishment(initialData.establishment || '');
         setInstallmentsCount(initialData.installmentsCount ? String(initialData.installmentsCount) : '');
         setInstallmentAmountStr(initialData.type === 'parcelas' ? formatMoney(initialData.amount || 0) : '');
@@ -71,7 +68,6 @@ export default function TransactionFormModal({
         setType(defaultType);
         setCat('moradia');
         setDue('');
-        setClassification('pessoal');
         setEstablishment('');
         setInstallmentsCount('');
         setInstallmentAmountStr('');
@@ -158,8 +154,7 @@ export default function TransactionFormModal({
       due: due.trim() || '',
       total_parcelado: totalVal || undefined,
       establishment: establishment.trim() || undefined,
-      installmentsCount: installmentsNum || undefined,
-      classification
+      installmentsCount: installmentsNum || undefined
     });
     onClose();
   };
@@ -226,7 +221,7 @@ export default function TransactionFormModal({
             {/* Description input */}
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                <Landmark className="w-3.5 h-3.5" /> Descrição do Lançamento
+                <Landmark className="w-3.5 h-3.5" /> Descrição do Gastos / Receita
               </label>
               <input
                 id="modal-desc-input"
@@ -236,37 +231,6 @@ export default function TransactionFormModal({
                 onChange={(e) => setName(e.target.value)}
                 className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3.5 rounded-xl transition-all font-medium"
               />
-            </div>
-
-            {/* Classification: Personal vs Professional Toggle */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                💼 Destinação do Lançamento
-              </label>
-              <div className="grid grid-cols-2 gap-2 bg-slate-950/40 p-1 rounded-xl border border-white/5">
-                <button
-                  type="button"
-                  onClick={() => setClassification('pessoal')}
-                  className={`py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                    classification === 'pessoal'
-                      ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-400'
-                      : 'bg-transparent border border-transparent text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  👤 Pessoal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setClassification('profissional')}
-                  className={`py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                    classification === 'profissional'
-                      ? 'bg-teal-600/20 border border-teal-500/30 text-teal-400'
-                      : 'bg-transparent border border-transparent text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  💼 Profissional / Negócio
-                </button>
-              </div>
             </div>
 
             {/* Transaction type selector */}

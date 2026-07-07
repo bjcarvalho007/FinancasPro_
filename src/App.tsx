@@ -143,6 +143,7 @@ export default function App() {
   const [floatingAlert, setFloatingAlert] = useState<{ id: string; title: string; desc: string; type: string } | null>(null);
   const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, boolean>>({});
   const [showUpdateAlert, setShowUpdateAlert] = useState<boolean>(false);
+  const [isPremiumAlertDismissed, setIsPremiumAlertDismissed] = useState<boolean>(false);
   const [sessionClosedAlert, setSessionClosedAlert] = useState<boolean>(false);
   const [prevMonthKey, setPrevMonthKey] = useState(currentMonthKey);
   if (currentMonthKey !== prevMonthKey) {
@@ -245,6 +246,21 @@ export default function App() {
     return Date.now() <= expiryTime;
   }, [user, userProfile]);
 
+  const isSubscriptionEndingSoon = useMemo(() => {
+    if (!userProfile || userProfile.assinante !== true || !userProfile.dataVencimento) {
+      return false;
+    }
+    
+    const expiryTime = Date.parse(userProfile.dataVencimento);
+    if (isNaN(expiryTime)) return false;
+    
+    const diffMs = expiryTime - Date.now();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    
+    // Alerta com 2 dias de antecedência (de 0 a 2.1 dias antes de expirar)
+    return diffDays > 0 && diffDays <= 2.1;
+  }, [userProfile]);
+
   const hasAccess = isVIP || isWithinFiveDaysTrial || hasActiveSubscription;
   const isBlocked = !!(user && !hasAccess);
 
@@ -325,6 +341,16 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
+
+  // Load premium alert dismissal state
+  useEffect(() => {
+    if (user) {
+      const dismissed = localStorage.getItem(`dismiss_premium_alert_${user.uid}`) === 'true';
+      setIsPremiumAlertDismissed(dismissed);
+    } else {
+      setIsPremiumAlertDismissed(false);
+    }
+  }, [user]);
 
   // Profile snapshot stream
   useEffect(() => {
@@ -2360,6 +2386,71 @@ export default function App() {
                 </button>
               </div>
             </div>
+          )}
+
+          {/* Alerta de Expiração Próxima do Plano Premium (Gentle, friendly & soft) */}
+          {isSubscriptionEndingSoon && !isPremiumAlertDismissed && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-5 rounded-3xl border transition-all relative overflow-hidden ${
+                theme === 'light'
+                  ? 'bg-gradient-to-r from-indigo-50/75 to-indigo-100/30 border-indigo-200/60 shadow-md shadow-indigo-150/10 text-slate-800'
+                  : 'bg-gradient-to-r from-[#171b30] to-slate-950/20 border border-indigo-500/15 text-white shadow-xl shadow-indigo-950/5'
+              }`}
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+              
+              <button
+                onClick={() => {
+                  if (user) {
+                    localStorage.setItem(`dismiss_premium_alert_${user.uid}`, 'true');
+                  }
+                  setIsPremiumAlertDismissed(true);
+                }}
+                className={`absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent ${
+                  theme === 'light' ? 'hover:bg-indigo-100 text-indigo-700' : 'hover:bg-white/5 text-indigo-300'
+                }`}
+                title="Fechar alerta"
+              >
+                ✕
+              </button>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 pr-6">
+                <div className="flex items-start gap-3.5">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                    theme === 'light'
+                      ? 'bg-indigo-100/50 border-indigo-200 text-indigo-600'
+                      : 'bg-indigo-500/10 border-indigo-500/25 text-indigo-400'
+                  }`}>
+                    <Sparkles className="w-5 h-5 text-indigo-400 animate-pulse" />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <h4 className={`font-display font-black text-sm uppercase tracking-wide ${
+                      theme === 'light' ? 'text-indigo-800' : 'text-indigo-400'
+                    }`}>
+                      Seu Plano Premium vence em breve! ✨
+                    </h4>
+                    <p className={`text-xs font-light leading-relaxed ${
+                      theme === 'light' ? 'text-slate-650' : 'text-slate-350'
+                    }`}>
+                      Olá! Percebemos que faltam apenas <strong className="font-bold">2 dias</strong> para a data de vencimento do seu plano Premium (dia {userProfile?.dataVencimento ? new Date(userProfile.dataVencimento).toLocaleDateString('pt-BR') : ''}). Se você quiser continuar aproveitando o controle total das suas finanças sem qualquer interrupção, você já pode renovar seu mês de uso de forma simples e suave. Obrigado por caminhar conosco!
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 sm:self-center shrink-0 w-full sm:w-auto">
+                  <a
+                    href="https://mpago.la/1SfRUJ2"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 sm:flex-none text-center bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold px-4.5 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md shadow-indigo-600/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none no-underline"
+                  >
+                    <span>Renovar Agora</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+            </motion.div>
           )}
 
           {/* Unified High-Converting Top Header Block (Both PC & Mobile) */}

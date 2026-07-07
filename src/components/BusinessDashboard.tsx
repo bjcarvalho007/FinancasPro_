@@ -66,6 +66,7 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
   const [servicePrice, setServicePrice] = useState<number>(0);
   const [serviceDuration, setServiceDuration] = useState<number>(30);
   const [serviceDescription, setServiceDescription] = useState('');
+  const [serviceActive, setServiceActive] = useState(true);
 
   // Setup / Profile Form States
   const [bizName, setBizName] = useState('');
@@ -183,7 +184,6 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
 
   // Create or Update Service
   const handleSaveService = async (e: React.FormEvent) => {
-    e.preventDefault();
     if (!serviceName.trim() || servicePrice <= 0 || serviceDuration <= 0) {
       triggerToast('Preencha os dados do serviço corretamente.', 'warning');
       return;
@@ -198,7 +198,7 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
           price: Number(servicePrice),
           duration: Number(serviceDuration),
           description: serviceDescription,
-          active: true
+          active: serviceActive
         });
         triggerToast('Serviço atualizado com sucesso!', 'success');
       } else {
@@ -211,7 +211,7 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
           price: Number(servicePrice),
           duration: Number(serviceDuration),
           description: serviceDescription,
-          active: true,
+          active: serviceActive,
           createdAt: new Date().toISOString()
         };
         await setDoc(doc(db, 'business_services', newId), serviceData);
@@ -225,6 +225,7 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
       setServicePrice(0);
       setServiceDuration(30);
       setServiceDescription('');
+      setServiceActive(true);
     } catch (err) {
       console.error('Error saving service:', err);
       triggerToast('Erro ao salvar serviço.', 'error');
@@ -239,6 +240,18 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
     } catch (err) {
       console.error('Error deleting service:', err);
       triggerToast('Erro ao remover serviço.', 'error');
+    }
+  };
+
+  const handleToggleServiceActive = async (service: BusinessService) => {
+    try {
+      const serviceRef = doc(db, 'business_services', service.id);
+      const newActive = service.active === undefined ? false : !service.active;
+      await updateDoc(serviceRef, { active: newActive });
+      triggerToast(`Serviço marcado como ${newActive ? 'disponível' : 'indisponível'}!`, 'success');
+    } catch (err) {
+      console.error('Error toggling service active:', err);
+      triggerToast('Erro ao alterar disponibilidade do serviço.', 'error');
     }
   };
 
@@ -275,7 +288,8 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
             paid_amount: booking.servicePrice,
             paid_at: new Date().toISOString(),
             monthKey,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            classification: 'profissional'
           };
 
           await setDoc(doc(db, 'transactions', transId), newTransaction);
@@ -868,6 +882,20 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
                               {service.description}
                             </p>
                           )}
+                          <div className="pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleServiceActive(service)}
+                              className={`px-2 py-0.5 rounded text-[9px] font-extrabold uppercase transition-all flex items-center gap-1 ${
+                                service.active ?? true
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : 'bg-slate-500/10 text-slate-450 border border-white/5'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${service.active ?? true ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                              {(service.active ?? true) ? 'Disponível' : 'Indisponível'}
+                            </button>
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-3 mt-1.5">
@@ -883,6 +911,7 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
                                 setServicePrice(service.price);
                                 setServiceDuration(service.duration);
                                 setServiceDescription(service.description || '');
+                                setServiceActive(service.active ?? true);
                                 setIsServiceModalOpen(true);
                               }}
                               className="text-[10px] text-indigo-400 hover:text-white font-bold uppercase tracking-wider cursor-pointer"
@@ -981,6 +1010,35 @@ export const BusinessDashboard: React.FC<BusinessDashboardProps> = ({ userId, tr
                               onChange={(e) => setServiceDescription(e.target.value)}
                               className="w-full bg-slate-950/50 border border-white/10 hover:border-white/15 focus:border-indigo-500 focus:outline-none rounded-xl p-3 text-xs text-white resize-none font-light"
                             />
+                          </div>
+
+                          {/* Service status / availability */}
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 font-black uppercase tracking-wider">Disponibilidade do Serviço</label>
+                            <div className="grid grid-cols-2 gap-2 bg-slate-950/40 p-1 rounded-xl border border-white/10">
+                              <button
+                                type="button"
+                                onClick={() => setServiceActive(true)}
+                                className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                  serviceActive
+                                    ? 'bg-emerald-500/20 border border-emerald-500/35 text-emerald-450'
+                                    : 'border border-transparent text-slate-500 hover:text-slate-350'
+                                }`}
+                              >
+                                🟢 Ativo / Visível
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setServiceActive(false)}
+                                className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                  !serviceActive
+                                    ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400'
+                                    : 'border border-transparent text-slate-500 hover:text-slate-350'
+                                }`}
+                              >
+                                ⚪ Indisponível
+                              </button>
+                            </div>
                           </div>
 
                           <button

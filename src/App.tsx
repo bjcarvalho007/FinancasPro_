@@ -140,6 +140,7 @@ export default function App() {
 
   // Tabs context
   const [activeTab, setActiveTab] = useState<'contas' | 'fixos' | 'variaveis' | 'parcelas' | 'dashboard' | 'goals' | 'settings' | 'admin' | 'negocio'>('dashboard');
+  const [financialScope, setFinancialScope] = useState<'todos' | 'pessoal' | 'profissional'>('todos');
   
   // Layout and sorting settings for transactions categories (fixos, variaveis, parcelas)
   const [tabLayout, setTabLayout] = useState<'detalhado' | 'lista'>('detalhado');
@@ -751,6 +752,7 @@ export default function App() {
       type: data.type,
       cat: data.cat,
       due: data.due,
+      classification: (data as any).classification || editingTransaction?.classification || 'pessoal',
       monthKey: editingTransaction ? editingTransaction.monthKey : currentMonthKey,
       paid_amount: fallbackPaid,
       paid_at: fallbackPaidAt || '',
@@ -1431,14 +1433,25 @@ export default function App() {
           keep_showing: masterTx.keep_showing,
           extension_months: masterTx.extension_months,
           target_payoff_month: masterTx.target_payoff_month,
-          target_payoff_date: masterTx.target_payoff_date
+          target_payoff_date: masterTx.target_payoff_date,
+          classification: masterTx.classification || 'pessoal'
         };
         enrichedTransactions.push(virtualTx);
       }
     });
 
-    return enrichedTransactions.filter(t => !t.is_skipped);
-  }, [transactions, currentMonthKey]);
+    const filteredByScope = enrichedTransactions.filter(t => !t.is_skipped).filter(t => {
+      if (financialScope === 'pessoal') {
+        return !t.classification || t.classification === 'pessoal';
+      }
+      if (financialScope === 'profissional') {
+        return t.classification === 'profissional';
+      }
+      return true;
+    });
+
+    return filteredByScope;
+  }, [transactions, currentMonthKey, financialScope]);
 
   // Alert triggers: Monitor upcoming / overdue bills due on mounting/ledger updates using activeMonthTransactions (enables virtual/projection compatibility)
   useEffect(() => {
@@ -2586,6 +2599,52 @@ export default function App() {
             </div>
           </div>
 
+          {/* Financial Scope / Classification Filter (Pessoal vs Profissional vs Todos) */}
+          {(activeTab === 'dashboard' || activeTab === 'contas' || activeTab === 'variaveis' || activeTab === 'parcelas' || activeTab === 'fixos') && (
+            <div className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl border ${
+              theme === 'light' ? 'bg-white border-slate-205 shadow-sm text-slate-900' : 'bg-white/3 border-white/5 text-white'
+            } mb-4 gap-3`}>
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${financialScope === 'pessoal' ? 'bg-indigo-400' : financialScope === 'profissional' ? 'bg-teal-400' : 'bg-indigo-500'}`} />
+                <span className={`text-[10px] font-black uppercase tracking-wider ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Filtro do Caixa: <span className="text-white font-black">{financialScope === 'todos' ? 'Caixa Geral (Misto)' : financialScope === 'pessoal' ? 'Apenas Pessoal' : 'Apenas Negócio/Profissional'}</span>
+                </span>
+              </div>
+              <div className="flex gap-1 p-1 bg-slate-950/40 rounded-xl border border-white/5">
+                <button
+                  onClick={() => setFinancialScope('todos')}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    financialScope === 'todos'
+                      ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-400'
+                      : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                  }`}
+                >
+                  🌐 Ambos
+                </button>
+                <button
+                  onClick={() => setFinancialScope('pessoal')}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    financialScope === 'pessoal'
+                      ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-400'
+                      : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                  }`}
+                >
+                  👤 Pessoal
+                </button>
+                <button
+                  onClick={() => setFinancialScope('profissional')}
+                  className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    financialScope === 'profissional'
+                      ? 'bg-teal-600/20 border border-teal-500/30 text-teal-400'
+                      : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                  }`}
+                >
+                  💼 Negócio
+                </button>
+              </div>
+            </div>
+          )}
+
 
           {/* Grid Layout that splits screen on PC, but rolls standard single col on Mobile */}
           {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
@@ -2717,6 +2776,11 @@ export default function App() {
                                             Parcela {getInstallmentIndex(tx, currentMonthKey) || 'Ativa'}
                                           </span>
                                         )}
+                                        {tx.classification === 'profissional' ? (
+                                          <span className="text-[8.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 border border-teal-500/10">💼 Negócio</span>
+                                        ) : (
+                                          <span className="text-[8.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/10">👤 Pessoal</span>
+                                        )}
                                       </h4>
                                       <p className="text-[10px] text-slate-550/90 font-medium truncate mt-0.5 flex flex-wrap items-center gap-1">
                                         <span>{categoryObj.label} • {formatCurrency(tx.amount)}</span>
@@ -2810,6 +2874,11 @@ export default function App() {
                                         <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-500 border border-pink-500/20">
                                           Parcela {getInstallmentIndex(tx, currentMonthKey) || 'Ativa'}
                                         </span>
+                                      )}
+                                      {tx.classification === 'profissional' ? (
+                                        <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 border border-teal-500/20">💼 Negócio</span>
+                                      ) : (
+                                        <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/20">👤 Pessoal</span>
                                       )}
                                     </h4>
                                     <p className="text-[11.5px] text-slate-500 mt-1 uppercase font-semibold tracking-wider flex flex-wrap items-center gap-1">

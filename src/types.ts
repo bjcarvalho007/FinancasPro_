@@ -21,6 +21,7 @@ export interface Transaction {
   extension_months?: number;
   target_payoff_month?: string;
   target_payoff_date?: string;
+  classification?: 'pessoal' | 'profissional'; // Pessoal ou Profissional (Negócio)
 }
 
 export interface Category {

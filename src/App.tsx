@@ -357,12 +357,16 @@ export default function App() {
 
   // Monitor if user needs to configure a username (for both existing and new users after login)
   useEffect(() => {
-    if (user && userProfile && !userProfile.username) {
-      setShowUsernamePromptModal(true);
+    if (user && !loadingProfile) {
+      if (!userProfile || !userProfile.username) {
+        setShowUsernamePromptModal(true);
+      } else {
+        setShowUsernamePromptModal(false);
+      }
     } else {
       setShowUsernamePromptModal(false);
     }
-  }, [user, userProfile]);
+  }, [user, userProfile, loadingProfile]);
 
   // Profile snapshot stream
   useEffect(() => {
@@ -2471,44 +2475,33 @@ export default function App() {
           }`}>
             <div className="flex items-center gap-2.5">
               {userProfile?.username ? (
-                <div className="flex items-center gap-2.5">
-                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 border select-none ${
-                    isVIP 
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-lg shadow-emerald-500/5 glow-emerald'
-                      : hasActiveSubscription
-                      ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-lg shadow-indigo-500/5 glow-indigo'
-                      : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                  }`}>
-                    {userProfile.username.substring(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className={`font-display font-black text-base sm:text-lg tracking-tight leading-none truncate max-w-[150px] sm:max-w-[220px] ${
-                      theme === 'light' ? 'text-slate-900' : 'text-white'
-                    }`} title={userProfile.username}>
-                      {userProfile.username}
-                    </h2>
-                    {isVIP ? (
-                      <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-1">
-                        <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
+                <div className="min-w-0">
+                  <h2 className={`font-display font-black text-xl sm:text-2xl tracking-tight leading-none ${
+                    theme === 'light' ? 'text-slate-900' : 'text-white'
+                  }`} title={userProfile.username}>
+                    {userProfile.username}
+                  </h2>
+                  {isVIP ? (
+                    <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-1.5">
+                      <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
+                    </span>
+                  ) : hasActiveSubscription ? (
+                    <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-1.5">
+                      <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
+                    </span>
+                  ) : (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
                       </span>
-                    ) : hasActiveSubscription ? (
-                      <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-1">
-                        <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
-                      </span>
-                    ) : (
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
-                          <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
-                        </span>
-                        <button
-                          onClick={() => setShowPaymentInfoModal(true)}
-                          className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
-                        >
-                          Assinar
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                      <button
+                        onClick={() => setShowPaymentInfoModal(true)}
+                        className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
+                      >
+                        Assinar
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
@@ -4582,10 +4575,12 @@ export default function App() {
                     setUsernameSaving(true);
                     try {
                       const userRef = doc(db, 'users', user!.uid);
-                      await updateDoc(userRef, { 
+                      await setDoc(userRef, { 
+                        uid: user!.uid,
+                        email: user!.email || '',
                         username: trimmed,
                         updatedAt: new Date().toISOString()
-                      });
+                      }, { merge: true });
                       triggerToast(`Bem-vindo, ${trimmed}! Seu nome foi configurado com sucesso.`, 'success');
                       setShowUsernamePromptModal(false);
                     } catch (err) {

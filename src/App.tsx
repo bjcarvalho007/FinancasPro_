@@ -357,16 +357,16 @@ export default function App() {
 
   // Monitor if user needs to configure a username (for both existing and new users after login)
   useEffect(() => {
-    if (user && !loadingProfile) {
+    if (user && !loadingProfile && !usernameSaving) {
       if (!userProfile || !userProfile.username) {
         setShowUsernamePromptModal(true);
       } else {
         setShowUsernamePromptModal(false);
       }
-    } else {
+    } else if (!user) {
       setShowUsernamePromptModal(false);
     }
-  }, [user, userProfile, loadingProfile]);
+  }, [user, userProfile, loadingProfile, usernameSaving]);
 
   // Profile snapshot stream
   useEffect(() => {
@@ -4581,11 +4581,21 @@ export default function App() {
                         username: trimmed,
                         updatedAt: new Date().toISOString()
                       }, { merge: true });
+                      
+                      // Immediately update the local state to prevent any race condition or latency flashes
+                      setUserProfile((prev: any) => ({
+                        ...(prev || {}),
+                        uid: user!.uid,
+                        email: user!.email || '',
+                        username: trimmed
+                      }));
+                      
                       triggerToast(`Bem-vindo, ${trimmed}! Seu nome foi configurado com sucesso.`, 'success');
                       setShowUsernamePromptModal(false);
-                    } catch (err) {
+                    } catch (err: any) {
                       console.error("Erro ao salvar o nome de usuário:", err);
-                      triggerToast('Erro ao atualizar seu perfil. Tente novamente.', 'error');
+                      const errMsg = err?.message || String(err);
+                      triggerToast(`Erro ao atualizar seu perfil: ${errMsg}`, 'error');
                     } finally {
                       setUsernameSaving(false);
                     }

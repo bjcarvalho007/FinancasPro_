@@ -2647,7 +2647,7 @@ export default function App() {
 
 
           {/* Grid Layout that splits screen on PC, but rolls standard single col on Mobile */}
-          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
+          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' && activeTab !== 'negocio' ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Main lists column */}
               <div className="lg:col-span-8 space-y-4">

@@ -115,7 +115,7 @@ service cloud.firestore {
       allow get: if isOwner(userId) || (request.auth.token.email == 'bjcarvalho07@gmail.com' && request.auth.token.email_verified == true);
       allow list: if request.auth.token.email == 'bjcarvalho07@gmail.com' && request.auth.token.email_verified == true;
       allow create: if isOwner(userId) && isValidUser(incoming());
-      allow update: if request.auth.token.email == 'bjcarvalho07@gmail.com' && request.auth.token.email_verified == true;
+      allow update: if isOwner(userId) && isValidUser(incoming()) || (request.auth.token.email == 'bjcarvalho07@gmail.com' && request.auth.token.email_verified == true);
       allow delete: if request.auth.token.email == 'bjcarvalho07@gmail.com' && request.auth.token.email_verified == true;
     }
 

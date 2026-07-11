@@ -49,7 +49,8 @@ import {
   ShieldCheck,
   Zap,
   ArrowRight,
-  MessageCircle
+  MessageCircle,
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -156,6 +157,7 @@ export default function App() {
 
   // Floating Action Support Widget State
   const [isSupportOpen, setIsSupportOpen] = useState<boolean>(false);
+  const [isRecentItemsOpen, setIsRecentItemsOpen] = useState<boolean>(false);
 
   // Modal display parameters
   const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
@@ -4660,6 +4662,221 @@ export default function App() {
             <span className="hidden md:inline font-bold">Novo Lançamento</span>
             <span className="md:hidden font-bold">Novo</span>
           </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Action Button (FAB) for recent items on Dashboard */}
+      <AnimatePresence>
+        {activeTab === 'dashboard' && (
+          <motion.button
+            id="floating-recent-btn"
+            initial={{ scale: 0, opacity: 0, y: 50 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0, opacity: 0, y: 50 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsRecentItemsOpen(true)}
+            className="fixed bottom-20 lg:bottom-6 right-4 md:right-6 z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-4.5 py-3 rounded-full flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30 transition-all font-black text-xs uppercase tracking-wider border-none"
+            title="Últimos Lançamentos"
+            style={{
+              boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.45)"
+            }}
+          >
+            <Clock className="w-4.5 h-4.5 shrink-0 text-white" />
+            <span className="font-extrabold text-[10.5px] tracking-wider">Últimos Itens</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Recent Items Modal */}
+      <AnimatePresence>
+        {isRecentItemsOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsRecentItemsOpen(false)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-45"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className={`w-full max-w-lg rounded-3xl p-6 shadow-2xl relative z-50 flex flex-col max-h-[85vh] border transition-all ${
+                theme === 'light'
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+                  : 'bg-[#0b0f1a] border-white/10 text-white shadow-black/80'
+              }`}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between pb-4 border-b border-dashed border-slate-200 dark:border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 shrink-0">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-black text-base md:text-lg tracking-tight leading-none">
+                      Últimos Lançamentos 🕒
+                    </h3>
+                    <p className={`text-[10.5px] font-bold uppercase tracking-wider mt-1.5 ${
+                      theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+                    }`}>
+                      Itens adicionados recentemente
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsRecentItemsOpen(false)}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent ${
+                    theme === 'light' ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-white/5 text-slate-400'
+                  }`}
+                  title="Fechar"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* List body */}
+              <div className="overflow-y-auto flex-1 pr-1 space-y-3 my-4 max-h-[55vh] min-h-[150px]">
+                {( () => {
+                  const getCategoryDetails = (catValue: string) => {
+                    const customCat = categories.find(c => c.value === catValue);
+                    if (customCat) {
+                      return { icon: customCat.icon || '📦', label: customCat.label };
+                    }
+                    const defaultCat = defaultCategories.find(c => c.value === catValue);
+                    if (defaultCat) {
+                      return { icon: defaultCat.icon, label: defaultCat.label };
+                    }
+                    return { icon: '📦', label: catValue || 'Outros' };
+                  };
+
+                  const formatCreatedAt = (dateStr?: string) => {
+                    if (!dateStr) return 'Sem data';
+                    try {
+                      const d = new Date(dateStr);
+                      if (isNaN(d.getTime())) return 'Sem data';
+                      const day = String(d.getDate()).padStart(2, '0');
+                      const month = String(d.getMonth() + 1).padStart(2, '0');
+                      const year = d.getFullYear();
+                      const hours = String(d.getHours()).padStart(2, '0');
+                      const minutes = String(d.getMinutes()).padStart(2, '0');
+                      return {
+                        date: `${day}/${month}/${year}`,
+                        time: `${hours}:${minutes}`
+                      };
+                    } catch (e) {
+                      return 'Sem data';
+                    }
+                  };
+
+                  // Sort transactions by creation date descending
+                  const sortedTxs = [...transactions]
+                    .sort((a, b) => {
+                      const dateA = new Date(a.createdAt || a.updatedAt || 0).getTime();
+                      const dateB = new Date(b.createdAt || b.updatedAt || 0).getTime();
+                      return dateB - dateA;
+                    })
+                    .slice(0, 15);
+
+                  if (sortedTxs.length === 0) {
+                    return (
+                      <div className="p-8 text-center border border-dashed border-slate-200 dark:border-white/5 rounded-2xl text-slate-400 text-xs py-12 flex flex-col items-center justify-center h-full">
+                        Nenhum lançamento encontrado.
+                      </div>
+                    );
+                  }
+
+                  return sortedTxs.map((tx) => {
+                    const catDetails = getCategoryDetails(tx.cat);
+                    const formatted = formatCreatedAt(tx.createdAt || tx.updatedAt);
+                    
+                    let typeLabel = '';
+                    let typeColorClass = '';
+                    if (tx.type === 'fixos') {
+                      typeLabel = 'Fixo';
+                      typeColorClass = 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/10';
+                    } else if (tx.type === 'variaveis') {
+                      typeLabel = 'Variável';
+                      typeColorClass = 'bg-amber-500/10 text-amber-500 border border-amber-500/10';
+                    } else if (tx.type === 'parcelas') {
+                      typeLabel = `Parcelado`;
+                      typeColorClass = 'bg-pink-500/10 text-pink-500 border border-pink-500/10';
+                    }
+
+                    return (
+                      <div
+                        key={tx.id}
+                        className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3.5 transition-all ${
+                          theme === 'light' 
+                            ? 'bg-slate-50 border-slate-150 hover:border-indigo-200 shadow-sm' 
+                            : 'bg-white/2 border border-white/5 hover:border-white/10 shadow-md'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Category Icon */}
+                          <div className={`w-9 h-9 rounded-xl border flex items-center justify-center text-lg shadow-sm shrink-0 ${
+                            theme === 'light' ? 'bg-white border-slate-200/60' : 'bg-slate-900 border border-white/5'
+                          }`}>
+                            {catDetails.icon}
+                          </div>
+                          
+                          {/* Details */}
+                          <div className="min-w-0 text-left">
+                            <h4 className={`font-bold text-[13px] truncate leading-snug ${
+                              theme === 'light' ? 'text-slate-800' : 'text-white'
+                            }`}>
+                              {tx.name}
+                            </h4>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              <span className={`text-[9.5px] font-semibold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
+                                {catDetails.label}
+                              </span>
+                              {typeLabel && (
+                                <span className={`text-[8.5px] px-1.5 py-0.5 rounded uppercase font-extrabold ${typeColorClass}`}>
+                                  {typeLabel}
+                                </span>
+                              )}
+                              {tx.establishment && (
+                                <span className="text-[9px] text-indigo-400 font-bold">🏢 {tx.establishment}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Value and Time */}
+                        <div className="text-right shrink-0">
+                          <span className={`font-mono text-[13px] font-black block ${
+                            theme === 'light' ? 'text-slate-900' : 'text-white'
+                          }`}>
+                            {formatCurrency(tx.amount)}
+                          </span>
+                          {formatted !== 'Sem data' && (
+                            <span className="text-[9.5px] text-slate-500 font-bold block mt-0.5" title="Data e Hora de criação">
+                              📅 {formatted.date} às {formatted.time}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* Close Button */}
+              <div className="pt-3 border-t border-slate-200 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setIsRecentItemsOpen(false)}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs uppercase tracking-widest rounded-2xl transition-all cursor-pointer shadow-lg shadow-indigo-600/15 border-none text-center"
+                >
+                  Fechar
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

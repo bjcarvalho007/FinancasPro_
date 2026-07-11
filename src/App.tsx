@@ -4683,7 +4683,7 @@ export default function App() {
             }}
           >
             <Clock className="w-4.5 h-4.5 shrink-0 text-white" />
-            <span className="font-extrabold text-[10.5px] tracking-wider">Últimos Itens</span>
+            <span className="font-extrabold text-[10.5px] tracking-wider">Últimos lançados</span>
           </motion.button>
         )}
       </AnimatePresence>

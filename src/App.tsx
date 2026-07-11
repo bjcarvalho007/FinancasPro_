@@ -4676,7 +4676,7 @@ export default function App() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setIsRecentItemsOpen(true)}
-            className="fixed bottom-20 lg:bottom-6 right-4 md:right-6 z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-4.5 py-3 rounded-full flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30 transition-all font-black text-xs uppercase tracking-wider border-none"
+            className="fixed bottom-[148px] lg:bottom-6 right-4 md:right-6 lg:right-[215px] z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-4.5 py-3 rounded-full flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30 transition-all font-black text-xs uppercase tracking-wider border-none"
             title="Últimos Lançamentos"
             style={{
               boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.45)"

@@ -1,3 +1,9 @@
+export interface ExtraGastoHistoryItem {
+  id: string;
+  amount: number;
+  createdAt: string;
+}
+
 export interface Transaction {
   id: string;
   userId: string;
@@ -12,6 +18,7 @@ export interface Transaction {
   monthKey: string; // YYYY-MM
   total_parcelado?: number;
   extra_gasto?: number;
+  extra_gastos_history?: ExtraGastoHistoryItem[];
   establishment?: string;
   installmentsCount?: number;
   createdAt?: string;

@@ -3274,8 +3274,18 @@ export default function App() {
                                                   const path = `transactions/${masterId}`;
                                                   try {
                                                     const docRef = doc(db, 'transactions', masterId);
+                                                    const newHistoryItem = {
+                                                      id: `eg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                                                      amount: valueToAdd,
+                                                      createdAt: new Date().toISOString()
+                                                    };
+                                                    const updatedHistory = [
+                                                      ...(masterTx.extra_gastos_history || []),
+                                                      newHistoryItem
+                                                    ];
                                                     await updateDoc(docRef, {
                                                       extra_gasto: totalExtraGasto + valueToAdd,
+                                                      extra_gastos_history: updatedHistory,
                                                       updatedAt: new Date().toISOString()
                                                     });
                                                     setExtraGastoInputs(prev => ({ ...prev, [masterId]: '' }));
@@ -3300,8 +3310,18 @@ export default function App() {
                                               const path = `transactions/${masterId}`;
                                               try {
                                                 const docRef = doc(db, 'transactions', masterId);
+                                                const newHistoryItem = {
+                                                  id: `eg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                                                  amount: valueToAdd,
+                                                  createdAt: new Date().toISOString()
+                                                };
+                                                const updatedHistory = [
+                                                  ...(masterTx.extra_gastos_history || []),
+                                                  newHistoryItem
+                                                ];
                                                 await updateDoc(docRef, {
                                                   extra_gasto: totalExtraGasto + valueToAdd,
+                                                  extra_gastos_history: updatedHistory,
                                                   updatedAt: new Date().toISOString()
                                                 });
                                                 setExtraGastoInputs(prev => ({ ...prev, [masterId]: '' }));
@@ -4800,16 +4820,37 @@ export default function App() {
 
                     // Dynamic extra expense entry added to the installment plan
                     if (tx.type === 'parcelas' && tx.extra_gasto && tx.extra_gasto > 0) {
-                      unifiedList.push({
-                        id: `extra-${tx.id}`,
-                        name: `Gasto Extra • ${tx.name}`,
-                        amount: tx.extra_gasto,
-                        type: 'gasto_extra',
-                        cat: tx.cat,
-                        establishment: tx.establishment,
-                        timestampStr: tx.updatedAt || tx.createdAt || '',
-                        parentName: tx.name
+                      const history = tx.extra_gastos_history || [];
+                      const historySum = history.reduce((sum, h) => sum + (h.amount || 0), 0);
+                      
+                      // 1. Add all history items
+                      history.forEach((h, idx) => {
+                        unifiedList.push({
+                          id: `extra-h-${tx.id}-${h.id || idx}`,
+                          name: `Gasto Extra • ${tx.name}`,
+                          amount: h.amount,
+                          type: 'gasto_extra',
+                          cat: tx.cat,
+                          establishment: tx.establishment,
+                          timestampStr: h.createdAt || tx.updatedAt || tx.createdAt || '',
+                          parentName: tx.name
+                        });
                       });
+
+                      // 2. If there's some remaining extra_gasto amount not covered by history (legacy/fallback), add it
+                      const remainingAmount = tx.extra_gasto - historySum;
+                      if (remainingAmount > 0.01) {
+                        unifiedList.push({
+                          id: `extra-legacy-${tx.id}`,
+                          name: `Gasto Extra • ${tx.name}`,
+                          amount: remainingAmount,
+                          type: 'gasto_extra',
+                          cat: tx.cat,
+                          establishment: tx.establishment,
+                          timestampStr: tx.updatedAt || tx.createdAt || '',
+                          parentName: tx.name
+                        });
+                      }
                     }
                   });
 

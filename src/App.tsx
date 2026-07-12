@@ -4772,16 +4772,57 @@ export default function App() {
                     }
                   };
 
-                  // Sort transactions by creation date descending
-                  const sortedTxs = [...transactions]
+                  // Build unified list of regular transactions and added extra expenses (gastos extras)
+                  interface UnifiedItem {
+                    id: string;
+                    name: string;
+                    amount: number;
+                    type: 'fixos' | 'variaveis' | 'parcelas' | 'gasto_extra';
+                    cat: string;
+                    establishment?: string;
+                    timestampStr: string;
+                    parentName?: string;
+                  }
+
+                  const unifiedList: UnifiedItem[] = [];
+
+                  transactions.forEach(tx => {
+                    // Original transaction entry
+                    unifiedList.push({
+                      id: tx.id,
+                      name: tx.name,
+                      amount: tx.amount,
+                      type: tx.type,
+                      cat: tx.cat,
+                      establishment: tx.establishment,
+                      timestampStr: tx.createdAt || tx.updatedAt || ''
+                    });
+
+                    // Dynamic extra expense entry added to the installment plan
+                    if (tx.type === 'parcelas' && tx.extra_gasto && tx.extra_gasto > 0) {
+                      unifiedList.push({
+                        id: `extra-${tx.id}`,
+                        name: `Gasto Extra • ${tx.name}`,
+                        amount: tx.extra_gasto,
+                        type: 'gasto_extra',
+                        cat: tx.cat,
+                        establishment: tx.establishment,
+                        timestampStr: tx.updatedAt || tx.createdAt || '',
+                        parentName: tx.name
+                      });
+                    }
+                  });
+
+                  // Sort consolidated list by timestamp descending
+                  const sortedItems = unifiedList
                     .sort((a, b) => {
-                      const dateA = new Date(a.createdAt || a.updatedAt || 0).getTime();
-                      const dateB = new Date(b.createdAt || b.updatedAt || 0).getTime();
+                      const dateA = new Date(a.timestampStr || 0).getTime();
+                      const dateB = new Date(b.timestampStr || 0).getTime();
                       return dateB - dateA;
                     })
-                    .slice(0, 15);
+                    .slice(0, 20);
 
-                  if (sortedTxs.length === 0) {
+                  if (sortedItems.length === 0) {
                     return (
                       <div className="p-8 text-center border border-dashed border-slate-200 dark:border-white/5 rounded-2xl text-slate-400 text-xs py-12 flex flex-col items-center justify-center h-full">
                         Nenhum lançamento encontrado.
@@ -4789,38 +4830,43 @@ export default function App() {
                     );
                   }
 
-                  return sortedTxs.map((tx) => {
-                    const catDetails = getCategoryDetails(tx.cat);
-                    const formatted = formatCreatedAt(tx.createdAt || tx.updatedAt);
+                  return sortedItems.map((item) => {
+                    const catDetails = getCategoryDetails(item.cat);
+                    const formatted = formatCreatedAt(item.timestampStr);
                     
                     let typeLabel = '';
                     let typeColorClass = '';
-                    if (tx.type === 'fixos') {
+                    if (item.type === 'fixos') {
                       typeLabel = 'Fixo';
                       typeColorClass = 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/10';
-                    } else if (tx.type === 'variaveis') {
+                    } else if (item.type === 'variaveis') {
                       typeLabel = 'Variável';
                       typeColorClass = 'bg-amber-500/10 text-amber-500 border border-amber-500/10';
-                    } else if (tx.type === 'parcelas') {
-                      typeLabel = `Parcelado`;
+                    } else if (item.type === 'parcelas') {
+                      typeLabel = 'Parcelado';
                       typeColorClass = 'bg-pink-500/10 text-pink-500 border border-pink-500/10';
+                    } else if (item.type === 'gasto_extra') {
+                      typeLabel = 'Gasto Extra';
+                      typeColorClass = 'bg-amber-500/15 text-amber-500 border border-amber-500/20';
                     }
 
                     return (
                       <div
-                        key={tx.id}
+                        key={item.id}
                         className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3.5 transition-all ${
                           theme === 'light' 
                             ? 'bg-slate-50 border-slate-150 hover:border-indigo-200 shadow-sm' 
                             : 'bg-white/2 border border-white/5 hover:border-white/10 shadow-md'
-                        }`}
+                        } ${item.type === 'gasto_extra' ? 'border-amber-500/20 dark:border-amber-500/10' : ''}`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           {/* Category Icon */}
                           <div className={`w-9 h-9 rounded-xl border flex items-center justify-center text-lg shadow-sm shrink-0 ${
-                            theme === 'light' ? 'bg-white border-slate-200/60' : 'bg-slate-900 border border-white/5'
+                            theme === 'light' 
+                              ? item.type === 'gasto_extra' ? 'bg-amber-50/50 border-amber-200 text-amber-600' : 'bg-white border-slate-200/60' 
+                              : item.type === 'gasto_extra' ? 'bg-amber-950/20 border-amber-500/20 text-amber-400' : 'bg-slate-900 border border-white/5'
                           }`}>
-                            {catDetails.icon}
+                            {item.type === 'gasto_extra' ? '⚡' : catDetails.icon}
                           </div>
                           
                           {/* Details */}
@@ -4828,7 +4874,7 @@ export default function App() {
                             <h4 className={`font-bold text-[13px] truncate leading-snug ${
                               theme === 'light' ? 'text-slate-800' : 'text-white'
                             }`}>
-                              {tx.name}
+                              {item.name}
                             </h4>
                             <div className="flex flex-wrap items-center gap-1.5 mt-1">
                               <span className={`text-[9.5px] font-semibold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'}`}>
@@ -4839,8 +4885,8 @@ export default function App() {
                                   {typeLabel}
                                 </span>
                               )}
-                              {tx.establishment && (
-                                <span className="text-[9px] text-indigo-400 font-bold">🏢 {tx.establishment}</span>
+                              {item.establishment && (
+                                <span className="text-[9px] text-indigo-400 font-bold">🏢 {item.establishment}</span>
                               )}
                             </div>
                           </div>
@@ -4849,9 +4895,11 @@ export default function App() {
                         {/* Value and Time */}
                         <div className="text-right shrink-0">
                           <span className={`font-mono text-[13px] font-black block ${
-                            theme === 'light' ? 'text-slate-900' : 'text-white'
+                            item.type === 'gasto_extra' 
+                              ? 'text-amber-500'
+                              : theme === 'light' ? 'text-slate-900' : 'text-white'
                           }`}>
-                            {formatCurrency(tx.amount)}
+                            {formatCurrency(item.amount)}
                           </span>
                           {formatted !== 'Sem data' && (
                             <span className="text-[9.5px] text-slate-500 font-bold block mt-0.5" title="Data e Hora de criação">

@@ -239,6 +239,227 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Helper functions for Mercado Pago
+const getMercadoPagoAccessToken = (): string => {
+  return (process.env.MERCADOPAGO_ACCESS_TOKEN || "APP_USR-8709355773380717-071310-4bd4c68b4aa757e29d639fc38e220aca-3535803631").trim();
+};
+
+const getMercadoPagoPublicKey = (): string => {
+  return (process.env.MERCADOPAGO_PUBLIC_KEY || "APP_USR-d38c88c3-eb64-42bb-9c31-6baf6fbf43ba").trim();
+};
+
+// Mercado Pago dynamic checkout preference creation
+app.post("/api/mercadopago/create-preference", async (req, res) => {
+  try {
+    const { email, userId } = req.body;
+    
+    const rawOrigin = process.env.APP_URL || req.get("origin") || req.get("referer") || (req.get("host") ? `${req.protocol}://${req.get("host")}` : "http://localhost:3000");
+    let origin = "http://localhost:3000";
+    try {
+      const parsedUrl = new URL(rawOrigin);
+      origin = `${parsedUrl.protocol}//${parsedUrl.host}`;
+    } catch {
+      origin = rawOrigin.trim().replace(/\/$/, "");
+      if (origin.includes("://")) {
+        const parts = origin.split("/");
+        origin = `${parts[0]}//${parts[2]}`;
+      }
+    }
+
+    const accessToken = getMercadoPagoAccessToken();
+    const fetchFn = (globalThis as any).fetch || fetch;
+    
+    console.log(`\n💳 [MERCADO PAGO] Criando preferência para email=${email || "Novo Usuário"}, userId=${userId || "new_user"}`);
+
+    const response = await fetchFn("https://api.mercadopago.com/checkout/preferences", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        items: [
+          {
+            id: "premium_30_days",
+            title: "Assinatura Premium FinançasPro - 30 Dias",
+            description: "Acesso total à gestão financeira corporativa e projeções analíticas automatizadas.",
+            quantity: 1,
+            currency_id: "BRL",
+            unit_price: 11.99
+          }
+        ],
+        payer: {
+          email: email || "comprador@financapro.com"
+        },
+        back_urls: {
+          success: `${origin}${userId ? "" : "/cadastro"}?status=approved`,
+          failure: `${origin}/`,
+          pending: `${origin}/`
+        },
+        auto_return: "approved",
+        external_reference: userId || "new_user",
+        notification_url: `${origin}/api/mercadopago/webhook`
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`❌ [MERCADO PAGO] Erro ao criar preferência: ${response.status} - ${errText}`);
+      throw new Error(`Erro ao criar link de pagamento no Mercado Pago: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log(`✅ [MERCADO PAGO] Preferência criada com sucesso: ID=${data.id}`);
+    res.json({ id: data.id, url: data.init_point });
+  } catch (err: any) {
+    console.error("Erro ao criar preferência do Mercado Pago:", err);
+    res.status(500).json({ error: err.message || "Erro interno" });
+  }
+});
+
+// Mercado Pago instant notification webhook (IPN / Webhook)
+app.post("/api/mercadopago/webhook", async (req, res) => {
+  console.log("\n📥 [MERCADO PAGO WEBHOOK] Notificação recebida. Body:", JSON.stringify(req.body), "Query:", JSON.stringify(req.query));
+  
+  try {
+    const queryId = req.query.id || req.query["data.id"];
+    const bodyId = req.body.id || (req.body.data && req.body.data.id);
+    const paymentId = queryId || bodyId;
+    const topic = req.query.topic || req.body.type || "payment";
+
+    if (!paymentId || topic !== "payment") {
+      console.log("ℹ️ [MERCADO PAGO WEBHOOK] Ignorando (não é do tipo payment ou ID ausente).");
+      return res.status(200).json({ received: true });
+    }
+
+    console.log(`🔍 [MERCADO PAGO WEBHOOK] Verificando pagamento ID: ${paymentId}`);
+
+    const accessToken = getMercadoPagoAccessToken();
+    const fetchFn = (globalThis as any).fetch || fetch;
+    const mpResponse = await fetchFn(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      headers: {
+        "Authorization": `Bearer ${accessToken}`
+      }
+    });
+
+    if (!mpResponse.ok) {
+      console.error(`❌ [MERCADO PAGO WEBHOOK] Erro ao buscar pagamento no Mercado Pago: ${mpResponse.statusText}`);
+      return res.status(400).send("Erro ao buscar pagamento.");
+    }
+
+    const paymentData = await mpResponse.json();
+    const status = paymentData.status;
+    const email = paymentData.payer?.email;
+    const externalReference = paymentData.external_reference; // Contém o userId (se logado) ou "new_user"
+
+    console.log(`📊 [MERCADO PAGO WEBHOOK] Detalhes do pagamento ${paymentId}: Status = ${status}, Email = ${email}, ExternalRef = ${externalReference}`);
+
+    if (status === "approved") {
+      const adminDb = admin.firestore();
+      
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30);
+      const dataVencimento = expiryDate.toISOString();
+
+      // 1. Grava ou atualiza na coleção 'tokens_pagos' para novos usuários poderem registrar
+      const tokenRef = adminDb.collection("tokens_pagos").doc(String(paymentId));
+      const tokenSnap = await tokenRef.get();
+      const alreadyUsed = tokenSnap.exists && tokenSnap.data()?.used === true;
+
+      await tokenRef.set({
+        token: String(paymentId),
+        email: email || "",
+        used: alreadyUsed,
+        paymentSystem: "MercadoPago",
+        createdAt: new Date().toISOString()
+      }, { merge: true });
+
+      let userActivated = false;
+
+      // A. Se temos o userId (externalReference), ativa direto
+      if (externalReference && externalReference !== "new_user") {
+        console.log(`🎯 [MERCADO PAGO WEBHOOK] Ativando conta do usuário via ID: ${externalReference}`);
+        const userRef = adminDb.collection("users").doc(externalReference);
+        const userSnap = await userRef.get();
+        if (userSnap.exists) {
+          const userData = userSnap.data();
+          let currentVencimento = userData?.dataVencimento;
+          let newVencimento = dataVencimento;
+          
+          if (currentVencimento) {
+            const currentExpiryTime = Date.parse(currentVencimento);
+            if (!isNaN(currentExpiryTime) && currentExpiryTime > Date.now()) {
+              const renewalDate = new Date(currentExpiryTime);
+              renewalDate.setDate(renewalDate.getDate() + 30);
+              newVencimento = renewalDate.toISOString();
+              console.log(`🔄 [RENOVAÇÃO] Prorrogando validade de ${currentVencimento} para ${newVencimento}`);
+            }
+          }
+
+          await userRef.set({
+            assinante: true,
+            dataVencimento: newVencimento,
+            paymentId: String(paymentId),
+            paymentStatus: "approved",
+            paymentSystem: "MercadoPago",
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+
+          await tokenRef.update({ used: true, userId: externalReference });
+          userActivated = true;
+        }
+      }
+
+      // B. Se não ativou por ID, busca por e-mail correspondente
+      if (!userActivated && email) {
+        console.log(`📧 [MERCADO PAGO WEBHOOK] Buscando usuário pelo e-mail: ${email}`);
+        const usersQuery = await adminDb.collection("users").where("email", "==", email).get();
+        if (!usersQuery.empty) {
+          for (const userDoc of usersQuery.docs) {
+            const userData = userDoc.data();
+            let currentVencimento = userData?.dataVencimento;
+            let newVencimento = dataVencimento;
+
+            if (currentVencimento) {
+              const currentExpiryTime = Date.parse(currentVencimento);
+              if (!isNaN(currentExpiryTime) && currentExpiryTime > Date.now()) {
+                const renewalDate = new Date(currentExpiryTime);
+                renewalDate.setDate(renewalDate.getDate() + 30);
+                newVencimento = renewalDate.toISOString();
+                console.log(`🔄 [RENOVAÇÃO POR EMAIL] Prorrogando de ${currentVencimento} para ${newVencimento}`);
+              }
+            }
+
+            console.log(`🎯 [MERCADO PAGO WEBHOOK] Ativando conta do usuário ${userDoc.id} via e-mail match`);
+            await userDoc.ref.set({
+              assinante: true,
+              dataVencimento: newVencimento,
+              paymentId: String(paymentId),
+              paymentStatus: "approved",
+              paymentSystem: "MercadoPago",
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+
+            await tokenRef.update({ used: true, userId: userDoc.id });
+            userActivated = true;
+          }
+        }
+      }
+
+      if (userActivated) {
+        console.log(`✅ [MERCADO PAGO WEBHOOK] Conta ativada com sucesso pelo webhook!`);
+      } else {
+        console.log(`ℹ️ [MERCADO PAGO WEBHOOK] Nenhum usuário ativo correspondente encontrado para ativação direta ainda. Token gravado.`);
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("❌ [MERCADO PAGO WEBHOOK] Erro crítico:", err);
+    res.status(500).send("Erro interno de processamento.");
+  }
+});
+
 // Stripe checkout session creation
 app.post(["/api/stripe/create-checkout-session", "/api/create-checkout-session"], async (req, res) => {
   try {

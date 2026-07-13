@@ -201,6 +201,7 @@ export default function App() {
   const [tempExtraStr, setTempExtraStr] = useState<string>('');
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
   const [showPaymentInfoModal, setShowPaymentInfoModal] = useState<boolean>(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
   const [showCelebrationModal, setShowCelebrationModal] = useState<boolean>(false);
   const [celebratedTx, setCelebratedTx] = useState<{ name: string; amount: number } | null>(null);
 
@@ -1298,6 +1299,40 @@ export default function App() {
     }
   };
 
+  const handleDynamicMercadoPagoCheckout = async () => {
+    setShowPaymentInfoModal(false);
+    setCheckoutLoading(true);
+    try {
+      const response = await fetch('/api/mercadopago/create-preference', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: user?.email || '',
+          userId: user?.uid || '',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao gerar preferência no backend');
+      }
+
+      const data = await response.json();
+      if (data && data.url) {
+        window.open(data.url, '_blank');
+      } else {
+        window.open("https://mpago.la/1SfRUJ2", "_blank");
+      }
+    } catch (err) {
+      console.error("Erro ao gerar link de pagamento dinâmico:", err);
+      // Fallback seguro
+      window.open("https://mpago.la/1SfRUJ2", "_blank");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   // Math ledger computation definitions
   const activeMonthCategoryList = [...defaultCategories, ...categories];
   const activeMonthTransactions = useMemo(() => {
@@ -2078,16 +2113,15 @@ export default function App() {
                 >
                   Voltar
                 </button>
-                <a
-                  href="https://mpago.la/1SfRUJ2"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setShowPaymentInfoModal(false)}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 px-4 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-1 cursor-pointer border-none text-[10px] no-underline"
+                <button
+                  type="button"
+                  disabled={checkoutLoading}
+                  onClick={handleDynamicMercadoPagoCheckout}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 px-4 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-1 cursor-pointer border-none text-[10px] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Ir para o Pagamento
+                  {checkoutLoading ? "Carregando..." : "Ir para o Pagamento"}
                   <ArrowRight className="w-3.5 h-3.5" />
-                </a>
+                </button>
               </div>
             </motion.div>
           </div>
@@ -2457,15 +2491,14 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 sm:self-center shrink-0 w-full sm:w-auto">
-                  <a
-                    href="https://mpago.la/1SfRUJ2"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 sm:flex-none text-center bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold px-4.5 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md shadow-indigo-600/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none no-underline"
+                  <button
+                    disabled={checkoutLoading}
+                    onClick={handleDynamicMercadoPagoCheckout}
+                    className="flex-1 sm:flex-none text-center bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold px-4.5 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md shadow-indigo-600/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <span>Renovar Agora</span>
+                    <span>{checkoutLoading ? "Processando..." : "Renovar Agora"}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
-                  </a>
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -4043,16 +4076,15 @@ export default function App() {
               >
                 Voltar
               </button>
-              <a
-                href="https://mpago.la/1SfRUJ2"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setShowPaymentInfoModal(false)}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 px-4 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-1 cursor-pointer border-none text-[10px] no-underline"
+              <button
+                type="button"
+                disabled={checkoutLoading}
+                onClick={handleDynamicMercadoPagoCheckout}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 px-4 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-1 cursor-pointer border-none text-[10px] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Ir para o Pagamento
+                {checkoutLoading ? "Carregando..." : "Ir para o Pagamento"}
                 <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+              </button>
             </div>
           </motion.div>
         </div>

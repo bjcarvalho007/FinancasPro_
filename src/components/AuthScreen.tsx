@@ -86,9 +86,37 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
     setShowPaymentInfoModal(true);
   };
 
-  const confirmMercadoPagoCheckout = () => {
+  const confirmMercadoPagoCheckout = async () => {
     setShowPaymentInfoModal(false);
-    window.open("https://mpago.la/1SfRUJ2", "_blank");
+    setCheckoutLoading(true);
+    try {
+      const response = await fetch('/api/mercadopago/create-preference', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email || '',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao gerar preferência no backend');
+      }
+
+      const data = await response.json();
+      if (data && data.url) {
+        window.open(data.url, '_blank');
+      } else {
+        window.open("https://mpago.la/1SfRUJ2", "_blank");
+      }
+    } catch (err) {
+      console.error("Erro ao gerar link de pagamento dinâmico:", err);
+      // Fallback seguro para link estático
+      window.open("https://mpago.la/1SfRUJ2", "_blank");
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -254,13 +282,15 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       expiryDate.setDate(expiryDate.getDate() + 30);
       const dataVencimento = expiryDate.toISOString();
 
+      const isPremiumUser = !isTrialSignUp;
+
       await setDoc(doc(db, "users", registeredUser.uid), {
         uid: registeredUser.uid,
         email: email,
         token: token,
         paymentSystem: isTrialSignUp ? 'Trial' : 'MercadoPago',
-        assinante: isMPApproved ? true : false,
-        dataVencimento: isMPApproved ? dataVencimento : null,
+        assinante: isPremiumUser,
+        dataVencimento: isPremiumUser ? dataVencimento : null,
         createdAt: new Date().toISOString()
       }, { merge: true });
 

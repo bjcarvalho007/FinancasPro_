@@ -214,7 +214,7 @@ export default function App() {
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
 
-  const VIP_EMAILS = useMemo(() => ['bjcarvalho07@gmail.com', 'msouzacintia600@gmail.com'], []);
+  const VIP_EMAILS = useMemo(() => ['bjcarvalho07@gmail.com', 'msouzacintia600@gmail.com', 'teste@gmail.com', 'bjcarvalho007@gmail.com'], []);
 
   const isVIP = useMemo(() => {
     return !!(user && user.email && VIP_EMAILS.includes(user.email.toLowerCase().trim()));
@@ -397,6 +397,48 @@ export default function App() {
             updatedAt: new Date().toISOString()
           }, { merge: true }).catch(err => {
             console.error("Erro ao auto-liberar acesso pro irakellygaby1@icloud.com:", err);
+          });
+        }
+      }
+
+      // Auto-ativação imediata para o usuário teste@gmail.com que já pagou
+      if (user && user.email && user.email.toLowerCase().trim() === 'teste@gmail.com') {
+        const currentExpiryStr = profileData?.dataVencimento;
+        const targetExpiry = new Date();
+        targetExpiry.setFullYear(targetExpiry.getFullYear() + 1); // 1 ano de assinatura garantida
+        const hasValidSub = profileData?.assinante === true && currentExpiryStr && Date.parse(currentExpiryStr) >= (targetExpiry.getTime() - 1000 * 60 * 60 * 24 * 30);
+
+        if (!hasValidSub) {
+          const userRef = doc(db, 'users', user.uid);
+          setDoc(userRef, {
+            assinante: true,
+            dataVencimento: targetExpiry.toISOString(),
+            paymentStatus: 'approved',
+            paymentSystem: 'MercadoPago',
+            updatedAt: new Date().toISOString()
+          }, { merge: true }).catch(err => {
+            console.error("Erro ao auto-ativar acesso para teste@gmail.com:", err);
+          });
+        }
+      }
+
+      // Auto-ativação imediata para o usuário bjcarvalho007@gmail.com
+      if (user && user.email && user.email.toLowerCase().trim() === 'bjcarvalho007@gmail.com') {
+        const currentExpiryStr = profileData?.dataVencimento;
+        const targetExpiry = new Date();
+        targetExpiry.setFullYear(targetExpiry.getFullYear() + 1); // 1 ano de assinatura garantida
+        const hasValidSub = profileData?.assinante === true && currentExpiryStr && Date.parse(currentExpiryStr) >= (targetExpiry.getTime() - 1000 * 60 * 60 * 24 * 30);
+
+        if (!hasValidSub) {
+          const userRef = doc(db, 'users', user.uid);
+          setDoc(userRef, {
+            assinante: true,
+            dataVencimento: targetExpiry.toISOString(),
+            paymentStatus: 'approved',
+            paymentSystem: 'MercadoPago',
+            updatedAt: new Date().toISOString()
+          }, { merge: true }).catch(err => {
+            console.error("Erro ao auto-ativar acesso para bjcarvalho007@gmail.com:", err);
           });
         }
       }

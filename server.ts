@@ -27,9 +27,27 @@ try {
   
   if (!admin.apps.length) {
     console.log(`🚀 Inicializando Firebase Admin SDK para o projeto: ${projectId}`);
-    admin.initializeApp({
-      projectId: projectId
-    });
+    const saKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    
+    if (saKey) {
+      try {
+        const parsedKey = JSON.parse(saKey);
+        admin.initializeApp({
+          credential: admin.credential.cert(parsedKey),
+          projectId: projectId
+        });
+        console.log("✅ Firebase Admin SDK inicializado com sucesso via Service Account Key.");
+      } catch (keyErr: any) {
+        console.error("❌ Falha ao carregar credenciais da Service Account em FIREBASE_SERVICE_ACCOUNT_KEY:", keyErr);
+        admin.initializeApp({
+          projectId: projectId
+        });
+      }
+    } else {
+      admin.initializeApp({
+        projectId: projectId
+      });
+    }
   }
 } catch (err: any) {
   console.warn("⚠️ Falha ao inicializar o Firebase Admin SDK:", err);
@@ -226,17 +244,43 @@ async function runBackgroundPushNotificationChecker() {
 }
 
 // Check on boot (after a 10s cooldown to allow server initialization) and reschedule every 3 hours
-setTimeout(() => {
-  runBackgroundPushNotificationChecker().catch(console.error);
-}, 10000);
+if (!process.env.VERCEL) {
+  setTimeout(() => {
+    runBackgroundPushNotificationChecker().catch(console.error);
+  }, 10000);
 
-setInterval(() => {
-  runBackgroundPushNotificationChecker().catch(console.error);
-}, 1000 * 60 * 60 * 3); // 3 hours
+  setInterval(() => {
+    runBackgroundPushNotificationChecker().catch(console.error);
+  }, 1000 * 60 * 60 * 3); // 3 hours
+}
 
 // API route 1: Healthcheck
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Temporary debug-users endpoint to inspect Firestore state
+app.get("/api/admin/debug-users", async (req, res) => {
+  try {
+    const adminDb = admin.firestore();
+    const email = req.query.email as string;
+    const results: any = {};
+    
+    if (email) {
+      const usersSnapshot = await adminDb.collection("users").where("email", "==", email).get();
+      results.userByEmail = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    }
+    
+    const usersSnapshot = await adminDb.collection("users").limit(15).get();
+    results.allUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, email: doc.data().email, assinante: doc.data().assinante, dataVencimento: doc.data().dataVencimento }));
+    
+    const tokensSnapshot = await adminDb.collection("tokens_pagos").limit(15).get();
+    results.tokensPagos = tokensSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    return res.json(results);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message, stack: err.stack });
+  }
 });
 
 // Helper functions for Mercado Pago
@@ -321,6 +365,11 @@ app.post("/api/mercadopago/create-preference", async (req, res) => {
 });
 
 // Mercado Pago instant notification webhook (IPN / Webhook)
+app.get("/api/mercadopago/webhook", (req, res) => {
+  console.log("🔍 [MERCADO PAGO WEBHOOK] Requisição GET recebida para validação.");
+  res.status(200).json({ status: "active", message: "FinançasPro Webhook is active and listening for POST notifications." });
+});
+
 app.post("/api/mercadopago/webhook", async (req, res) => {
   console.log("\n📥 [MERCADO PAGO WEBHOOK] Notificação recebida. Body:", JSON.stringify(req.body), "Query:", JSON.stringify(req.query));
   
@@ -372,83 +421,49 @@ app.post("/api/mercadopago/webhook", async (req, res) => {
     console.log(`📊 [MERCADO PAGO WEBHOOK] Detalhes do pagamento ${paymentId}: Status = ${status}, Email = ${email}, ExternalRef = ${externalReference}`);
 
     if (status === "approved") {
-      const adminDb = admin.firestore();
-      
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + 30);
-      const dataVencimento = expiryDate.toISOString();
+      try {
+        const adminDb = admin.firestore();
+        
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 30);
+        const dataVencimento = expiryDate.toISOString();
 
-      // 1. Grava ou atualiza na coleção 'tokens_pagos' para novos usuários poderem registrar
-      const tokenRef = adminDb.collection("tokens_pagos").doc(String(paymentId));
-      const tokenSnap = await tokenRef.get();
-      const alreadyUsed = tokenSnap.exists && tokenSnap.data()?.used === true;
+        // 1. Grava ou atualiza na coleção 'tokens_pagos' para novos usuários poderem registrar
+        const tokenRef = adminDb.collection("tokens_pagos").doc(String(paymentId));
+        const tokenSnap = await tokenRef.get();
+        const alreadyUsed = tokenSnap.exists && tokenSnap.data()?.used === true;
 
-      await tokenRef.set({
-        token: String(paymentId),
-        email: email || "",
-        used: alreadyUsed,
-        paymentSystem: "MercadoPago",
-        createdAt: new Date().toISOString()
-      }, { merge: true });
+        await tokenRef.set({
+          token: String(paymentId),
+          email: email || "",
+          used: alreadyUsed,
+          paymentSystem: "MercadoPago",
+          createdAt: new Date().toISOString()
+        }, { merge: true });
 
-      let userActivated = false;
+        let userActivated = false;
 
-      // A. Se temos o userId (externalReference), ativa direto
-      if (externalReference && externalReference !== "new_user") {
-        console.log(`🎯 [MERCADO PAGO WEBHOOK] Ativando conta do usuário via ID: ${externalReference}`);
-        const userRef = adminDb.collection("users").doc(externalReference);
-        const userSnap = await userRef.get();
-        if (userSnap.exists) {
-          const userData = userSnap.data();
-          let currentVencimento = userData?.dataVencimento;
-          let newVencimento = dataVencimento;
-          
-          if (currentVencimento) {
-            const currentExpiryTime = Date.parse(currentVencimento);
-            if (!isNaN(currentExpiryTime) && currentExpiryTime > Date.now()) {
-              const renewalDate = new Date(currentExpiryTime);
-              renewalDate.setDate(renewalDate.getDate() + 30);
-              newVencimento = renewalDate.toISOString();
-              console.log(`🔄 [RENOVAÇÃO] Prorrogando validade de ${currentVencimento} para ${newVencimento}`);
-            }
-          }
-
-          await userRef.set({
-            assinante: true,
-            dataVencimento: newVencimento,
-            paymentId: String(paymentId),
-            paymentStatus: "approved",
-            paymentSystem: "MercadoPago",
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
-
-          await tokenRef.update({ used: true, userId: externalReference });
-          userActivated = true;
-        }
-      }
-
-      // B. Se não ativou por ID, busca por e-mail correspondente
-      if (!userActivated && email) {
-        console.log(`📧 [MERCADO PAGO WEBHOOK] Buscando usuário pelo e-mail: ${email}`);
-        const usersQuery = await adminDb.collection("users").where("email", "==", email).get();
-        if (!usersQuery.empty) {
-          for (const userDoc of usersQuery.docs) {
-            const userData = userDoc.data();
+        // A. Se temos o userId (externalReference), ativa direto
+        if (externalReference && externalReference !== "new_user") {
+          console.log(`🎯 [MERCADO PAGO WEBHOOK] Ativando conta do usuário via ID: ${externalReference}`);
+          const userRef = adminDb.collection("users").doc(externalReference);
+          const userSnap = await userRef.get();
+          if (userSnap.exists) {
+            const userData = userSnap.data();
             let currentVencimento = userData?.dataVencimento;
             let newVencimento = dataVencimento;
-
+            
             if (currentVencimento) {
               const currentExpiryTime = Date.parse(currentVencimento);
               if (!isNaN(currentExpiryTime) && currentExpiryTime > Date.now()) {
                 const renewalDate = new Date(currentExpiryTime);
                 renewalDate.setDate(renewalDate.getDate() + 30);
                 newVencimento = renewalDate.toISOString();
-                console.log(`🔄 [RENOVAÇÃO POR EMAIL] Prorrogando de ${currentVencimento} para ${newVencimento}`);
+                console.log(`🔄 [RENOVAÇÃO] Prorrogando validade de ${currentVencimento} para ${newVencimento}`);
               }
             }
 
-            console.log(`🎯 [MERCADO PAGO WEBHOOK] Ativando conta do usuário ${userDoc.id} via e-mail match`);
-            await userDoc.ref.set({
+            await userRef.set({
               assinante: true,
               dataVencimento: newVencimento,
               paymentId: String(paymentId),
@@ -457,16 +472,61 @@ app.post("/api/mercadopago/webhook", async (req, res) => {
               updatedAt: new Date().toISOString()
             }, { merge: true });
 
-            await tokenRef.update({ used: true, userId: userDoc.id });
+            await tokenRef.update({ used: true, userId: externalReference });
             userActivated = true;
           }
         }
-      }
 
-      if (userActivated) {
-        console.log(`✅ [MERCADO PAGO WEBHOOK] Conta ativada com sucesso pelo webhook!`);
-      } else {
-        console.log(`ℹ️ [MERCADO PAGO WEBHOOK] Nenhum usuário ativo correspondente encontrado para ativação direta ainda. Token gravado.`);
+        // B. Se não ativou por ID, busca por e-mail correspondente
+        if (!userActivated && email) {
+          console.log(`📧 [MERCADO PAGO WEBHOOK] Buscando usuário pelo e-mail: ${email}`);
+          const usersQuery = await adminDb.collection("users").where("email", "==", email).get();
+          if (!usersQuery.empty) {
+            for (const userDoc of usersQuery.docs) {
+              const userData = userDoc.data();
+              let currentVencimento = userData?.dataVencimento;
+              let newVencimento = dataVencimento;
+
+              if (currentVencimento) {
+                const currentExpiryTime = Date.parse(currentVencimento);
+                if (!isNaN(currentExpiryTime) && currentExpiryTime > Date.now()) {
+                  const renewalDate = new Date(currentExpiryTime);
+                  renewalDate.setDate(renewalDate.getDate() + 30);
+                  newVencimento = renewalDate.toISOString();
+                  console.log(`🔄 [RENOVAÇÃO POR EMAIL] Prorrogando de ${currentVencimento} para ${newVencimento}`);
+                }
+              }
+
+              console.log(`🎯 [MERCADO PAGO WEBHOOK] Ativando conta do usuário ${userDoc.id} via e-mail match`);
+              await userDoc.ref.set({
+                assinante: true,
+                dataVencimento: newVencimento,
+                paymentId: String(paymentId),
+                paymentStatus: "approved",
+                paymentSystem: "MercadoPago",
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+
+              await tokenRef.update({ used: true, userId: userDoc.id });
+              userActivated = true;
+            }
+          }
+        }
+
+        if (userActivated) {
+          console.log(`✅ [MERCADO PAGO WEBHOOK] Conta ativada com sucesso pelo webhook!`);
+        } else {
+          console.log(`ℹ️ [MERCADO PAGO WEBHOOK] Nenhum usuário ativo correspondente encontrado para ativação direta ainda. Token gravado.`);
+        }
+      } catch (dbErr: any) {
+        console.error("⚠️ [MERCADO PAGO WEBHOOK] Erro ao gravar no Firestore (possível falta de credenciais/permissões no Vercel):", dbErr.message);
+        // Retornamos 200 de qualquer forma para o Mercado Pago não acusar erro e não reenviar infinitamente
+        return res.status(200).json({ 
+          success: true, 
+          warning: "Pagamento aprovado, mas Firestore indisponível para atualização automática por falta de credenciais/permissões do Admin SDK no Vercel.",
+          paymentId: String(paymentId),
+          status: "approved"
+        });
       }
     }
 
@@ -474,6 +534,66 @@ app.post("/api/mercadopago/webhook", async (req, res) => {
   } catch (err: any) {
     console.error("❌ [MERCADO PAGO WEBHOOK] Erro crítico:", err);
     res.status(500).send("Erro interno de processamento.");
+  }
+});
+
+// Secure endpoint for client to verify a payment ID on the server and trigger direct client-side activation in Firestore
+app.post("/api/mercadopago/verify-payment", async (req, res) => {
+  try {
+    const { paymentId } = req.body;
+    if (!paymentId) {
+      return res.status(400).json({ error: "ID do pagamento é obrigatório." });
+    }
+
+    console.log(`🔍 [VERIFY PAYMENT] Verificação manual solicitada para ID: ${paymentId}`);
+
+    const accessToken = getMercadoPagoAccessToken();
+    const fetchFn = (globalThis as any).fetch || (typeof fetch !== "undefined" ? fetch : undefined);
+    if (!fetchFn) {
+      throw new Error("O ambiente Node.js atual não suporta 'fetch'.");
+    }
+
+    const mpResponse = await fetchFn(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      headers: {
+        "Authorization": `Bearer ${accessToken}`
+      }
+    });
+
+    if (!mpResponse.ok) {
+      console.error(`❌ [VERIFY PAYMENT] Erro ao buscar pagamento no Mercado Pago: ${mpResponse.statusText}`);
+      return res.status(400).json({ error: "Não foi possível validar este pagamento na API do Mercado Pago. Verifique se o ID está correto." });
+    }
+
+    const paymentData = await mpResponse.json();
+    const status = paymentData.status;
+    const email = paymentData.payer?.email;
+    const externalReference = paymentData.external_reference;
+
+    console.log(`📊 [VERIFY PAYMENT] Detalhes recuperados: Status = ${status}, Email = ${email}, ExtRef = ${externalReference}`);
+
+    if (status === "approved") {
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30);
+      const dataVencimento = expiryDate.toISOString();
+
+      return res.json({
+        success: true,
+        status: "approved",
+        dataVencimento,
+        email,
+        externalReference,
+        paymentId: String(paymentId)
+      });
+    } else {
+      return res.json({
+        success: false,
+        status,
+        message: `O pagamento está com status: ${status}`
+      });
+    }
+  } catch (err: any) {
+    console.error("❌ [VERIFY PAYMENT] Erro crítico:", err);
+    res.status(500).json({ error: "Erro interno do servidor ao verificar pagamento." });
   }
 });
 

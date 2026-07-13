@@ -204,11 +204,6 @@ export default function App() {
   const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
   const [showCelebrationModal, setShowCelebrationModal] = useState<boolean>(false);
   const [celebratedTx, setCelebratedTx] = useState<{ name: string; amount: number } | null>(null);
-  
-  // Manual payment activation states
-  const [showManualActivation, setShowManualActivation] = useState<boolean>(false);
-  const [manualPaymentId, setManualPaymentId] = useState<string>("");
-  const [activatingManual, setActivatingManual] = useState<boolean>(false);
 
   // Pull to refresh support variables
   const [startY, setStartY] = useState<number>(0);
@@ -1335,58 +1330,6 @@ export default function App() {
       window.open("https://mpago.la/1SfRUJ2", "_blank");
     } finally {
       setCheckoutLoading(false);
-    }
-  };
-
-  const handleManualActivation = async () => {
-    if (!manualPaymentId.trim()) {
-      triggerToast("Por favor, digite o ID do pagamento.", "error");
-      return;
-    }
-    if (!user) {
-      triggerToast("Faça login para poder ativar sua conta.", "error");
-      return;
-    }
-
-    setActivatingManual(true);
-    try {
-      const response = await fetch("/api/mercadopago/verify-payment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ paymentId: manualPaymentId.trim() }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "Não foi possível validar este pagamento.");
-      }
-
-      const data = await response.json();
-      if (data.success && data.status === "approved") {
-        const userRef = doc(db, 'users', user.uid);
-        await setDoc(userRef, {
-          assinante: true,
-          dataVencimento: data.dataVencimento,
-          paymentId: data.paymentId,
-          paymentStatus: "approved",
-          paymentSystem: "MercadoPago",
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-
-        triggerToast("Sua assinatura foi ativada com sucesso! Seu acesso premium foi liberado.", "success");
-        setShowPaymentInfoModal(false);
-        setManualPaymentId("");
-        setShowManualActivation(false);
-      } else {
-        triggerToast(data.message || "Pagamento não aprovado ou inválido.", "error");
-      }
-    } catch (err: any) {
-      console.error("Erro na ativação manual:", err);
-      triggerToast(err.message || "Erro de conexão ao ativar pagamento.", "error");
-    } finally {
-      setActivatingManual(false);
     }
   };
 
@@ -4123,42 +4066,6 @@ export default function App() {
               <p className="text-[11px] text-slate-300 leading-normal font-light">
                 O lote promocional possui apenas <strong className="font-bold text-white">8 vagas</strong> e restam apenas <strong className="font-bold text-yellow-400">5 vagas promocionais</strong>. Garanta seu valor especial de <strong className="font-bold text-emerald-400">R$ 11,99 mensal</strong> antes que esgote!
               </p>
-            </div>
-
-            {/* Seção de ativação manual */}
-            <div className="border-t border-white/5 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowManualActivation(!showManualActivation)}
-                className="w-full text-center text-[10.5px] text-indigo-400 hover:text-indigo-300 font-semibold transition-colors cursor-pointer block"
-              >
-                {showManualActivation ? "Ocultar ativação manual" : "Já pagou? Ative sua conta informando o ID do Pagamento"}
-              </button>
-              
-              {showManualActivation && (
-                <div className="mt-2.5 bg-slate-950/60 p-3 rounded-xl border border-indigo-500/20 space-y-2 text-left">
-                  <p className="text-[9px] text-slate-400 leading-normal">
-                    Caso você tenha realizado o pagamento e sua conta não tenha sido ativada automaticamente, insira o ID de transação (número da transação) do Mercado Pago abaixo:
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Ex: 8472910482"
-                      value={manualPaymentId}
-                      onChange={(e) => setManualPaymentId(e.target.value)}
-                      className="flex-1 bg-slate-900 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-                    />
-                    <button
-                      type="button"
-                      disabled={activatingManual}
-                      onClick={handleManualActivation}
-                      className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                    >
-                      {activatingManual ? "Ativando..." : "Ativar"}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex gap-2.5 text-center text-xs">

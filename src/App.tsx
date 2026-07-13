@@ -1345,31 +1345,10 @@ export default function App() {
     setShowPaymentInfoModal(false);
     setCheckoutLoading(true);
     try {
-      const response = await fetch('/api/mercadopago/create-preference', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: user?.email || '',
-          userId: user?.uid || '',
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao gerar preferência no backend');
-      }
-
-      const data = await response.json();
-      if (data && data.url) {
-        window.open(data.url, '_blank');
-      } else {
-        window.open("https://mpago.la/1SfRUJ2", "_blank");
-      }
-    } catch (err) {
-      console.error("Erro ao gerar link de pagamento dinâmico:", err);
-      // Fallback seguro
+      // Usar diretamente o link estático de pagamento fornecido pelo usuário
       window.open("https://mpago.la/1SfRUJ2", "_blank");
+    } catch (err) {
+      console.error("Erro ao redirecionar para link de pagamento:", err);
     } finally {
       setCheckoutLoading(false);
     }

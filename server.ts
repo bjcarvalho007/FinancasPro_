@@ -32,6 +32,9 @@ try {
     if (saKey) {
       try {
         const parsedKey = JSON.parse(saKey);
+        if (parsedKey.private_key) {
+          parsedKey.private_key = parsedKey.private_key.replace(/\\n/g, '\n');
+        }
         admin.initializeApp({
           credential: admin.credential.cert(parsedKey),
           projectId: projectId

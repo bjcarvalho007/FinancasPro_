@@ -606,22 +606,6 @@ app.post("/api/mercadopago/verify-payment", async (req, res) => {
     const maskedToken = accessToken ? `${accessToken.substring(0, 10)}...${accessToken.substring(accessToken.length - 4)}` : "VAZIO";
     console.log(`🔑 [VERIFY PAYMENT] Token em uso: ${maskedToken} (comprimento: ${accessToken?.length || 0})`);
 
-    // BYPASS DE DESENVOLVIMENTO: Se o token for o placeholder 'Mgp' ou muito curto, ativa automaticamente
-    if (!accessToken || accessToken === "Mgp" || accessToken.length <= 10) {
-      console.log(`⚠️ [VERIFY PAYMENT] Detectado token placeholder ou ausente. Fazendo ativação em modo de bypass/desenvolvimento para o ID ${paymentId}`);
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + 30);
-      return res.json({
-        success: true,
-        status: "approved",
-        dataVencimento: expiryDate.toISOString(),
-        email: "bjcarvalho007@gmail.com",
-        paymentId: String(paymentId),
-        isDevelopmentBypass: true,
-        warning: "Seu token do Mercado Pago está configurado como o placeholder 'Mgp'. Sua conta foi ativada em modo de bypass/testes para desenvolvimento."
-      });
-    }
-
     const fetchFn = (globalThis as any).fetch || (typeof fetch !== "undefined" ? fetch : undefined);
     if (!fetchFn) {
       throw new Error("O ambiente Node.js atual não suporta 'fetch'.");
@@ -643,11 +627,11 @@ app.post("/api/mercadopago/verify-payment", async (req, res) => {
       const errorBody = await mpResponse.text().catch(() => "Não foi possível ler o corpo do erro");
       console.error(`❌ [VERIFY PAYMENT] Erro ao buscar pagamento no Mercado Pago: ${mpResponse.status} ${mpResponse.statusText}. Corpo: ${errorBody}`);
       
-      let friendlyError = "Não foi possível validar este pagamento na API do Mercado Pago. Verifique o ID.";
+      let friendlyError = "Não foi possível validar este pagamento na API do Mercado Pago. Verifique se o ID está correto.";
       if (mpResponse.status === 404) {
-        friendlyError = `O Mercado Pago retornou erro 404 (Não Encontrado). Isso significa que o ID do pagamento (${paymentId}) não existe na conta do Mercado Pago associada ao token configurado. Se você pagou via link manual de sua própria conta, lembre-se de configurar seu MERCADOPAGO_ACCESS_TOKEN real no painel de segredos do AI Studio.`;
+        friendlyError = `O ID de pagamento (${paymentId}) não existe ou não foi localizado nesta conta do Mercado Pago. Por favor, verifique se digitou o ID correto de 11 dígitos contido no seu comprovante Pix.`;
       } else if (mpResponse.status === 401) {
-        friendlyError = `O token do Mercado Pago configurado é inválido ou expirou (Erro 401). Certifique-se de preencher o segredo MERCADOPAGO_ACCESS_TOKEN com seu token de produção real do Mercado Pago.`;
+        friendlyError = `Erro de Autenticação com o Mercado Pago (Erro 401). Verifique se o MERCADOPAGO_ACCESS_TOKEN configurado é válido.`;
       }
 
       return res.status(400).json({ 

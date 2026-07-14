@@ -1432,7 +1432,11 @@ export default function App() {
           updatedAt: new Date().toISOString()
         }, { merge: true });
 
-        triggerToast('Assinatura Premium Ativada com sucesso!', 'success');
+        if (data.warning) {
+          triggerToast(data.warning, 'warning');
+        } else {
+          triggerToast('Assinatura Premium Ativada com sucesso!', 'success');
+        }
         setShowPaymentInfoModal(false);
         setManualPaymentId('');
       } else {

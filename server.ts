@@ -27,14 +27,42 @@ try {
   
   if (!admin.apps.length) {
     console.log(`🚀 Inicializando Firebase Admin SDK para o projeto: ${projectId}`);
-    const saKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    let saKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
     
     if (saKey) {
+      saKey = saKey.trim();
       try {
-        const parsedKey = JSON.parse(saKey);
-        if (parsedKey.private_key) {
+        let parsedKey: any;
+        try {
+          parsedKey = JSON.parse(saKey);
+        } catch (jsonErr) {
+          // Tenta limpar erros comuns de cópia/colagem de JSON (como quebras de linha reais ou vírgulas extras)
+          try {
+            const cleaned = saKey
+              .replace(/[\n\r]/g, " ") // remove quebras de linha literais
+              .replace(/,\s*}/g, "}") // remove vírgulas antes do fechamento de chaves
+              .replace(/,\s*]/g, "]"); // remove vírgulas antes do fechamento de colchetes
+            parsedKey = JSON.parse(cleaned);
+          } catch (jsonErr2) {
+            // Se falhar de novo, usa Regex para extrair a private_key e o client_email de forma robusta
+            const privateKeyMatch = saKey.match(/"private_key"\s*:\s*"([^"]+)"/) || saKey.match(/private_key\s*=\s*([^\s]+)/);
+            const clientEmailMatch = saKey.match(/"client_email"\s*:\s*"([^"]+)"/) || saKey.match(/client_email\s*=\s*([^\s]+)/);
+            
+            if (privateKeyMatch && clientEmailMatch) {
+              parsedKey = {
+                private_key: privateKeyMatch[1].replace(/\\n/g, '\n'),
+                client_email: clientEmailMatch[1]
+              };
+            } else {
+              throw new Error(`Não foi possível parsear a chave ou extrair campos por Regex. Erro original: ${jsonErr.message}`);
+            }
+          }
+        }
+
+        if (parsedKey && parsedKey.private_key) {
           parsedKey.private_key = parsedKey.private_key.replace(/\\n/g, '\n');
         }
+
         admin.initializeApp({
           credential: admin.credential.cert(parsedKey),
           projectId: projectId
@@ -377,10 +405,17 @@ app.post("/api/mercadopago/webhook", async (req, res) => {
   console.log("\n📥 [MERCADO PAGO WEBHOOK] Notificação recebida. Body:", JSON.stringify(req.body), "Query:", JSON.stringify(req.query));
   
   try {
-    const queryId = req.query.id || req.query["data.id"];
+    const queryId = req.query.id || req.query["data.id"] || req.query.data_id;
     const bodyId = req.body.id || (req.body.data && req.body.data.id);
-    const paymentId = queryId || bodyId;
-    const topic = req.query.topic || req.body.type || "payment";
+    
+    let resourceId = "";
+    if (req.body.resource && typeof req.body.resource === "string") {
+      const parts = req.body.resource.split("/");
+      resourceId = parts[parts.length - 1];
+    }
+    
+    const paymentId = queryId || bodyId || resourceId || req.body.resource;
+    const topic = req.query.topic || req.body.type || req.body.topic || "payment";
 
     if (!paymentId || topic !== "payment") {
       console.log("ℹ️ [MERCADO PAGO WEBHOOK] Ignorando (não é do tipo payment ou ID ausente).");

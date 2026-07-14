@@ -1052,8 +1052,8 @@ export default function App() {
 
   // Preset configuration and extras cumulative earnings save
   const handleOpenIncome = () => {
-    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? 0;
-    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? 0;
+    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
+    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
     const ext = settings?.extras?.[currentMonthKey] || 0;
 
     setTempIncomeStr(incVal > 0 ? formatCurrency(incVal) : '');
@@ -1777,8 +1777,8 @@ export default function App() {
   }, [activeMonthTransactions, activeTab, tabSortBy]);
 
   // Summaries Calculations
-  const inc = settings?.monthlyIncome?.[currentMonthKey] ?? 0;
-  const bal = settings?.monthlyBalance?.[currentMonthKey] ?? 0;
+  const inc = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
+  const bal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
   const ext = settings?.extras?.[currentMonthKey] || 0;
   
   // Total funds active

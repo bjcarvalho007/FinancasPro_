@@ -308,6 +308,13 @@ app.get("/api/admin/debug-users", async (req, res) => {
     const tokensSnapshot = await adminDb.collection("tokens_pagos").limit(15).get();
     results.tokensPagos = tokensSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
+    // List environment keys safely to confirm configuration status
+    results.envKeysConfigured = Object.keys(process.env).filter(k => k !== "GEMINI_API_KEY" && k !== "STRIPE_SECRET_KEY" && k !== "MERCADOPAGO_ACCESS_TOKEN" && k !== "FIREBASE_SERVICE_ACCOUNT_KEY" && k !== "SMTP_PASSWORD");
+    results.hasFirebaseSAKey = !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    results.hasGoogleCredentialsJson = !!process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+    results.hasMercadoPagoToken = !!process.env.MERCADOPAGO_ACCESS_TOKEN;
+    results.mpTokenLength = process.env.MERCADOPAGO_ACCESS_TOKEN ? process.env.MERCADOPAGO_ACCESS_TOKEN.length : 0;
+    
     return res.json(results);
   } catch (err: any) {
     return res.status(500).json({ error: err.message, stack: err.stack });
@@ -515,38 +522,46 @@ app.post("/api/mercadopago/webhook", async (req, res) => {
           }
         }
 
-        // B. Se não ativou por ID, busca por e-mail correspondente
+        // B. Se não ativou por ID, busca por e-mail correspondente (com tratamento de casing insensível)
         if (!userActivated && email) {
-          console.log(`📧 [MERCADO PAGO WEBHOOK] Buscando usuário pelo e-mail: ${email}`);
-          const usersQuery = await adminDb.collection("users").where("email", "==", email).get();
-          if (!usersQuery.empty) {
-            for (const userDoc of usersQuery.docs) {
-              const userData = userDoc.data();
-              let currentVencimento = userData?.dataVencimento;
-              let newVencimento = dataVencimento;
+          const emailLower = email.toLowerCase().trim();
+          const emailUpper = email.toUpperCase().trim();
+          const emailRaw = email.trim();
+          const uniqueEmails = Array.from(new Set([emailRaw, emailLower, emailUpper]));
 
-              if (currentVencimento) {
-                const currentExpiryTime = Date.parse(currentVencimento);
-                if (!isNaN(currentExpiryTime) && currentExpiryTime > Date.now()) {
-                  const renewalDate = new Date(currentExpiryTime);
-                  renewalDate.setDate(renewalDate.getDate() + 30);
-                  newVencimento = renewalDate.toISOString();
-                  console.log(`🔄 [RENOVAÇÃO POR EMAIL] Prorrogando de ${currentVencimento} para ${newVencimento}`);
+          for (const searchEmail of uniqueEmails) {
+            console.log(`📧 [MERCADO PAGO WEBHOOK] Buscando usuário pelo e-mail: ${searchEmail}`);
+            const usersQuery = await adminDb.collection("users").where("email", "==", searchEmail).get();
+            if (!usersQuery.empty) {
+              for (const userDoc of usersQuery.docs) {
+                const userData = userDoc.data();
+                let currentVencimento = userData?.dataVencimento;
+                let newVencimento = dataVencimento;
+
+                if (currentVencimento) {
+                  const currentExpiryTime = Date.parse(currentVencimento);
+                  if (!isNaN(currentExpiryTime) && currentExpiryTime > Date.now()) {
+                    const renewalDate = new Date(currentExpiryTime);
+                    renewalDate.setDate(renewalDate.getDate() + 30);
+                    newVencimento = renewalDate.toISOString();
+                    console.log(`🔄 [RENOVAÇÃO POR EMAIL] Prorrogando de ${currentVencimento} para ${newVencimento}`);
+                  }
                 }
+
+                console.log(`🎯 [MERCADO PAGO WEBHOOK] Ativando conta do usuário ${userDoc.id} via e-mail match: ${searchEmail}`);
+                await userDoc.ref.set({
+                  assinante: true,
+                  dataVencimento: newVencimento,
+                  paymentId: String(paymentId),
+                  paymentStatus: "approved",
+                  paymentSystem: "MercadoPago",
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+
+                await tokenRef.update({ used: true, userId: userDoc.id });
+                userActivated = true;
               }
-
-              console.log(`🎯 [MERCADO PAGO WEBHOOK] Ativando conta do usuário ${userDoc.id} via e-mail match`);
-              await userDoc.ref.set({
-                assinante: true,
-                dataVencimento: newVencimento,
-                paymentId: String(paymentId),
-                paymentStatus: "approved",
-                paymentSystem: "MercadoPago",
-                updatedAt: new Date().toISOString()
-              }, { merge: true });
-
-              await tokenRef.update({ used: true, userId: userDoc.id });
-              userActivated = true;
+              break; // Se já encontrou e ativou, para a busca nas outras variações de e-mail
             }
           }
         }

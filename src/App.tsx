@@ -201,6 +201,8 @@ export default function App() {
   const [tempExtraStr, setTempExtraStr] = useState<string>('');
   const [isTutorialOpen, setIsTutorialOpen] = useState<boolean>(false);
   const [showPaymentInfoModal, setShowPaymentInfoModal] = useState<boolean>(false);
+  const [manualPaymentId, setManualPaymentId] = useState<string>('');
+  const [verifyingManual, setVerifyingManual] = useState<boolean>(false);
   const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
   const [showCelebrationModal, setShowCelebrationModal] = useState<boolean>(false);
   const [celebratedTx, setCelebratedTx] = useState<{ name: string; amount: number } | null>(null);
@@ -1375,6 +1377,75 @@ export default function App() {
     }
   };
 
+  const handleManualPaymentVerification = async (customId?: string) => {
+    const payId = (customId || manualPaymentId || '').trim();
+    if (!payId) {
+      triggerToast('Por favor, informe o ID do pagamento.', 'error');
+      return;
+    }
+
+    if (!user) {
+      triggerToast('Você precisa estar logado para ativar sua conta.', 'error');
+      return;
+    }
+
+    setVerifyingManual(true);
+    try {
+      const response = await fetch('/api/mercadopago/verify-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentId: payId,
+          userId: user.uid,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success && data.status === 'approved') {
+        const userRef = doc(db, 'users', user.uid);
+        const currentVencimento = userProfile?.dataVencimento;
+        let dataVencimento = data.dataVencimento;
+
+        if (currentVencimento) {
+          const currentExpiryTime = Date.parse(currentVencimento);
+          if (!isNaN(currentExpiryTime) && currentExpiryTime > Date.now()) {
+            const newExpiry = new Date(currentExpiryTime);
+            newExpiry.setDate(newExpiry.getDate() + 30);
+            dataVencimento = newExpiry.toISOString();
+          }
+        }
+
+        if (!dataVencimento) {
+          const expiryDate = new Date();
+          expiryDate.setDate(expiryDate.getDate() + 30);
+          dataVencimento = expiryDate.toISOString();
+        }
+
+        await setDoc(userRef, {
+          assinante: true,
+          dataVencimento: dataVencimento,
+          paymentId: payId,
+          paymentStatus: 'approved',
+          paymentSystem: 'MercadoPago',
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        triggerToast('Assinatura Premium Ativada com sucesso!', 'success');
+        setShowPaymentInfoModal(false);
+        setManualPaymentId('');
+      } else {
+        triggerToast(data.error || data.message || 'Seu pagamento ainda não consta como aprovado no Mercado Pago. Verifique o ID e tente novamente.', 'error');
+      }
+    } catch (err) {
+      console.error('Erro ao verificar pagamento:', err);
+      triggerToast('Erro de rede ao validar pagamento. Verifique sua conexão.', 'error');
+    } finally {
+      setVerifyingManual(false);
+    }
+  };
+
   // Math ledger computation definitions
   const activeMonthCategoryList = [...defaultCategories, ...categories];
   const activeMonthTransactions = useMemo(() => {
@@ -2075,6 +2146,33 @@ export default function App() {
               </button>
             </div>
 
+            {/* Seção de Ativação Manual de Pagamento (Fallback se webhook demorar) */}
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-2 mt-4 text-left">
+              <div className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">
+                Já efetuou o pagamento e deseja ativar na hora?
+              </div>
+              <p className="text-[9.5px] text-slate-450 font-light leading-relaxed">
+                Se você já pagou via Pix ou Cartão no Mercado Pago, digite o <strong>ID do Pagamento</strong> de 11 dígitos do comprovante para liberar o seu acesso na hora:
+              </p>
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={manualPaymentId}
+                  onChange={(e) => setManualPaymentId(e.target.value)}
+                  placeholder="ID ex: 167819930775"
+                  className="flex-1 bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-slate-650 focus:outline-none focus:border-emerald-500 font-mono"
+                />
+                <button
+                  type="button"
+                  disabled={verifyingManual}
+                  onClick={() => handleManualPaymentVerification()}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold px-3.5 py-1.5 rounded-lg text-[10px] uppercase tracking-wider cursor-pointer border-none transition-colors shrink-0 flex items-center justify-center min-w-[65px]"
+                >
+                  {verifyingManual ? "Ativando..." : "Ativar"}
+                </button>
+              </div>
+            </div>
+
             {/* Trust Footer Badges */}
             <div className="flex items-center justify-center gap-1.5 mt-6 pt-4 border-t border-white/5 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
               <ShieldCheck className="w-4 h-4 text-emerald-400" /> Pagamento 100% Protegido pelo Mercado Pago
@@ -2151,7 +2249,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setShowPaymentInfoModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/10 text-slate-400 font-bold uppercase tracking-wider transition-colors cursor-pointer text-[10px]"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/10 text-slate-450 font-bold uppercase tracking-wider transition-colors cursor-pointer text-[10px]"
                 >
                   Voltar
                 </button>
@@ -2164,6 +2262,36 @@ export default function App() {
                   {checkoutLoading ? "Carregando..." : "Ir para o Pagamento"}
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
+              </div>
+
+              {/* Seção de Ativação Manual de Pagamento */}
+              <div className="pt-3 border-t border-white/5 mt-2 space-y-2">
+                <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                  Já efetuou o pagamento?
+                </div>
+                <p className="text-[9.5px] text-slate-400 font-light leading-relaxed">
+                  Insira o ID da Transação do Mercado Pago (encontrado no comprovante ou e-mail de confirmação) para liberar seu acesso imediatamente:
+                </p>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={manualPaymentId}
+                    onChange={(e) => setManualPaymentId(e.target.value)}
+                    placeholder="ID ex: 167819930775"
+                    className="flex-1 bg-slate-950/80 border border-white/10 rounded-lg px-2.5 py-1.5 text-[10px] text-white placeholder-slate-650 focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    disabled={verifyingManual}
+                    onClick={() => handleManualPaymentVerification()}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-wider cursor-pointer border-none transition-colors shrink-0 flex items-center justify-center min-w-[55px]"
+                  >
+                    {verifyingManual ? "Ativando..." : "Ativar"}
+                  </button>
+                </div>
+                <p className="text-[8px] text-slate-500">
+                  O ID é uma sequência de cerca de 11 números fornecida pelo Mercado Pago.
+                </p>
               </div>
             </motion.div>
           </div>

@@ -4256,6 +4256,33 @@ export default function App() {
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            {/* Seção de Ativação Manual de Pagamento (Para quem pagou antes de bloquear ou deseja ativar na hora) */}
+            <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2 mt-2 text-left">
+              <div className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">
+                Já efetuou o pagamento e deseja ativar na hora?
+              </div>
+              <p className="text-[9.5px] text-slate-400 font-light leading-relaxed">
+                Se você já pagou via Pix ou Cartão no Mercado Pago, digite o <strong>ID do Pagamento</strong> de 11 dígitos do comprovante para liberar o seu acesso na hora:
+              </p>
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={manualPaymentId}
+                  onChange={(e) => setManualPaymentId(e.target.value)}
+                  placeholder="ID ex: 167819930775"
+                  className="flex-1 bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+                />
+                <button
+                  type="button"
+                  disabled={verifyingManual}
+                  onClick={() => handleManualPaymentVerification()}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold px-3.5 py-1.5 rounded-lg text-[10px] uppercase tracking-wider cursor-pointer border-none transition-colors shrink-0 flex items-center justify-center min-w-[65px]"
+                >
+                  {verifyingManual ? "Ativando..." : "Ativar"}
+                </button>
+              </div>
+            </div>
           </motion.div>
         </div>
       )}

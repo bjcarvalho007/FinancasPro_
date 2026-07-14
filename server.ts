@@ -595,12 +595,12 @@ app.post("/api/mercadopago/webhook", async (req, res) => {
 // Secure endpoint for client to verify a payment ID on the server and trigger direct client-side activation in Firestore
 app.post("/api/mercadopago/verify-payment", async (req, res) => {
   try {
-    const { paymentId } = req.body;
+    const { paymentId, userId } = req.body;
     if (!paymentId) {
       return res.status(400).json({ error: "ID do pagamento é obrigatório." });
     }
 
-    console.log(`🔍 [VERIFY PAYMENT] Verificação manual solicitada para ID: ${paymentId}`);
+    console.log(`🔍 [VERIFY PAYMENT] Verificação manual solicitada para ID: ${paymentId} pelo usuário: ${userId}`);
 
     const accessToken = getMercadoPagoAccessToken();
     const maskedToken = accessToken ? `${accessToken.substring(0, 10)}...${accessToken.substring(accessToken.length - 4)}` : "VAZIO";
@@ -649,6 +649,54 @@ app.post("/api/mercadopago/verify-payment", async (req, res) => {
     console.log(`📊 [VERIFY PAYMENT] Detalhes recuperados: Status = ${status}, Email = ${email}, ExtRef = ${externalReference}`);
 
     if (status === "approved") {
+      // SECURITY CHECK: Anti-abuse and anti-reuse validation
+      try {
+        const adminDb = admin.firestore();
+        
+        // 1. Check if the token is already registered as used by someone else in "tokens_pagos"
+        const tokenRef = adminDb.collection("tokens_pagos").doc(String(paymentId));
+        const tokenSnap = await tokenRef.get();
+        if (tokenSnap.exists) {
+          const tokenData = tokenSnap.data();
+          if (tokenData?.used === true && tokenData?.userId && tokenData?.userId !== userId) {
+            console.log(`⚠️ [VERIFY PAYMENT] Bloqueio de reutilização: ID ${paymentId} já usado pelo usuário ${tokenData.userId}`);
+            return res.status(400).json({
+              error: "Este ID de pagamento já foi utilizado para ativar outra conta."
+            });
+          }
+        }
+
+        // 2. Check if another user doc in "users" already has this paymentId
+        if (userId) {
+          const usersQuery = await adminDb.collection("users")
+            .where("paymentId", "==", String(paymentId))
+            .get();
+          
+          if (!usersQuery.empty) {
+            const otherUserDoc = usersQuery.docs.find(doc => doc.id !== userId);
+            if (otherUserDoc) {
+              console.log(`⚠️ [VERIFY PAYMENT] Bloqueio de reutilização: ID ${paymentId} já registrado no perfil do usuário ${otherUserDoc.id}`);
+              return res.status(400).json({
+                error: "Este ID de pagamento já foi utilizado para ativar outra conta."
+              });
+            }
+          }
+        }
+
+        // Mark the token as used by this user to prevent anyone else from claiming it
+        await tokenRef.set({
+          token: String(paymentId),
+          email: email || "",
+          used: true,
+          userId: userId || "unknown",
+          paymentSystem: "MercadoPago",
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        console.log(`✅ [VERIFY PAYMENT] ID ${paymentId} marcado como 'used' no Firestore para o usuário ${userId}`);
+      } catch (dbErr: any) {
+        console.warn("⚠️ [VERIFY PAYMENT] Erro ao validar duplicidade ou salvar token no Firestore:", dbErr.message);
+      }
+
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + 30);
       const dataVencimento = expiryDate.toISOString();

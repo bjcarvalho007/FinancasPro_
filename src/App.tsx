@@ -2818,6 +2818,32 @@ export default function App() {
             </div>
           </header>
 
+          {/* Alerta de Contas - bjcarvalho007@gmail.com vs bjcarvalho07@gmail.com */}
+          {user && user.email && user.email.toLowerCase().trim() === 'bjcarvalho007@gmail.com' && (
+            <div className="mb-6 p-5 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-amber-200 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg shadow-amber-500/5">
+              <div className="flex gap-3.5 items-start">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 animate-pulse">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-bold text-sm text-white flex items-center gap-2">
+                    Aviso Importante de Usuário (bjcarvalho007@gmail.com)
+                  </h4>
+                  <p className="text-xs text-amber-350 leading-relaxed max-w-2xl font-medium">
+                    Você está conectado como <span className="font-bold text-white underline">bjcarvalho007@gmail.com</span> (com dois zeros). 
+                    Seus dados e históricos de renda e transações anteriores estão todos seguros e salvos no seu usuário principal: <span className="font-bold text-white underline font-mono">bjcarvalho07@gmail.com</span> (com apenas um zero)!
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={executeLogout}
+                className="shrink-0 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-450 text-slate-950 font-black text-xs uppercase tracking-wider transition-all duration-200 shadow-md flex items-center gap-2 border-none cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" /> Desconectar para Trocar de Conta
+              </button>
+            </div>
+          )}
+
           {/* Render Mobile summary cards */}
           {activeTab !== 'dashboard' && activeTab !== 'contas' && activeTab !== 'variaveis' && activeTab !== 'parcelas' && activeTab !== 'fixos' && renderSummaryCardsMobile()}
 

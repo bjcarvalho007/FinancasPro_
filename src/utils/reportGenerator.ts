@@ -93,8 +93,8 @@ export const exportPremiumPDF = ({
 
     if (uniqueMonthKeys.length > 0) {
       uniqueMonthKeys.forEach(mKey => {
-        mIncome += settings?.monthlyIncome?.[mKey] ?? 0;
-        mBalance += settings?.monthlyBalance?.[mKey] ?? 0;
+        mIncome += settings?.monthlyIncome?.[mKey] || settings?.income || 0;
+        mBalance += settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
         mExtra += settings?.extras?.[mKey] ?? 0;
       });
     } else {
@@ -102,8 +102,8 @@ export const exportPremiumPDF = ({
       mBalance = 0;
     }
   } else {
-    mIncome = settings?.monthlyIncome?.[selectedMonthKey] ?? 0;
-    mBalance = settings?.monthlyBalance?.[selectedMonthKey] ?? 0;
+    mIncome = settings?.monthlyIncome?.[selectedMonthKey] || settings?.income || 0;
+    mBalance = settings?.monthlyBalance?.[selectedMonthKey] || settings?.balance || 0;
     mExtra = settings?.extras?.[selectedMonthKey] ?? 0;
   }
 
@@ -514,8 +514,8 @@ export const exportPremiumSpreadsheet = ({
 
     if (uniqueMonthKeys.length > 0) {
       uniqueMonthKeys.forEach(mKey => {
-        mIncome += settings?.monthlyIncome?.[mKey] ?? 0;
-        mBalance += settings?.monthlyBalance?.[mKey] ?? 0;
+        mIncome += settings?.monthlyIncome?.[mKey] || settings?.income || 0;
+        mBalance += settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
         mExtra += settings?.extras?.[mKey] ?? 0;
       });
     } else {
@@ -523,8 +523,8 @@ export const exportPremiumSpreadsheet = ({
       mBalance = 0;
     }
   } else {
-    mIncome = settings?.monthlyIncome?.[selectedMonthKey] ?? 0;
-    mBalance = settings?.monthlyBalance?.[selectedMonthKey] ?? 0;
+    mIncome = settings?.monthlyIncome?.[selectedMonthKey] || settings?.income || 0;
+    mBalance = settings?.monthlyBalance?.[selectedMonthKey] || settings?.balance || 0;
     mExtra = settings?.extras?.[selectedMonthKey] ?? 0;
   }
 

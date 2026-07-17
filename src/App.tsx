@@ -424,8 +424,9 @@ export default function App() {
         }
       }
 
-      // Auto-ativação imediata para o usuário bjcarvalho007@gmail.com
-      if (user && user.email && user.email.toLowerCase().trim() === 'bjcarvalho007@gmail.com') {
+      // Auto-ativação imediata para os usuários de administração/testes (bjcarvalho07@gmail.com e bjcarvalho007@gmail.com)
+      const currentEmail = user?.email?.toLowerCase().trim();
+      if (user && currentEmail && (currentEmail === 'bjcarvalho007@gmail.com' || currentEmail === 'bjcarvalho07@gmail.com')) {
         const currentExpiryStr = profileData?.dataVencimento;
         const targetExpiry = new Date();
         targetExpiry.setFullYear(targetExpiry.getFullYear() + 1); // 1 ano de assinatura garantida
@@ -440,7 +441,7 @@ export default function App() {
             paymentSystem: 'MercadoPago',
             updatedAt: new Date().toISOString()
           }, { merge: true }).catch(err => {
-            console.error("Erro ao auto-ativar acesso para bjcarvalho007@gmail.com:", err);
+            console.error(`Erro ao auto-ativar acesso para ${currentEmail}:`, err);
           });
         }
       }
@@ -1052,8 +1053,8 @@ export default function App() {
 
   // Preset configuration and extras cumulative earnings save
   const handleOpenIncome = () => {
-    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
-    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
+    const incVal = settings?.monthlyIncome?.[currentMonthKey] || settings?.income || 0;
+    const balVal = settings?.monthlyBalance?.[currentMonthKey] || settings?.balance || 0;
     const ext = settings?.extras?.[currentMonthKey] || 0;
 
     setTempIncomeStr(incVal > 0 ? formatCurrency(incVal) : '');
@@ -1777,8 +1778,8 @@ export default function App() {
   }, [activeMonthTransactions, activeTab, tabSortBy]);
 
   // Summaries Calculations
-  const inc = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
-  const bal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
+  const inc = settings?.monthlyIncome?.[currentMonthKey] || settings?.income || 0;
+  const bal = settings?.monthlyBalance?.[currentMonthKey] || settings?.balance || 0;
   const ext = settings?.extras?.[currentMonthKey] || 0;
   
   // Total funds active

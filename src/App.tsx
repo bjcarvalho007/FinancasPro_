@@ -2709,12 +2709,6 @@ export default function App() {
             theme === 'light' ? 'border-slate-200/80' : 'border-white/5'
           }`}>
             <div className="flex items-center gap-2.5">
-              <img 
-                src="/app_icon.png" 
-                alt="FinançasPro Logo" 
-                className="w-10 h-10 rounded-2xl object-cover border border-white/5 shrink-0 shadow-lg shadow-emerald-500/5 glow-emerald"
-                referrerPolicy="no-referrer"
-              />
               <div className="min-w-0">
                 <h2 className={`font-display font-black text-lg sm:text-xl tracking-tight leading-tight ${
                   theme === 'light' ? 'text-slate-900' : 'text-white'

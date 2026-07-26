@@ -2705,8 +2705,10 @@ export default function App() {
           )}
 
           {/* Unified High-Converting Top Header Block (Both PC & Mobile) */}
-          <header className={`flex items-center justify-between pb-4 border-b transition-colors duration-300 ${
-            theme === 'light' ? 'border-slate-200/80' : 'border-white/5'
+          <header className={`sticky top-0 z-40 flex items-center justify-between pb-4 -mx-4 lg:-mx-8 px-4 lg:px-8 -mt-6 md:-mt-8 pt-6 md:pt-8 border-b transition-colors duration-300 backdrop-blur-md ${
+            theme === 'light' 
+              ? 'bg-white/90 border-slate-200/80 shadow-xs' 
+              : 'bg-[#0b0f1a]/90 border-white/5 shadow-xs'
           }`}>
             <div className="flex items-center gap-2.5">
               <div className="min-w-0">

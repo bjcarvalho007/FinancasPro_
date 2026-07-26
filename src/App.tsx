@@ -2480,7 +2480,7 @@ export default function App() {
       </aside>
 
       {/* Right Content Container */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
 
       {/* Dynamic Animated Toast */}
       {showToast && (
@@ -2579,6 +2579,109 @@ export default function App() {
         </motion.div>
       )}
 
+      {/* Unified Fixed Top Header Block (Stays completely fixed when scrolling) */}
+      <header className={`z-40 flex items-center justify-between px-4 lg:px-8 py-3.5 border-b transition-colors duration-300 shrink-0 backdrop-blur-md ${
+        theme === 'light' 
+          ? 'bg-white/95 border-slate-200/80 shadow-xs' 
+          : 'bg-[#0b0f1a]/95 border-white/5 shadow-xs'
+      }`}>
+        <div className="flex items-center gap-2.5">
+          <div className="min-w-0">
+            <h2 className={`font-display font-black text-lg sm:text-xl tracking-tight leading-tight ${
+              theme === 'light' ? 'text-slate-900' : 'text-white'
+            }`} title={formattedUserName}>
+              {timeGreeting}, <span className="text-emerald-400 font-extrabold">{formattedUserName}</span>!
+            </h2>
+            {isVIP ? (
+              <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-0.5">
+                <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
+              </span>
+            ) : hasActiveSubscription ? (
+              <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-0.5">
+                <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
+              </span>
+            ) : (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
+                </span>
+                <button
+                  onClick={() => setShowPaymentInfoModal(true)}
+                  className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
+                >
+                  Assinar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Top Right Controls - Pro visual layout */}
+        <div className="flex items-center gap-2.5">
+          {/* Hot button to subscribe for desktop trial accounts */}
+          {isWithinFiveDaysTrial && !isVIP && !hasActiveSubscription && (
+            <button
+              onClick={() => setShowPaymentInfoModal(true)}
+              className="hidden md:flex px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white items-center gap-2 cursor-pointer border border-emerald-500/25 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shrink-0"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> Ativar Premium (PRO)
+            </button>
+          )}
+
+          {/* User profile details (hidden on mobile, ultra elegant on desktop) */}
+          <div className={`hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-2xl border ${
+            theme === 'light' ? 'bg-slate-50 border-slate-200/60 text-slate-705' : 'bg-white/3 border-white/5 text-slate-300'
+          }`}>
+            <div className={`w-7.5 h-7.5 rounded-xl flex items-center justify-center font-bold text-[11px] shrink-0 select-none ${
+              isVIP 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                : hasActiveSubscription
+                ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+            }`}>
+              {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
+            </div>
+            <div className="min-w-0 pr-1 text-left">
+              <span className={`text-[8.5px] uppercase font-black tracking-wider block leading-tight ${
+                isVIP 
+                  ? 'text-emerald-400' 
+                  : hasActiveSubscription
+                  ? 'text-indigo-400'
+                  : 'text-amber-500'
+              }`}>
+                {isVIP ? '👑 Membro VIP' : hasActiveSubscription ? '⭐ Assinante PRO' : '⚡ Conta Grátis'}
+              </span>
+              <p className="text-xs font-semibold truncate leading-tight max-w-[150px]" title={user.email || ''}>
+                {user.email || 'Conectado'}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleOpenIncome}
+            className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
+              theme === 'light' 
+                ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm' 
+                : 'bg-white/3 hover:bg-white/6 text-slate-200 border border-white/5'
+            }`}
+          >
+            <DollarSign className="w-4 h-4 text-emerald-400" /> Ganhos
+          </button>
+          
+          <button
+            onClick={handleUserLogout}
+            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
+              theme === 'light'
+                ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-700'
+                : 'bg-rose-500/5 hover:bg-rose-500/15 border border-rose-500/10 text-rose-450'
+            }`}
+            title="Sair da plataforma"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
       {/* Pull down visual indicator block layout */}
       {pullProgress > 0 && (
         <div 
@@ -2595,7 +2698,7 @@ export default function App() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto h-screen pb-28 lg:pb-12"
+        className="flex-1 overflow-y-auto pb-28 lg:pb-12"
       >
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 md:py-8 space-y-6">
           {isFirebaseOffline && (
@@ -2703,110 +2806,6 @@ export default function App() {
               </div>
             </motion.div>
           )}
-
-          {/* Unified High-Converting Top Header Block (Both PC & Mobile) */}
-          <header className={`sticky top-0 z-40 flex items-center justify-between pb-4 -mx-4 lg:-mx-8 px-4 lg:px-8 -mt-6 md:-mt-8 pt-6 md:pt-8 border-b transition-colors duration-300 backdrop-blur-md ${
-            theme === 'light' 
-              ? 'bg-white/90 border-slate-200/80 shadow-xs' 
-              : 'bg-[#0b0f1a]/90 border-white/5 shadow-xs'
-          }`}>
-            <div className="flex items-center gap-2.5">
-              <div className="min-w-0">
-                <h2 className={`font-display font-black text-lg sm:text-xl tracking-tight leading-tight ${
-                  theme === 'light' ? 'text-slate-900' : 'text-white'
-                }`} title={formattedUserName}>
-                  {timeGreeting}, <span className="text-emerald-400 font-extrabold">{formattedUserName}</span>!
-                </h2>
-                {isVIP ? (
-                  <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-0.5">
-                    <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
-                  </span>
-                ) : hasActiveSubscription ? (
-                  <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-0.5">
-                    <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
-                  </span>
-                ) : (
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
-                      <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
-                    </span>
-                    <button
-                      onClick={() => setShowPaymentInfoModal(true)}
-                      className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
-                    >
-                      Assinar
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Top Right Controls - Pro visual layout */}
-            <div className="flex items-center gap-3">
-              {/* Hot button to subscribe for desktop trial accounts */}
-              {isWithinFiveDaysTrial && !isVIP && !hasActiveSubscription && (
-                <button
-                  onClick={() => setShowPaymentInfoModal(true)}
-                  className="hidden md:flex px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white items-center gap-2 cursor-pointer border border-emerald-500/25 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shrink-0"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> Ativar Premium (PRO)
-                </button>
-              )}
-
-              {/* User profile details (hidden on mobile, ultra elegant on desktop) */}
-              <div className={`hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-2xl border ${
-                theme === 'light' ? 'bg-slate-50 border-slate-200/60 text-slate-705' : 'bg-white/3 border-white/5 text-slate-300'
-              }`}>
-                <div className={`w-7.5 h-7.5 rounded-xl flex items-center justify-center font-bold text-[11px] shrink-0 select-none ${
-                  isVIP 
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : hasActiveSubscription
-                    ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                    : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                }`}>
-                  {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
-                </div>
-                <div className="min-w-0 pr-1 text-left">
-                  <span className={`text-[8.5px] uppercase font-black tracking-wider block leading-tight ${
-                    isVIP 
-                      ? 'text-emerald-400' 
-                      : hasActiveSubscription
-                      ? 'text-indigo-400'
-                      : 'text-amber-500'
-                  }`}>
-                    {isVIP ? '👑 Membro VIP' : hasActiveSubscription ? '⭐ Assinante PRO' : '⚡ Conta Grátis'}
-                  </span>
-                  <p className="text-xs font-semibold truncate leading-tight max-w-[150px]" title={user.email || ''}>
-                    {user.email || 'Conectado'}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={handleOpenIncome}
-                className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
-                  theme === 'light' 
-                    ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm' 
-                    : 'bg-white/3 hover:bg-white/6 text-slate-200 border border-white/5'
-                }`}
-              >
-                <DollarSign className="w-4 h-4 text-emerald-400" /> Ganhos
-              </button>
-              
-              <button
-                onClick={handleUserLogout}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
-                  theme === 'light'
-                    ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-700'
-                    : 'bg-rose-500/5 hover:bg-rose-500/15 border border-rose-500/10 text-rose-450'
-                }`}
-                title="Sair da plataforma"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          </header>
-
           {/* Alerta de Contas - bjcarvalho007@gmail.com vs bjcarvalho07@gmail.com */}
           {user && user.email && user.email.toLowerCase().trim() === 'bjcarvalho007@gmail.com' && (
             <div className="mb-6 p-5 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-amber-200 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg shadow-amber-500/5">

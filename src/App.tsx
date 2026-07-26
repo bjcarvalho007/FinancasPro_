@@ -49,6 +49,7 @@ import {
   ShieldCheck,
   Zap,
   ArrowRight,
+  ArrowUp,
   MessageCircle,
   Clock
 } from 'lucide-react';
@@ -125,6 +126,23 @@ export default function App() {
   
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [currency, setCurrency] = useState<'BRL' | 'USD' | 'EUR'>('BRL');
+  const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+
+  const handleMainScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const scrollTop = e.currentTarget.scrollTop;
+    if (scrollTop > 220) {
+      setShowScrollTop(true);
+    } else {
+      setShowScrollTop(false);
+    }
+  };
+
+  const scrollToTop = () => {
+    const container = document.getElementById('main-scroller-view');
+    if (container) {
+      container.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   // Ledger timeline Navigation state
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
@@ -1835,6 +1853,10 @@ export default function App() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:hidden">
         {/* Core card leftover surplus */}
         <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-20px' }}
+          transition={{ duration: 0.35 }}
           whileHover={{ scale: 1.01 }}
           onClick={handleOpenIncome}
           className={`p-6 rounded-3xl ${
@@ -1859,6 +1881,10 @@ export default function App() {
 
         {/* Core card liabilities total */}
         <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-20px' }}
+          transition={{ duration: 0.35, delay: 0.08 }}
           whileHover={{ scale: 1.01 }}
           onClick={() => setIsPendingDebtListOpen(true)}
           className={`p-6 rounded-3xl ${
@@ -2695,10 +2721,11 @@ export default function App() {
       {/* Main scrolling wrapper */}
       <div 
         id="main-scroller-view"
+        onScroll={handleMainScroll}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto pb-28 lg:pb-12"
+        className="flex-1 overflow-y-auto pb-28 lg:pb-12 scroll-smooth"
       >
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 md:py-8 space-y-6">
           {isFirebaseOffline && (
@@ -2840,6 +2867,10 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               {/* Card 1: Sobra Estimada de Caixa */}
               <motion.div
+                initial={{ opacity: 0, y: 15 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-20px' }}
+                transition={{ duration: 0.35 }}
                 whileHover={{ scale: 1.01 }}
                 onClick={handleOpenIncome}
                 className={`p-5 rounded-3xl ${
@@ -2868,6 +2899,10 @@ export default function App() {
 
               {/* Card 2: Total a Pagar Pendente */}
               <motion.div
+                initial={{ opacity: 0, y: 15 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-20px' }}
+                transition={{ duration: 0.35, delay: 0.08 }}
                 whileHover={{ scale: 1.01 }}
                 onClick={() => setIsPendingDebtListOpen(true)}
                 className={`p-5 rounded-3xl ${
@@ -5217,6 +5252,28 @@ export default function App() {
       </AnimatePresence>
 
       </div>
+
+      {/* Floating Back to Top Button */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.7, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.7, y: 20 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            onClick={scrollToTop}
+            className={`fixed bottom-24 lg:bottom-8 right-4 sm:right-8 z-[55] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 cursor-pointer border backdrop-blur-xl transition-all active:scale-95 hover:scale-105 ${
+              theme === 'light'
+                ? 'bg-slate-900/90 text-white border-slate-700/60 hover:bg-slate-800 shadow-slate-900/25'
+                : 'bg-emerald-500/90 text-slate-950 border-emerald-400 hover:bg-emerald-400 shadow-emerald-500/40'
+            }`}
+            title="Voltar ao Topo"
+          >
+            <ArrowUp className="w-4 h-4 stroke-[2.8]" />
+            <span className="font-black uppercase tracking-wider text-[10.5px]">Topo</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <OnboardingTutorial 
         theme={theme} 

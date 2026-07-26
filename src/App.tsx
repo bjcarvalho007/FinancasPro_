@@ -2966,9 +2966,18 @@ export default function App() {
           </div>
 
 
-          {/* Grid Layout that splits screen on PC, but rolls standard single col on Mobile */}
-          {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Animated Tab View Switch Container */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 16, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -12, scale: 0.985 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="w-full"
+            >
+              {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Main lists column */}
               <div className="lg:col-span-8 space-y-4">
                 <main className="space-y-4 pt-1">
@@ -3728,6 +3737,8 @@ export default function App() {
               </main>
             </div>
           )}
+            </motion.div>
+          </AnimatePresence>
 
           {/* Minimalist Visual Balance Spacing */}
           <div className="pt-8 pb-4 text-center text-[10px] text-slate-500 tracking-wide font-medium uppercase opacity-40 select-none">

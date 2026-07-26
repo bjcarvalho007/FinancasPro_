@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ExtraEarning } from '../types';
+import { useLanguage } from '../utils/i18n';
 import { Plus, Trash2, Calendar, Tag, Briefcase, DollarSign, TrendingUp, Filter } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -20,6 +21,7 @@ export default function ExtraEarningsManager({
   onDeleteEarning,
   showToast,
 }: ExtraEarningsManagerProps) {
+  const { t, formatMonthKey } = useLanguage();
   const [source, setSource] = useState('');
   const [amountStr, setAmountStr] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -239,7 +241,7 @@ export default function ExtraEarningsManager({
                           </span>
                           {filterMode === 'all' && (
                             <span className="px-1.5 py-0.5 bg-indigo-500/15 text-[8px] text-indigo-400 rounded font-bold">
-                              {formatMonthTitle(item.monthKey)}
+                              {formatMonthKey(item.monthKey)}
                             </span>
                           )}
                         </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Goal } from '../types';
+import { useLanguage } from '../utils/i18n';
 import { 
   Target, 
   Trash2, 
@@ -41,6 +42,7 @@ export default function GoalsPanel({
   onUpdateGoalProgress,
   onDeleteGoal
 }: GoalsPanelProps) {
+  const { t, monthsList, lang } = useLanguage();
   const [showAddGoal, setShowAddGoal] = useState<boolean>(false);
   const [title, setTitle] = useState<string>('');
   const [targetAmountStr, setTargetAmountStr] = useState<string>('');
@@ -64,13 +66,9 @@ export default function GoalsPanel({
     if (targetMonths) {
       const date = new Date();
       date.setMonth(date.getMonth() + targetMonths);
-      const ptBRMonths = [
-        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-      ];
-      setDeadline(`${ptBRMonths[date.getMonth()]} ${date.getFullYear()}`);
+      setDeadline(`${monthsList[date.getMonth()]} ${date.getFullYear()}`);
     }
-  }, [targetMonths]);
+  }, [targetMonths, monthsList]);
 
   const formatMoney = (val: number): string => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);

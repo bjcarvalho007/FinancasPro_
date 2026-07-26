@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Transaction, Category } from '../types';
+import { useLanguage } from '../utils/i18n';
 import { 
   Sparkles, 
   BarChart2, 
@@ -54,6 +55,8 @@ export default function DashboardAnalytics({
   currentTheme = 'dark',
   settings = null
 }: DashboardAnalyticsProps) {
+  const { t, formatMonthKey, lang } = useLanguage();
+
   // Toggle between active month 'current' or total lifetime records 'history'
   const [activeDashboardMode, setActiveDashboardMode] = useState<'current' | 'history'>('current');
   const [metricsScope, setMetricsScope] = useState<'month' | 'general'>('month');
@@ -77,21 +80,6 @@ export default function DashboardAnalytics({
   const topSource = filteredExtras.length > 0 
     ? [...filteredExtras].sort((a: any, b: any) => b.amount - a.amount)[0] 
     : null;
-
-  // Format key-value months cleanly (Brazilian calendar)
-  const formatMonthKey = (key: string) => {
-    if (!key || !key.includes('-')) return key;
-    const [year, month] = key.split('-');
-    const months = [
-      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-    ];
-    const idx = parseInt(month, 10) - 1;
-    if (idx >= 0 && idx < 12) {
-      return `${months[idx]} ${year}`;
-    }
-    return key;
-  };
 
   // Safe list fallbacks
   const listActive = transactions;

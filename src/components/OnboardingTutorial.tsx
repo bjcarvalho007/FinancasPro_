@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../utils/i18n';
 import { 
   X, 
   ChevronRight, 
@@ -26,6 +27,7 @@ interface OnboardingTutorialProps {
 }
 
 export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: OnboardingTutorialProps) {
+  const { t, lang } = useLanguage();
   const [currentStep, setCurrentStep] = useState(0);
 
   // Automatically open tutorial on first login if not seen yet

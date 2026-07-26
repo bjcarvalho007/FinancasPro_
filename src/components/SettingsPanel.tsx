@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Transaction } from '../types';
 import { auth, db } from '../firebase';
+import { useLanguage } from '../utils/i18n';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
 import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle } from 'lucide-react';
@@ -36,6 +37,7 @@ export default function SettingsPanel({
   alertThresholdDays = 3,
   settings = null
 }: SettingsPanelProps) {
+  const { t, lang } = useLanguage();
   const [incStr, setIncStr] = useState<string>(
     baseIncome > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseIncome) : ''
   );

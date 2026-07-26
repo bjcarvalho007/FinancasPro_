@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Transaction, Category } from '../types';
+import { useLanguage } from '../utils/i18n';
 import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -31,6 +32,7 @@ export default function TransactionFormModal({
   onCreateCategory,
   defaultType = 'fixos'
 }: TransactionFormModalProps) {
+  const { t } = useLanguage();
   const [name, setName] = useState<string>('');
   const [amountStr, setAmountStr] = useState<string>('');
   const [type, setType] = useState<'fixos' | 'variaveis' | 'parcelas'>('fixos');

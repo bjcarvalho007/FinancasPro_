@@ -25,9 +25,12 @@ import {
   ChevronRight,
   Info,
   Eye,
-  EyeOff
+  EyeOff,
+  Globe,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { LANGUAGES, useLanguage } from '../utils/i18n';
 
 interface AuthScreenProps {
   onSuccess: () => void;
@@ -35,6 +38,9 @@ interface AuthScreenProps {
 }
 
 export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
+  const { lang, setLang, t } = useLanguage();
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState<boolean>(false);
+
   // Defaults to false so returning users go directly to login without visual clutter
   const [showPitch, setShowPitch] = useState<boolean>(() => {
     try {
@@ -331,34 +337,92 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
             <span className="font-display font-extrabold text-[17px] tracking-tight text-white leading-none">
               FINANÇAS<span className="text-emerald-400 font-black ml-0.5">PRO</span>
             </span>
-            <span className="text-[8.5px] text-slate-500 font-extrabold uppercase tracking-widest block leading-tight mt-0.5">Gestão de Caixa Seguro</span>
+            <span className="text-[8.5px] text-slate-500 font-extrabold uppercase tracking-widest block leading-tight mt-0.5">{t('gestaoCaixaSeguro')}</span>
           </div>
         </div>
 
-        {/* Global Quick Toggle Switch - High Craft */}
-        <button
-          onClick={() => {
-            setShowPitch(!showPitch);
-            setErrorAlert(null);
-          }}
-          className={`px-4 py-2 rounded-xl text-[11px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center gap-2 border cursor-pointer ${
-            showPitch 
-              ? 'bg-indigo-600/15 border-indigo-500/30 text-indigo-400 hover:bg-indigo-600/25' 
-              : 'bg-emerald-600/15 border-emerald-500/30 text-emerald-450 hover:bg-emerald-600/25'
-          }`}
-        >
-          {showPitch ? (
-            <>
-              <Lock className="w-3.5 h-3.5" />
-              Ir direto para Acesso
-            </>
-          ) : (
-            <>
-              <Info className="w-3.5 h-3.5" />
-              💡 O Que é / Como Adquirir?
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-2.5">
+          {/* Language Selector Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+              className="px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10"
+              title={t('selecionarIdioma')}
+            >
+              <Globe className="w-4 h-4 text-indigo-400" />
+              <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1">
+                <span>{LANGUAGES.find(l => l.code === lang)?.flag}</span>
+                <span className="hidden sm:inline">{lang.toUpperCase()}</span>
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+            </button>
+
+            <AnimatePresence>
+              {isLangMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 mt-2 w-52 rounded-2xl p-1.5 shadow-2xl border z-50 backdrop-blur-xl bg-slate-900/95 border-slate-700/80 shadow-black/60 text-white"
+                >
+                  <div className="px-3 py-2 border-b border-white/10 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
+                      🌐 {t('idioma')}
+                    </p>
+                  </div>
+                  {LANGUAGES.map((l) => (
+                    <button
+                      key={l.code}
+                      type="button"
+                      onClick={() => {
+                        setLang(l.code);
+                        setIsLangMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        lang === l.code
+                          ? 'bg-indigo-500/20 text-indigo-300 font-extrabold border border-indigo-500/30'
+                          : 'hover:bg-white/5 text-slate-300'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <span className="text-lg leading-none">{l.flag}</span>
+                        <span>{l.label}</span>
+                      </span>
+                      {lang === l.code && <span className="text-indigo-400 font-bold">✓</span>}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Global Quick Toggle Switch - High Craft */}
+          <button
+            onClick={() => {
+              setShowPitch(!showPitch);
+              setErrorAlert(null);
+            }}
+            className={`px-4 py-2 rounded-xl text-[11px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center gap-2 border cursor-pointer ${
+              showPitch 
+                ? 'bg-indigo-600/15 border-indigo-500/30 text-indigo-400 hover:bg-indigo-600/25' 
+                : 'bg-emerald-600/15 border-emerald-500/30 text-emerald-450 hover:bg-emerald-600/25'
+            }`}
+          >
+            {showPitch ? (
+              <>
+                <Lock className="w-3.5 h-3.5" />
+                {t('irDiretoAcesso')}
+              </>
+            ) : (
+              <>
+                <Info className="w-3.5 h-3.5" />
+                {t('oQueEComoAdquirir')}
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Main Responsive Dynamic Content Area */}
@@ -383,20 +447,20 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 <div className="text-center mb-6">
                   {isTrialSignUp ? (
                     <span className="text-[9px] text-indigo-400 font-extrabold uppercase tracking-widest bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
-                      ⚡ Teste Grátis de 5 Dias Ativado
+                      {t('testeGratisAtivado')}
                     </span>
                   ) : (
                     <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
-                      ✨ Compra Confirmada - Acesso Premium
+                      {t('compraConfirmada')}
                     </span>
                   )}
                   <h2 className="font-display font-black text-2xl md:text-3xl text-white tracking-tight">
-                    {isTrialSignUp ? 'Crie sua Conta de Teste' : 'Crie sua Conta Premium'}
+                    {isTrialSignUp ? t('crieContaTeste') : t('crieContaPremium')}
                   </h2>
                   <p className="text-xs text-slate-400 mt-1.5 font-light leading-relaxed">
                     {isTrialSignUp 
-                      ? 'Defina abaixo suas credenciais para iniciar seu teste gratuito de 5 dias hoje mesmo.'
-                      : 'Defina abaixo sua senha privada para começar a organizar suas finanças de forma premium hoje mesmo.'}
+                      ? t('definaCredenciaisTeste')
+                      : t('definaCredenciaisPremium')}
                   </p>
                 </div>
 
@@ -408,8 +472,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         <AlertCircle className="w-3.5 h-3.5" />
                       </div>
                       <div className="flex-1 text-xs leading-relaxed font-semibold">
-                        <span className="font-extrabold text-rose-200 block mb-0.5 uppercase tracking-wide text-[8.5px]">Acesso de Cadastro Bloqueado</span>
-                        Acesso negado. Por favor, realize o pagamento para liberar o seu cadastro.
+                        <span className="font-extrabold text-rose-200 block mb-0.5 uppercase tracking-wide text-[8.5px]">{t('acessoCadastroBloqueado')}</span>
+                        {t('acessoNegadoPagamento')}
                       </div>
                     </div>
 
@@ -419,7 +483,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         onClick={handleMercadoPagoCheckout}
                         className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
                       >
-                        Realizar Pagamento
+                        {t('realizarPagamento')}
                         <ArrowRight className="w-4 h-4" />
                       </button>
 
@@ -431,7 +495,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         }}
                         className="w-full text-xs text-slate-455 hover:text-white font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-transparent border-none mt-2"
                       >
-                        ← Voltar para Acesso Direto
+                        {t('voltarAcessoDireto')}
                       </button>
                     </div>
                   </div>
@@ -444,14 +508,14 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                           <AlertCircle className="w-3.5 h-3.5" />
                         </div>
                         <div className="flex-1 text-[11px] leading-relaxed font-semibold">
-                          <span className="font-extrabold text-rose-200 block mb-0.5 uppercase tracking-wide text-[8.5px]">Erro de cadastro</span>
+                          <span className="font-extrabold text-rose-200 block mb-0.5 uppercase tracking-wide text-[8.5px]">{t('erroCadastro')}</span>
                           {errorAlert}
                         </div>
                       </div>
                     )}
 
                     <div>
-                      <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{isTrialSignUp ? 'Seu E-mail' : 'Seu E-mail Premium'}</label>
+                      <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{isTrialSignUp ? t('seuEmail') : t('seuEmailPremium')}</label>
                       <div className="relative">
                         <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
                         <input 
@@ -467,14 +531,14 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                     </div>
 
                     <div>
-                      <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Escolha Sua Senha</label>
+                      <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('escolhaSuaSenha')}</label>
                       <div className="relative">
                         <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
                         <input 
                           type={showRegisterPassword ? "text" : "password"} 
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Minimo de 6 caracteres"
+                          placeholder={t('minimoCaracteres')}
                           required
                           className="w-full bg-[#030610] border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 text-slate-100 placeholder-slate-500 text-[13px] pl-11 pr-11 py-3 rounded-xl transition-all"
                         />
@@ -498,7 +562,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       disabled={loading}
                       className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
-                      {loading ? 'Criando Conta...' : isTrialSignUp ? 'Criar Conta & Iniciar Teste' : 'Criar Minha Conta & Acessar'}
+                      {loading ? t('criandoConta') : isTrialSignUp ? t('criarContaIniciarTeste') : t('criarMinhaContaAcessar')}
                       {!loading && <ArrowRight className="w-4 h-4" />}
                     </button>
 
@@ -511,11 +575,11 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       }}
                       className="w-full text-xs text-slate-450 hover:text-white font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-transparent border-none mt-2"
                     >
-                      ← Voltar para login
+                      {t('voltarLogin')}
                     </button>
                     
                     <p className="text-[10px] text-slate-500 text-center uppercase tracking-wider font-bold leading-relaxed pt-3">
-                      🔒 Você usará este e-mail e senha para acessar o painel corporativo a qualquer momento.
+                      {t('notaAcessoSeguro')}
                     </p>
                   </form>
                 )}
@@ -536,13 +600,13 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                   {/* Pitch Header */}
                   <div>
                     <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
-                      ⚡ Plataforma Profissional
+                      {t('plataformaProfissional')}
                     </span>
                     <h3 className="font-display font-black text-2xl md:text-3xl text-white tracking-tight leading-tight">
-                      Domine Suas Finanças com Inteligência Real
+                      {t('domineSuasFinancas')}
                     </h3>
                     <p className="text-xs text-slate-400 mt-2 font-normal leading-relaxed">
-                      Diga adeus às planilhas complexas e anotações perdidas. O FinançasPro é um ecossistema projetado para quem busca precisão cirúrgica e clareza no fluxo de caixa.
+                      {t('pitchDescricao')}
                     </p>
                   </div>
 
@@ -553,8 +617,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         <BarChart2 className="w-5 h-5 text-indigo-400" />
                       </div>
                       <div className="space-y-0.5">
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Analytics Completo</h4>
-                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">Visão global e por categoria automatizada e rica em detalhes.</p>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">{t('analyticsCompleto')}</h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">{t('analyticsDesc')}</p>
                       </div>
                     </div>
 
@@ -563,8 +627,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         <Coins className="w-5 h-5 text-emerald-400" />
                       </div>
                       <div className="space-y-0.5">
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Gestão de Parcelas</h4>
-                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">Abatimento progressivo do saldo devedor sem juros ocultos selvagens.</p>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">{t('gestaoParcelas')}</h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">{t('parcelasDesc')}</p>
                       </div>
                     </div>
 
@@ -573,8 +637,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         <Target className="w-5 h-5 text-amber-400" />
                       </div>
                       <div className="space-y-0.5">
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Metas Inteligentes</h4>
-                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">Defina objetivos e acompanhe suas conquistas mês a mês.</p>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">{t('metasInteligentes')}</h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">{t('metasDesc')}</p>
                       </div>
                     </div>
 
@@ -583,8 +647,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         <ShieldCheck className="w-5 h-5 text-sky-450" />
                       </div>
                       <div className="space-y-0.5">
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">Segurança Máxima</h4>
-                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">Dados criptografados na nuvem do Firebase para total privacidade.</p>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">{t('segurancaMaxima')}</h4>
+                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">{t('segurancaDesc')}</p>
                       </div>
                     </div>
                   </div>
@@ -593,10 +657,10 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                   <div className="p-5 md:p-6 rounded-2xl bg-emerald-950/20 border border-emerald-500/15 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-1 max-w-sm">
                       <h4 className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" /> Oferta Premium
+                        <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" /> {t('ofertaPremium')}
                       </h4>
                       <p className="text-xs text-slate-300 leading-relaxed font-light">
-                        Tenha acesso completo para gerenciar suas despesas fixas, variáveis e parcelas sem estresse ou complicações.
+                        {t('ofertaDesc')}
                       </p>
                     </div>
                     <button
@@ -604,16 +668,16 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                       onClick={handleMercadoPagoCheckout}
                       className="shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3 px-5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer border-none"
                     >
-                      Quero Assinar
+                      {t('queroAssinar')}
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
 
                   {/* Trust Badge */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 border-t border-white/5 text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">
-                    <span>Acesso Corporativo Completo</span>
+                    <span>{t('acessoCorporativoCompleto')}</span>
                     <span className="flex items-center gap-1.5 text-emerald-450">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /> Pagamento 100% Protegido
+                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /> {t('pagamentoProtegido')}
                     </span>
                   </div>
                 </div>
@@ -628,12 +692,12 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 {/* Compact brand marker */}
                 <div className="text-center mb-6">
                   <h2 className="font-display font-black text-2xl md:text-3xl text-white tracking-tight">
-                    {isResetMode ? 'Recuperar Senha' : 'Acesse sua Conta'}
+                    {isResetMode ? t('recuperarSenha') : t('acesseSuaConta')}
                   </h2>
                   <p className="text-xs text-slate-400 mt-1.5 font-light leading-relaxed">
                     {isResetMode 
-                      ? 'Insira seu email de assinante para receber o link de recuperação.' 
-                      : 'Digite seus dados de segurança corporativos abaixo.'}
+                      ? t('insiraEmailRecuperacao') 
+                      : t('digiteDadosSeguranca')}
                   </p>
                 </div>
 
@@ -661,7 +725,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         <AlertCircle className="w-3.5 h-3.5" />
                       </div>
                       <div className="flex-1 text-[11px] leading-relaxed pr-5 font-semibold">
-                        <span className="font-extrabold text-rose-200 block mb-0.5 uppercase tracking-wide text-[8.5px]">Erro no login</span>
+                        <span className="font-extrabold text-rose-200 block mb-0.5 uppercase tracking-wide text-[8.5px]">{t('erroLogin')}</span>
                         {errorAlert}
                       </div>
                       <button
@@ -678,7 +742,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 {/* Login Form */}
                 <form onSubmit={handleEmailAuth} className="space-y-4">
                   <div>
-                    <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">E-mail Credenciado</label>
+                    <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('emailCredenciado')}</label>
                     <div className="relative">
                       <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
                       <input 
@@ -696,13 +760,13 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                   {!isResetMode && (
                     <div>
                       <div className="flex justify-between items-center mb-1.5">
-                        <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Senha Provisória ou Pessoal</label>
+                        <label className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">{t('senhaProvisoria')}</label>
                         <button 
                           type="button" 
                           onClick={() => setIsResetMode(true)}
                           className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold"
                         >
-                          Esqueceu?
+                          {t('esqueceuSenha')}
                         </button>
                       </div>
                       <div className="relative">
@@ -739,7 +803,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                     disabled={loading}
                     className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 border-none"
                   >
-                    {loading ? 'Processando...' : isResetMode ? 'Enviar Link' : 'Acessar Meu Painel'}
+                    {loading ? t('processando') : isResetMode ? t('enviarLink') : t('acessarMeuPainel')}
                     {!loading && <ArrowRight className="w-4 h-4" />}
                   </button>
                 </form>
@@ -749,14 +813,14 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                     <button 
                       type="button"
                       onClick={() => setIsResetMode(false)}
-                      className="text-xs text-slate-450 hover:text-white transition-colors font-bold bg-transparent border-none cursor-pointer"
+                      className="text-xs text-slate-455 hover:text-white transition-colors font-bold bg-transparent border-none cursor-pointer"
                     >
-                      ← Voltar para Acesso Direto
+                      {t('voltarAcessoDireto')}
                     </button>
                   ) : (
                     <div className="pt-5 border-t border-white/5 space-y-3">
                       <p className="text-xs text-slate-400 leading-normal font-semibold">
-                        Ainda não possui uma assinatura ativa?
+                        {t('aindaNaoPossuiAssinatura')}
                       </p>
 
                       <button 
@@ -767,7 +831,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         }}
                         className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
                       >
-                        Quero Assinar
+                        {t('queroAssinar')}
                         <ArrowRight className="w-4 h-4" />
                       </button>
 
@@ -782,7 +846,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                         }}
                         className="w-full bg-slate-900 hover:bg-slate-850 border border-white/10 hover:border-white/20 text-slate-300 hover:text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        Criar Conta (Teste de 5 Dias)
+                        {t('criarContaTeste')}
                       </button>
                     </div>
                   )}
@@ -812,10 +876,10 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
             <div className="flex items-start justify-between">
               <div>
                 <h4 className="font-display font-black text-sm text-white uppercase tracking-wider mb-1 flex items-center gap-2">
-                  <Mail className="w-4.5 h-4.5 text-emerald-400 animate-pulse" /> Identificar Seu Gmail
+                  <Mail className="w-4.5 h-4.5 text-emerald-400 animate-pulse" /> {t('identificarGmail')}
                 </h4>
                 <p className="text-xs text-slate-400 font-light leading-relaxed">
-                  Para ser atendido com prioridade máxima, informe o seu e-mail do Gmail cadastrado ou desejado.
+                  {t('identificarGmailDesc')}
                 </p>
               </div>
               <button
@@ -829,7 +893,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
             <div className="space-y-3 pt-1">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">
-                  Seu e-mail (@gmail.com)
+                  {t('seuEmailGmail')}
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
@@ -860,7 +924,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 onClick={() => setIsGmailPromptOpen(false)}
                 className="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/15 text-slate-450 font-bold text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
               >
-                Cancelar
+                {t('cancelar')}
               </button>
               <button
                 type="button"
@@ -881,7 +945,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 }}
                 className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-3.5 px-4 rounded-xl text-[11px] uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all cursor-pointer"
               >
-                Prosseguir para o Zap
+                {t('prosseguirZap')}
               </button>
             </div>
           </motion.div>
@@ -905,10 +969,10 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
             <div className="flex items-start justify-between">
               <div>
                 <span className="text-[9px] text-amber-450 font-extrabold uppercase tracking-widest bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse">
-                  <Sparkles className="w-3 h-3 text-amber-450" /> Vagas Limitadas
+                  <Sparkles className="w-3 h-3 text-amber-450" /> {t('vagasLimitadas')}
                 </span>
                 <h4 className="font-display font-black text-base text-white tracking-tight leading-snug mt-1.5">
-                  Oferta de Lançamento Limitada
+                  {t('ofertaLancamentoLimitada')}
                 </h4>
               </div>
               <button
@@ -926,25 +990,25 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 </div>
                 <div>
                   <h5 className="text-[10.5px] font-black uppercase text-amber-400 tracking-wider leading-none">
-                    Lote Promocional de Estreia
+                    {t('lotePromocionalEstreia')}
                   </h5>
                   <p className="text-[9.5px] text-amber-300 font-semibold mt-1">
-                    Apenas 8 assinaturas promocionais disponíveis! Restam apenas 5 vagas promocionais com valor especial de R$ 11,99 mensal. Após o preenchimento destas vagas, novas assinaturas serão realizadas pelo valor regular do plano.
+                    {t('textoLotePromocional')}
                   </p>
                 </div>
               </div>
 
               <div className="space-y-0.5 bg-slate-950/50 p-2.5 rounded-xl border border-white/5 text-center">
-                <p className="text-[9.5px] text-slate-500 font-black uppercase tracking-wider">Você garante o valor de:</p>
+                <p className="text-[9.5px] text-slate-500 font-black uppercase tracking-wider">{t('voceGaranteValor')}</p>
                 <div className="flex items-center justify-center gap-1.5 mt-0.5">
                   <span className="text-[11px] text-slate-450 line-through font-bold">R$ 28,99</span>
                   <span className="text-lg font-black text-emerald-400">R$ 11,99</span>
-                  <span className="text-[9.5px] text-slate-400 font-semibold">/ mês</span>
+                  <span className="text-[9.5px] text-slate-400 font-semibold">{t('porMes')}</span>
                 </div>
               </div>
 
               <p className="text-[11px] text-slate-300 leading-normal font-light">
-                O lote promocional possui apenas <strong className="font-bold text-white">8 vagas</strong> e restam apenas <strong className="font-bold text-yellow-400">5 vagas promocionais</strong>. Garanta seu valor especial de <strong className="font-bold text-emerald-400">R$ 11,99 mensal</strong> antes que esgote!
+                {t('textoLotePromocional')}
               </p>
             </div>
 
@@ -954,14 +1018,14 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
                 onClick={() => setShowPaymentInfoModal(false)}
                 className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/10 text-slate-400 font-bold uppercase tracking-wider transition-colors cursor-pointer text-[10px]"
               >
-                Voltar
+                {t('voltar')}
               </button>
               <button
                 type="button"
                 onClick={confirmMercadoPagoCheckout}
                 className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 px-4 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-1 cursor-pointer border-none text-[10px]"
               >
-                Ir para o Pagamento
+                {t('irParaPagamento')}
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>

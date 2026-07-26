@@ -57,7 +57,7 @@ import {
   Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LANGUAGES, Language, monthsByLang, getTranslation } from './utils/i18n';
+import { LANGUAGES, Language, useLanguage, LanguageProvider } from './utils/i18n';
 
 // Default built-in categories
 const defaultCategories = [
@@ -105,7 +105,7 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
-export default function App() {
+function MainApp() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
   const [userProfile, setUserProfile] = useState<any | null>(null);
@@ -132,18 +132,8 @@ export default function App() {
   const [currency, setCurrency] = useState<'BRL' | 'USD' | 'EUR'>('BRL');
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
 
-  const [lang, setLang] = useState<Language>(() => {
-    const saved = localStorage.getItem('financaspro_lang');
-    return (saved === 'es' || saved === 'en' || saved === 'pt' || saved === 'fr') ? (saved as Language) : 'pt';
-  });
+  const { lang, setLang, t, monthsList, formatMonthKey } = useLanguage();
   const [isLangMenuOpen, setIsLangMenuOpen] = useState<boolean>(false);
-
-  useEffect(() => {
-    localStorage.setItem('financaspro_lang', lang);
-  }, [lang]);
-
-  const t = (key: string) => getTranslation(key, lang);
-  const monthsList = monthsByLang[lang] || monthsByLang['pt'];
 
   const handleMainScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const scrollTop = e.currentTarget.scrollTop;
@@ -5386,5 +5376,13 @@ export default function App() {
         onOpen={() => setIsTutorialOpen(true)} 
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <MainApp />
+    </LanguageProvider>
   );
 }

@@ -222,6 +222,31 @@ export default function App() {
     return !!(user && user.email && VIP_EMAILS.includes(user.email.toLowerCase().trim()));
   }, [user, VIP_EMAILS]);
 
+  const timeGreeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) {
+      return 'Bom dia';
+    } else if (hour >= 12 && hour < 18) {
+      return 'Boa tarde';
+    } else {
+      return 'Boa noite';
+    }
+  }, []);
+
+  const formattedUserName = useMemo(() => {
+    if (userProfile?.username && userProfile.username.trim() !== '') {
+      return userProfile.username.trim();
+    }
+    if (user?.displayName && user.displayName.trim() !== '') {
+      return user.displayName.trim();
+    }
+    if (user?.email) {
+      const emailPrefix = user.email.split('@')[0];
+      return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+    }
+    return 'Usuário';
+  }, [userProfile?.username, user?.displayName, user?.email]);
+
   const isWithinFiveDaysTrial = useMemo(() => {
     if (!user) return false;
     let creationDateStr = userProfile?.createdAt;
@@ -2684,73 +2709,40 @@ export default function App() {
             theme === 'light' ? 'border-slate-200/80' : 'border-white/5'
           }`}>
             <div className="flex items-center gap-2.5">
-              {userProfile?.username ? (
-                <div className="min-w-0">
-                  <h2 className={`font-display font-black text-xl sm:text-2xl tracking-tight leading-none ${
-                    theme === 'light' ? 'text-slate-900' : 'text-white'
-                  }`} title={userProfile.username}>
-                    {userProfile.username}
-                  </h2>
-                  {isVIP ? (
-                    <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-1.5">
-                      <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
+              <img 
+                src="/app_icon.png" 
+                alt="FinançasPro Logo" 
+                className="w-10 h-10 rounded-2xl object-cover border border-white/5 shrink-0 shadow-lg shadow-emerald-500/5 glow-emerald"
+                referrerPolicy="no-referrer"
+              />
+              <div className="min-w-0">
+                <h2 className={`font-display font-black text-lg sm:text-xl tracking-tight leading-tight ${
+                  theme === 'light' ? 'text-slate-900' : 'text-white'
+                }`} title={formattedUserName}>
+                  {timeGreeting}, <span className="text-emerald-400 font-extrabold">{formattedUserName}</span>!
+                </h2>
+                {isVIP ? (
+                  <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-0.5">
+                    <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
+                  </span>
+                ) : hasActiveSubscription ? (
+                  <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-0.5">
+                    <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
                     </span>
-                  ) : hasActiveSubscription ? (
-                    <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-1.5">
-                      <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
-                    </span>
-                  ) : (
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
-                        <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
-                      </span>
-                      <button
-                        onClick={() => setShowPaymentInfoModal(true)}
-                        className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
-                      >
-                        Assinar
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <img 
-                    src="/app_icon.png" 
-                    alt="FinançasPro Logo" 
-                    className="w-11 h-11 rounded-2xl object-cover border border-white/5 shrink-0 shadow-lg shadow-emerald-500/5 glow-emerald"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="min-w-0">
-                    <h2 className={`font-display font-black text-[17px] sm:text-lg tracking-tight leading-none ${
-                      theme === 'light' ? 'text-slate-900' : 'text-white'
-                    }`}>
-                      FINANÇAS<span className="text-emerald-400 font-extrabold ml-0.5">PRO</span>
-                    </h2>
-                    {isVIP ? (
-                      <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-1">
-                        <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
-                      </span>
-                    ) : hasActiveSubscription ? (
-                      <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-1">
-                        <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
-                      </span>
-                    ) : (
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
-                          <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
-                        </span>
-                        <button
-                          onClick={() => setShowPaymentInfoModal(true)}
-                          className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
-                        >
-                          Assinar
-                        </button>
-                      </div>
-                    )}
+                    <button
+                      onClick={() => setShowPaymentInfoModal(true)}
+                      className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
+                    >
+                      Assinar
+                    </button>
                   </div>
-                </>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Top Right Controls - Pro visual layout */}

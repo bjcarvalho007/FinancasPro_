@@ -30,6 +30,9 @@ import {
   Plus, 
   ChevronLeft, 
   ChevronRight, 
+  ChevronDown,
+  Globe,
+  Check,
   Settings, 
   Target, 
   LogOut, 
@@ -54,6 +57,7 @@ import {
   Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { LANGUAGES, Language, monthsByLang, getTranslation } from './utils/i18n';
 
 // Default built-in categories
 const defaultCategories = [
@@ -127,6 +131,19 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [currency, setCurrency] = useState<'BRL' | 'USD' | 'EUR'>('BRL');
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+
+  const [lang, setLang] = useState<Language>(() => {
+    const saved = localStorage.getItem('financaspro_lang');
+    return (saved === 'es' || saved === 'en' || saved === 'pt' || saved === 'fr') ? (saved as Language) : 'pt';
+  });
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    localStorage.setItem('financaspro_lang', lang);
+  }, [lang]);
+
+  const t = (key: string) => getTranslation(key, lang);
+  const monthsList = monthsByLang[lang] || monthsByLang['pt'];
 
   const handleMainScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const scrollTop = e.currentTarget.scrollTop;
@@ -229,10 +246,7 @@ export default function App() {
   const [startY, setStartY] = useState<number>(0);
   const [pullProgress, setPullProgress] = useState<number>(0);
 
-  const monthsPortuguese = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-  ];
+  const monthsPortuguese = monthsList;
 
   const VIP_EMAILS = useMemo(() => ['bjcarvalho07@gmail.com', 'msouzacintia600@gmail.com', 'teste@gmail.com', 'bjcarvalho007@gmail.com'], []);
 
@@ -2401,12 +2415,12 @@ export default function App() {
           <nav className="space-y-1.5 pt-4">
             {( () => {
               const menuItems = [
-                { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-                { id: 'contas', label: 'Contas Fixas', icon: Receipt },
-                { id: 'variaveis', label: 'Gasto Variável', icon: Coins },
-                { id: 'parcelas', label: 'Parcelados', icon: CreditCard },
-                { id: 'goals', label: 'Metas', icon: Target },
-                { id: 'settings', label: 'Configurações', icon: Settings }
+                { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
+                { id: 'contas', label: t('contasFixas'), icon: Receipt },
+                { id: 'variaveis', label: t('gastoVariavel'), icon: Coins },
+                { id: 'parcelas', label: t('parcelados'), icon: CreditCard },
+                { id: 'goals', label: t('metas'), icon: Target },
+                { id: 'settings', label: t('configuracoes'), icon: Settings }
               ];
               return menuItems;
             })().map((item) => {
@@ -2675,7 +2689,7 @@ export default function App() {
                   ? 'text-indigo-400'
                   : 'text-amber-500'
               }`}>
-                {isVIP ? '👑 Membro VIP' : hasActiveSubscription ? '⭐ Assinante PRO' : '⚡ Conta Grátis'}
+                {isVIP ? t('membroVIP') : hasActiveSubscription ? t('assinantePRO') : t('contaGratis')}
               </span>
               <p className="text-xs font-semibold truncate leading-tight max-w-[150px]" title={user.email || ''}>
                 {user.email || 'Conectado'}
@@ -2683,6 +2697,7 @@ export default function App() {
             </div>
           </div>
 
+          {/* Button: Ganhos */}
           <button
             onClick={handleOpenIncome}
             className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
@@ -2691,8 +2706,76 @@ export default function App() {
                 : 'bg-white/3 hover:bg-white/6 text-slate-200 border border-white/5'
             }`}
           >
-            <DollarSign className="w-4 h-4 text-emerald-400" /> Ganhos
+            <DollarSign className="w-4 h-4 text-emerald-400" /> {t('ganhos')}
           </button>
+
+          {/* Button: Selector de Idiomas / Language Selector */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                theme === 'light' 
+                  ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm' 
+                  : 'bg-white/3 hover:bg-white/6 text-slate-200 border border-white/5'
+              }`}
+              title={t('selecionarIdioma')}
+            >
+              <Globe className="w-4 h-4 text-indigo-400" />
+              <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1">
+                <span>{LANGUAGES.find(l => l.code === lang)?.flag}</span>
+                <span className="hidden sm:inline">{lang.toUpperCase()}</span>
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+            </button>
+
+            <AnimatePresence>
+              {isLangMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                  transition={{ duration: 0.15 }}
+                  className={`absolute right-0 mt-2 w-52 rounded-2xl p-1.5 shadow-2xl border z-50 backdrop-blur-xl ${
+                    theme === 'light'
+                      ? 'bg-white/95 border-slate-200 shadow-slate-300/40 text-slate-800'
+                      : 'bg-slate-900/95 border-slate-700/80 shadow-black/60 text-white'
+                  }`}
+                >
+                  <div className="px-3 py-2 border-b border-white/10 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
+                      🌐 {t('idioma')}
+                    </p>
+                  </div>
+                  {LANGUAGES.map((l) => (
+                    <button
+                      key={l.code}
+                      type="button"
+                      onClick={() => {
+                        setLang(l.code);
+                        setIsLangMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        lang === l.code
+                          ? theme === 'light'
+                            ? 'bg-indigo-50 text-indigo-600 font-extrabold'
+                            : 'bg-indigo-500/20 text-indigo-300 font-extrabold border border-indigo-500/30'
+                          : theme === 'light'
+                            ? 'hover:bg-slate-100 text-slate-700'
+                            : 'hover:bg-white/5 text-slate-300'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <span className="text-lg leading-none">{l.flag}</span>
+                        <span>{l.label}</span>
+                      </span>
+                      {lang === l.code && <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           
           <button
             onClick={handleUserLogout}
@@ -2701,7 +2784,7 @@ export default function App() {
                 ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-700'
                 : 'bg-rose-500/5 hover:bg-rose-500/15 border border-rose-500/10 text-rose-450'
             }`}
-            title="Sair da plataforma"
+            title={t('sair')}
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -2881,7 +2964,7 @@ export default function App() {
               >
                 <div>
                   <span className={`text-[10px] font-black ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>
-                    💎 Sobra Estimada de Caixa
+                    💎 {t('sobraEstimada')}
                   </span>
                   <h3 className={`font-mono text-2xl font-black ${theme === 'light' ? 'text-emerald-700' : 'text-emerald-450'} tracking-tight leading-none`}>
                     {formatCurrency(leftoverCash)}
@@ -2913,13 +2996,13 @@ export default function App() {
               >
                 <div>
                   <span className={`text-[10px] font-black ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>
-                    💸 Total a Pagar Pendente
+                    💸 {t('totalPendente')}
                   </span>
                   <h3 className="font-mono text-2xl font-black text-rose-450 tracking-tight leading-none">
                     {formatCurrency(pendingTotalDebt)}
                   </h3>
                   <span className={`text-[10px] ${theme === 'light' ? 'text-slate-450 font-bold' : 'text-slate-500'} block font-bold uppercase tracking-wider mt-1.5`}>
-                    Comprometido do mês: {formatCurrency(totalSpentInMonth)}
+                    {t('comprometidoMes')}: {formatCurrency(totalSpentInMonth)}
                   </span>
                 </div>
                 <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
@@ -3063,7 +3146,7 @@ export default function App() {
                       <div className={`p-12 text-center border border-dashed rounded-3xl text-xs select-none ${
                         theme === 'light' ? 'border-slate-300 text-slate-500 bg-white' : 'border-white/5 text-slate-500'
                       }`}>
-                        Sem lançamentos registrados sob "{activeTab.toUpperCase()}" para o mês selecionado.
+                        {t('semLancamentos')} ({activeTab.toUpperCase()}) {t('paraOMesSelecionado')}
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -3939,8 +4022,8 @@ export default function App() {
               className="bg-[#0f1524] border border-white/10 w-full max-w-4xl rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 space-y-4 max-h-[90vh] overflow-y-auto"
             >
               <div>
-                <h4 className="font-display font-extrabold text-base text-white uppercase tracking-wider mb-1">💸 Ganhos da Competência</h4>
-                <p className="text-xs text-slate-400">Configure suas rendas básicas, reserva e histórico de rendimentos adicionais.</p>
+                <h4 className="font-display font-extrabold text-base text-white uppercase tracking-wider mb-1">💸 {t('ganhosCompetencia')}</h4>
+                <p className="text-xs text-slate-400">{t('gerenciarGanhos')}</p>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
@@ -4210,12 +4293,12 @@ export default function App() {
         <div className="max-w-4xl w-full mx-auto flex items-center justify-around h-full">
           {( () => {
             const tabs = [
-              { id: 'dashboard', val: 'Dashboard', icon: LayoutDashboard },
-              { id: 'contas', val: 'Fixas', icon: Receipt },
-              { id: 'variaveis', val: 'Variados', icon: Coins },
-              { id: 'parcelas', val: 'Parcelados', icon: CreditCard },
-              { id: 'goals', val: 'Metas', icon: Target },
-              { id: 'settings', val: 'Ajustes', icon: Settings }
+              { id: 'dashboard', val: t('dashboard'), icon: LayoutDashboard },
+              { id: 'contas', val: t('fixas'), icon: Receipt },
+              { id: 'variaveis', val: t('variados'), icon: Coins },
+              { id: 'parcelas', val: t('parcelados'), icon: CreditCard },
+              { id: 'goals', val: t('metas'), icon: Target },
+              { id: 'settings', val: t('ajustes'), icon: Settings }
             ];
             return tabs;
           })().map((tab) => {
@@ -5288,8 +5371,8 @@ export default function App() {
                 ? 'bg-slate-900/90 text-white border-slate-700/60 shadow-slate-900/30 hover:bg-slate-800'
                 : 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-emerald-500/40 hover:bg-emerald-400'
             }`}
-            title="Voltar ao Topo"
-            aria-label="Voltar ao Topo"
+            title={t('voltarTopo')}
+            aria-label={t('voltarTopo')}
           >
             <ArrowUp className="w-5.5 h-5.5 stroke-[3]" />
           </motion.button>

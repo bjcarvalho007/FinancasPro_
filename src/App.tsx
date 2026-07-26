@@ -130,7 +130,7 @@ export default function App() {
 
   const handleMainScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const scrollTop = e.currentTarget.scrollTop;
-    if (scrollTop > 220) {
+    if (scrollTop > 140) {
       setShowScrollTop(true);
     } else {
       setShowScrollTop(false);
@@ -3065,8 +3065,12 @@ export default function App() {
 
                           if (tabLayout === 'lista') {
                             return (
-                              <div
+                              <motion.div
                                 key={tx.id}
+                                initial={{ opacity: 0, y: 18 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true, margin: '-10px' }}
+                                transition={{ duration: 0.3 }}
                                 className={`p-3 rounded-2xl border flex flex-col gap-2 transition-all ${
                                   theme === 'light' 
                                     ? 'bg-white border-slate-200/80 hover:border-indigo-155 hover:shadow-xs' 
@@ -3153,14 +3157,18 @@ export default function App() {
                                     </span>
                                   )}
                                 </div>
-                              </div>
+                              </motion.div>
                             );
                           }
 
                           // DETALHADO (Detailed style)
                           return (
-                            <div
+                            <motion.div
                               key={tx.id}
+                              initial={{ opacity: 0, y: 18 }}
+                              whileInView={{ opacity: 1, y: 0 }}
+                              viewport={{ once: true, margin: '-10px' }}
+                              transition={{ duration: 0.3 }}
                               className={`p-4 rounded-3xl border flex flex-col gap-3.5 transition-all ${
                                 theme === 'light' 
                                   ? 'bg-white border-slate-200/80 hover:border-indigo-100 hover:shadow-sm' 
@@ -3644,7 +3652,7 @@ export default function App() {
                                   </div>
                                 );
                               })()}
-                            </div>
+                            </motion.div>
                           );
                         })}
                       </div>
@@ -5253,24 +5261,26 @@ export default function App() {
 
       </div>
 
-      {/* Floating Back to Top Button */}
+      {/* Floating Back to Top Button (Positioned on the Left Side) */}
       <AnimatePresence>
         {showScrollTop && (
           <motion.button
-            initial={{ opacity: 0, scale: 0.7, y: 20 }}
+            initial={{ opacity: 0, scale: 0.5, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.7, y: 20 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
+            exit={{ opacity: 0, scale: 0.5, y: 20 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
             onClick={scrollToTop}
-            className={`fixed bottom-24 lg:bottom-8 right-4 sm:right-8 z-[55] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 cursor-pointer border backdrop-blur-xl transition-all active:scale-95 hover:scale-105 ${
+            className={`fixed bottom-24 lg:bottom-8 left-4 sm:left-6 z-[55] w-12 h-12 rounded-full shadow-2xl flex items-center justify-center cursor-pointer border backdrop-blur-xl transition-all ${
               theme === 'light'
-                ? 'bg-slate-900/90 text-white border-slate-700/60 hover:bg-slate-800 shadow-slate-900/25'
-                : 'bg-emerald-500/90 text-slate-950 border-emerald-400 hover:bg-emerald-400 shadow-emerald-500/40'
+                ? 'bg-slate-900/90 text-white border-slate-700/60 shadow-slate-900/30 hover:bg-slate-800'
+                : 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-emerald-500/40 hover:bg-emerald-400'
             }`}
             title="Voltar ao Topo"
+            aria-label="Voltar ao Topo"
           >
-            <ArrowUp className="w-4 h-4 stroke-[2.8]" />
-            <span className="font-black uppercase tracking-wider text-[10.5px]">Topo</span>
+            <ArrowUp className="w-5.5 h-5.5 stroke-[3]" />
           </motion.button>
         )}
       </AnimatePresence>

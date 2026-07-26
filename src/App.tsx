@@ -2331,12 +2331,12 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen w-full flex flex-col lg:flex-row transition-colors duration-300 ${
+    <div className={`h-screen h-[100dvh] w-full flex flex-col lg:flex-row overflow-hidden transition-colors duration-300 ${
       theme === 'light' ? 'bg-[#f4f7fa] text-slate-900 font-sans' : 'bg-[#070a13] text-slate-100 font-sans'
     }`}>
 
       {/* PROFESSIONAL DESKTOP SIDEBAR PANEL (SITE VIEW) */}
-      <aside className={`hidden lg:flex w-72 h-screen sticky top-0 flex-col justify-between border-r shrink-0 transition-colors duration-300 ${
+      <aside className={`hidden lg:flex w-72 h-full flex-col justify-between border-r shrink-0 transition-colors duration-300 ${
         theme === 'light' 
           ? 'bg-white border-slate-200/85 text-slate-900' 
           : 'bg-[#0b0f1a] border-white/5 text-slate-100'
@@ -2480,7 +2480,7 @@ export default function App() {
       </aside>
 
       {/* Right Content Container */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
 
       {/* Dynamic Animated Toast */}
       {showToast && (

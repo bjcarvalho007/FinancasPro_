@@ -27,13 +27,17 @@
 }
 
 /* Dark default backdrop styling */
-html {
+html, body, #root {
+  height: 100%;
+  max-height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
   font-size: 106.25%; /* 17px default base for better mobile phone readability */
   -webkit-text-size-adjust: 100%;
 }
 
 @media (min-width: 768px) {
-  html {
+  html, body, #root {
     font-size: 109.375%; /* 17.5px comfortable base font size for easier PC screen readability */
   }
 }
@@ -41,7 +45,6 @@ html {
 body {
   background: #090e1a;
   color: #f8fafc;
-  overflow-x: hidden;
   font-family: var(--font-sans);
 }
 

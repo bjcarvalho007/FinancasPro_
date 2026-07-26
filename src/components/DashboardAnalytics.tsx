@@ -356,9 +356,81 @@ export default function DashboardAnalytics({
   // ==========================================
   // B. COMPUTE LIFETIME HISTORICAL SCORE (VISÃO GERAL)
   // ==========================================
-  const totalSpentAll = listAll.reduce((sum, t) => sum + t.amount, 0);
+  // 1. Unique Months in recorded transactions
+  const allUniqueMonths = Array.from(new Set(listAllRaw.map(t => t.monthKey).filter(Boolean)));
+
+  // 2. Média de Gastos Fixos anteriores e futuros per month
+  const monthlyFixosTotals = allUniqueMonths.map(mKey => {
+    return listAllRaw
+      .filter(t => t.monthKey === mKey && t.type === 'fixos')
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+  });
+  const totalFixosSumAllMonths = monthlyFixosTotals.reduce((a, b) => a + b, 0);
+  const mediaFixosMensal = monthlyFixosTotals.length > 0 
+    ? Math.round(totalFixosSumAllMonths / monthlyFixosTotals.length) 
+    : totalFixosMonth;
+
+  // 3. Média de Gastos Variáveis per month
+  const monthlyVariaveisTotals = allUniqueMonths.map(mKey => {
+    return listAllRaw
+      .filter(t => t.monthKey === mKey && t.type === 'variaveis')
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+  });
+  const totalVariaveisSumAllMonths = monthlyVariaveisTotals.reduce((a, b) => a + b, 0);
+  const mediaVariaveisMensal = monthlyVariaveisTotals.length > 0 
+    ? Math.round(totalVariaveisSumAllMonths / monthlyVariaveisTotals.length) 
+    : totalVariaveisMonth;
+
+  // 4. Total Devedor Parcelado Simples (remaining balance across all active installment purchases)
+  const allParcelaTransactions = listAllRaw.filter(t => t.type === 'parcelas');
+  const masterParcelaMap = new Map<string, { totalAmount: number; totalPaid: number }>();
+  
+  allParcelaTransactions.forEach(t => {
+    const masterId = t.masterId || t.id;
+    const masterTx = listAllRaw.find(m => m.id === masterId) || t;
+    
+    if (!masterParcelaMap.has(masterId)) {
+      const totalBase = masterTx.total_parcelado || ((masterTx.amount || 0) * (masterTx.installmentsCount || 1));
+      masterParcelaMap.set(masterId, {
+        totalAmount: totalBase,
+        totalPaid: 0
+      });
+    }
+    
+    const item = masterParcelaMap.get(masterId)!;
+    if (t.paid_amount && t.paid_amount > 0) {
+      item.totalPaid += t.paid_amount;
+    }
+  });
+
+  let totalDevedorParceladoSimples = 0;
+  masterParcelaMap.forEach(item => {
+    const remaining = Math.max(0, item.totalAmount - item.totalPaid);
+    totalDevedorParceladoSimples += remaining;
+  });
+
+  if (masterParcelaMap.size === 0 && allParcelaTransactions.length > 0) {
+    totalDevedorParceladoSimples = allParcelaTransactions.reduce((sum, t) => {
+      return sum + Math.max(0, (t.amount || 0) - (t.paid_amount || 0));
+    }, 0);
+  }
+
+  // 5. General Monthly Income (Média de Renda)
+  const monthlyIncomesList = allUniqueMonths.map(mKey => {
+    return settings?.monthlyIncome?.[mKey] || settings?.income || 0;
+  });
+  const mediaRendaMensal = monthlyIncomesList.length > 0
+    ? (monthlyIncomesList.reduce((a, b) => a + b, 0) / monthlyIncomesList.length)
+    : (settings?.income || totalAvailable);
+
+  // General Metrics Totals
+  const totalFixosAll = mediaFixosMensal;
+  const totalParcelasAll = totalDevedorParceladoSimples;
+  const totalVariaveisAll = mediaVariaveisMensal;
+
+  const totalSpentAll = mediaFixosMensal + mediaVariaveisMensal + totalDevedorParceladoSimples;
   const totalPaidAll = listAll.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
-  const totalUnpaidAll = Math.max(0, totalSpentAll - totalPaidAll);
+  const totalUnpaidAll = totalDevedorParceladoSimples;
   
   // Dynamic Score parameters
   const quitacaoScoreAll = totalSpentAll > 0 ? Math.round((totalPaidAll / totalSpentAll) * 100) : 100;
@@ -367,12 +439,8 @@ export default function DashboardAnalytics({
   const pastUnreconciledTx = listAll.filter(t => (t.paid_amount || 0) < t.amount && t.due && t.due < todayStr);
   const conciliacaoScoreAll = Math.max(10, Math.min(100, 100 - pastUnreconciledTx.length * 10));
 
-  // Installment strain: percentage of installments against all record values
-  const totalParcelasAll = listAll.filter(t => t.type === 'parcelas').reduce((sum, t) => sum + t.amount, 0);
-  const totalFixosAll = listAll.filter(t => t.type === 'fixos').reduce((sum, t) => sum + t.amount, 0);
-  const totalVariaveisAll = listAll.filter(t => t.type === 'variaveis').reduce((sum, t) => sum + t.amount, 0);
-
-  const installmentRatio = totalSpentAll > 0 ? (totalParcelasAll / totalSpentAll) * 100 : 0;
+  // Installment strain: percentage of installments against general commitments
+  const installmentRatio = totalSpentAll > 0 ? (totalDevedorParceladoSimples / totalSpentAll) * 100 : 0;
   const alavancagemScoreAll = Math.max(15, Math.min(100, 100 - Math.round(installmentRatio * 1.5)));
 
   // Global historical health score combined
@@ -1550,21 +1618,20 @@ export default function DashboardAnalytics({
           }
         });
 
-        const totalSpentVal = isScopeMonth ? totalSpentMonth : totalSpentAll;
+        const totalSpentVal = isScopeMonth 
+          ? totalSpentMonth 
+          : (mediaFixosMensal + mediaVariaveisMensal + totalDevedorParceladoSimples);
         const totalPaidVal = isScopeMonth ? totalPaidMonth : totalPaidAll;
-        const totalUnpaidVal = isScopeMonth ? totalUnpaidMonth : totalUnpaidAll;
+        const totalUnpaidVal = isScopeMonth ? totalUnpaidMonth : totalDevedorParceladoSimples;
 
         // Calculate average cost per items based on active scopeTransactions and total spent
-        const averageCost = scopeTransactions.length > 0 ? (totalSpentVal / scopeTransactions.length) : 0;
+        const averageCost = isScopeMonth 
+          ? (scopeTransactions.length > 0 ? (totalSpentMonth / scopeTransactions.length) : 0)
+          : mediaFixosMensal;
 
-        const historicalTotalInflow = uniqueMonths.reduce((sum, mKey) => {
-          const mIncome = settings?.monthlyIncome?.[mKey] || settings?.income || 0;
-          const mBalance = settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
-          const mExtra = settings?.extras?.[mKey] ?? 0;
-          return sum + mIncome + mBalance + mExtra;
-        }, 0);
-        const historicalLeftover = historicalTotalInflow - totalSpentAll;
-        const estimatedSurplus = isScopeMonth ? leftover : historicalLeftover;
+        const estimatedSurplus = isScopeMonth 
+          ? leftover 
+          : (mediaRendaMensal - (mediaFixosMensal + mediaVariaveisMensal));
 
         return (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -1575,7 +1642,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>Custo Crítico / Maior</span>
+                }`}>{isScopeMonth ? 'Custo Crítico / Maior' : 'Maior Gasto do Escopo'}</span>
                 <span className={`text-base font-mono font-extrabold truncate block mb-0.5 ${
                   isLight ? 'text-rose-600' : 'text-rose-400'
                 }`} title={highestExpense.name}>
@@ -1595,7 +1662,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>Média por gastos</span>
+                }`}>{isScopeMonth ? 'Média por gastos' : 'Média Gastos Fixos'}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   isLight ? 'text-slate-800' : 'text-slate-200'
                 }`}>
@@ -1605,7 +1672,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                Total {scopeTransactions.length} registros
+                {isScopeMonth ? `Total ${scopeTransactions.length} registros` : 'Média mensal (Fixos Geral)'}
               </span>
             </div>
 
@@ -1615,7 +1682,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>Relação Comprometida</span>
+                }`}>{isScopeMonth ? 'Relação Comprometida' : 'Comprometimento Geral'}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   isLight ? 'text-amber-600 font-bold' : 'text-amber-400'
                 }`}>
@@ -1625,7 +1692,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                Obrigações registradas
+                {isScopeMonth ? 'Obrigações do mês' : 'Fixos Médios + Var + Devedor'}
               </span>
             </div>
 
@@ -1645,7 +1712,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                Quitado até o momento
+                {isScopeMonth ? 'Quitado no mês' : 'Total quitado no histórico'}
               </span>
             </div>
 
@@ -1655,7 +1722,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>A Pagar Pendente</span>
+                }`}>{isScopeMonth ? 'A Pagar Pendente' : 'Total Devedor Parcelado'}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   isLight ? 'text-orange-600' : 'text-orange-400'
                 }`}>
@@ -1665,7 +1732,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                Pendente de quitação
+                {isScopeMonth ? 'Pendente de quitação no mês' : 'Saldo devedor restante simples'}
               </span>
             </div>
 
@@ -1675,7 +1742,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 font-black ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>Sobra Estimada</span>
+                }`}>{isScopeMonth ? 'Sobra Estimada' : 'Sobra Média Estimada'}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   estimatedSurplus >= 0 
                     ? isLight ? 'text-emerald-600' : 'text-emerald-400' 
@@ -1687,7 +1754,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                Saldo livre projetado
+                {isScopeMonth ? 'Saldo livre projetado do mês' : 'Média livre mensal projetada'}
               </span>
             </div>
 

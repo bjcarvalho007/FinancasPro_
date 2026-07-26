@@ -115,7 +115,7 @@ export default function App() {
   const [isFirebaseOffline, setIsFirebaseOffline] = useState<boolean>(false);
   const [minSplashLoading, setMinSplashLoading] = useState<boolean>(true);
   
-  // Enforce a minimum display duration of 3.0s for a beautifully balanced Copa introduction experience
+  // Enforce a minimum display duration of 3.0s for a beautifully balanced splash introduction experience
   useEffect(() => {
     const timer = setTimeout(() => {
       setMinSplashLoading(false);

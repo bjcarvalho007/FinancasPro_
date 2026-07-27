@@ -426,7 +426,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       </div>
 
       {/* Main Responsive Dynamic Content Area */}
-      <div className="w-full max-w-6xl flex flex-col items-center justify-center my-auto py-4 sm:py-6 flex-1">
+      <div className="w-full max-w-6xl flex flex-col items-center py-4 sm:py-6 flex-1">
         <AnimatePresence mode="wait">
           {isCadastroMode ? (
             /* ================= VIEW C: PREMIUM REGISTRATION / SIGNUP FORM ================= */

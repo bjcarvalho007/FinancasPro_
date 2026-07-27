@@ -2608,59 +2608,69 @@ function MainApp() {
       )}
 
       {/* Unified Fixed Top Header Block (Stays completely fixed when scrolling) */}
-      <header className={`z-40 flex items-center justify-between px-4 lg:px-8 py-3.5 border-b transition-colors duration-300 shrink-0 backdrop-blur-md ${
+      <header className={`z-40 flex items-center justify-between px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 border-b transition-colors duration-300 shrink-0 backdrop-blur-md ${
         theme === 'light' 
           ? 'bg-white/95 border-slate-200/80 shadow-xs' 
           : 'bg-[#0b0f1a]/95 border-white/5 shadow-xs'
       }`}>
-        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+        {/* Left Side: Greeting & User Name & Membership Badge */}
+        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
           <div className="min-w-0">
-            <h2 className={`font-display font-black text-base sm:text-lg lg:text-xl tracking-tight leading-snug truncate ${
+            <h2 className={`font-display font-black text-sm xs:text-base sm:text-lg lg:text-xl tracking-tight leading-tight ${
               theme === 'light' ? 'text-slate-900' : 'text-white'
             }`} title={`${timeGreeting}, ${formattedUserName}!`}>
-              {timeGreeting}, <span className="text-emerald-400 font-extrabold">{formattedUserName}</span>!
+              <span>{timeGreeting}, </span>
+              <span className="text-emerald-400 font-extrabold max-w-[160px] xs:max-w-[220px] sm:max-w-none inline-block truncate vertical-bottom">
+                {formattedUserName}
+              </span>
+              <span>!</span>
             </h2>
-            {isVIP ? (
-              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-0.5">
-                <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> {t('membroVIP')}
-              </span>
-            ) : hasActiveSubscription ? (
-              <span className="inline-flex items-center gap-1 text-[10px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-0.5">
-                <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> {t('assinantePRO')}
-              </span>
-            ) : (
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
-                  <Zap className="w-3 h-3 text-amber-500 shrink-0" /> {t('contaGratis')}
+            
+            <div className="mt-0.5">
+              {isVIP ? (
+                <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400 font-extrabold uppercase tracking-wider">
+                  <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" />
+                  <span>👑 {t('membroVIP')}</span>
                 </span>
-                <button
-                  onClick={() => setShowPaymentInfoModal(true)}
-                  className="text-[9px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
-                >
-                  {t('assinar')}
-                </button>
-              </div>
-            )}
+              ) : hasActiveSubscription ? (
+                <span className="inline-flex items-center gap-1.5 text-[10px] text-indigo-400 font-extrabold uppercase tracking-wider">
+                  <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" />
+                  <span>⭐ {t('assinantePRO')}</span>
+                </span>
+              ) : (
+                <div className="inline-flex items-center gap-1.5">
+                  <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider inline-flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-amber-500 shrink-0" /> {t('contaGratis')}
+                  </span>
+                  <button
+                    onClick={() => setShowPaymentInfoModal(true)}
+                    className="text-[9px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-0.5"
+                  >
+                    {t('assinar')}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Top Right Controls - Pro visual layout */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
           {/* Hot button to subscribe for desktop trial accounts */}
           {isWithinFiveDaysTrial && !isVIP && !hasActiveSubscription && (
             <button
               onClick={() => setShowPaymentInfoModal(true)}
-              className="hidden md:flex h-10 px-3.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white items-center gap-2 cursor-pointer border border-emerald-500/25 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shrink-0 whitespace-nowrap"
+              className="hidden lg:flex h-9.5 px-3.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white items-center gap-2 cursor-pointer border border-emerald-500/25 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shrink-0 whitespace-nowrap"
             >
               <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> {t('ativarPremium')}
             </button>
           )}
 
-          {/* User profile details (hidden on mobile, ultra elegant on desktop) */}
-          <div className={`hidden sm:flex items-center gap-2.5 h-10 px-3 rounded-xl border ${
-            theme === 'light' ? 'bg-slate-50 border-slate-200/80 text-slate-700' : 'bg-white/3 border-white/10 text-slate-300'
+          {/* User profile details (hidden on small mobile, visible sm+) */}
+          <div className={`hidden md:flex items-center gap-2.5 h-9.5 px-3 rounded-xl border ${
+            theme === 'light' ? 'bg-slate-50 border-slate-200/80 text-slate-700' : 'bg-white/5 border-white/10 text-slate-300'
           }`}>
-            <div className={`w-6.5 h-6.5 rounded-lg flex items-center justify-center font-bold text-[11px] shrink-0 select-none ${
+            <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-[10px] shrink-0 select-none ${
               isVIP 
                 ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                 : hasActiveSubscription
@@ -2669,8 +2679,8 @@ function MainApp() {
             }`}>
               {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
             </div>
-            <div className="min-w-0 pr-0.5 text-left leading-none">
-              <span className={`text-[8.5px] uppercase font-black tracking-wider block leading-tight ${
+            <div className="min-w-0 text-left leading-none">
+              <span className={`text-[8px] uppercase font-black tracking-wider block leading-tight ${
                 isVIP 
                   ? 'text-emerald-400' 
                   : hasActiveSubscription
@@ -2679,7 +2689,7 @@ function MainApp() {
               }`}>
                 {isVIP ? t('membroVIP') : hasActiveSubscription ? t('assinantePRO') : t('contaGratis')}
               </span>
-              <p className="text-xs font-semibold truncate max-w-[130px] leading-tight mt-0.5" title={user.email || ''}>
+              <p className="text-[11px] font-semibold truncate max-w-[120px] leading-tight mt-0.5" title={user.email || ''}>
                 {user.email || 'Conectado'}
               </p>
             </div>
@@ -2688,34 +2698,31 @@ function MainApp() {
           {/* Button: Ganhos */}
           <button
             onClick={handleOpenIncome}
-            className={`h-10 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border whitespace-nowrap ${
+            className={`h-9.5 px-3 sm:px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer border whitespace-nowrap ${
               theme === 'light' 
-                ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-xs' 
-                : 'bg-white/3 hover:bg-white/6 text-slate-200 border-white/10'
+                ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-2xs' 
+                : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/10'
             }`}
           >
             <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{t('ganhos')}</span>
+            <span className="text-xs font-bold">{t('ganhos')}</span>
           </button>
 
-          {/* Button: Selector de Idiomas / Language Selector */}
+          {/* Button: Language Selector */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
-              className={`h-10 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border whitespace-nowrap ${
+              className={`h-9.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border whitespace-nowrap ${
                 theme === 'light' 
-                  ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-xs' 
-                  : 'bg-white/3 hover:bg-white/6 text-slate-200 border-white/10'
+                  ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-2xs' 
+                  : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/10'
               }`}
               title={t('selecionarIdioma')}
             >
-              <Globe className="w-4 h-4 text-indigo-400" />
-              <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1">
-                <span>{LANGUAGES.find(l => l.code === lang)?.flag}</span>
-                <span className="hidden sm:inline">{lang.toUpperCase()}</span>
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              <Globe className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span className="text-xs leading-none">{LANGUAGES.find(l => l.code === lang)?.flag}</span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
             </button>
 
             <AnimatePresence>
@@ -2767,12 +2774,13 @@ function MainApp() {
             </AnimatePresence>
           </div>
           
+          {/* Logout Button */}
           <button
             onClick={handleUserLogout}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
+            className={`w-9.5 h-9.5 rounded-xl flex items-center justify-center transition-all cursor-pointer border shrink-0 ${
               theme === 'light'
-                ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-700'
-                : 'bg-rose-500/5 hover:bg-rose-500/15 border border-rose-500/10 text-rose-450'
+                ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-600'
+                : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/20 text-rose-400'
             }`}
             title={t('sair')}
           >

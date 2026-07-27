@@ -45,6 +45,11 @@ export const translations: Record<Language, Record<string, string>> = {
     assinantePRO: '⭐ Assinante PRO',
     contaGratis: '⚡ Conta Grátis',
     sair: 'Sair da plataforma',
+    bomDia: 'Bom dia',
+    boaTarde: 'Boa tarde',
+    boaNoite: 'Boa noite',
+    assinar: 'Assinar',
+    ativarPremium: 'Ativar Premium (PRO)',
     
     // Navigation Tabs
     dashboard: 'Dashboard',
@@ -242,6 +247,156 @@ export const translations: Record<Language, Record<string, string>> = {
     realizarPagamento: 'Realizar Pagamento',
     acessoCadastroBloqueado: 'Acesso de Cadastro Bloqueado',
     acessoNegadoPagamento: 'Acesso negado. Por favor, realize o pagamento para liberar o seu cadastro.',
+    // Dashboard & Analytics Extended
+    rateioDespesasMes: '⚖️ Rateio de Despesas do Mês',
+    distribuicaoAba: 'Distribuição Financeira por Aba',
+    totalComprometido: 'Total Comprometido',
+    maiorGasto: '⚠️ Maior Gasto',
+    gastosVariaveis: 'Gastos Variáveis',
+    lancamentoAtivo: 'lançamento ativo',
+    lancamentosAtivos: 'lançamentos ativos',
+    gastosParcelados: 'Gastos Parcelados',
+    parcelaEsteMes: 'parcela este mês',
+    parcelasEsteMes: 'parcelas este mês',
+    mesLabel: 'Mês',
+    totalContasPagas: 'Total de contas pagas',
+    dicaLabel: 'Dica',
+    comoFoiNoMes: 'Como você foi no Mês',
+    resumoTodasContas: 'Resumo de todas as contas',
+    excelenteResultado: '💎 Excelente resultado!',
+    sobrouText: 'Sobrou',
+    livreBolsoText: 'livre no seu bolso após o pagamento das despesas planejadas para este mês. Você fez um ótimo controle do dinheiro em',
+    atencaoGastoAlto: '🚨 Atenção (Gasto um pouco alto):',
+    superaramDinheiro: 'Seus gastos e contas superaram o dinheiro disponível deste mês em',
+    recomendamosPriorizar: 'No momento, você gastou mais do que ganhou. Recomendamos priorizar contas básicas e evitar compras extras até equilibrar o saldo.',
+    cuidadoPesoParcelas: '⚠️ Cuidado com o peso de parcelas:',
+    parcelamentosComprometem: 'Seus parcelamentos no cartão comprometem',
+    historicoFinanceiroText: 'do seu histórico financeiro',
+    eviteNovosParcelamentos: 'Muitas compras parceladas prendem sua renda futura. Evite novos parcelamentos até aliviar essa porcentagem!',
+    mostrandoFeedEvolucao: 'Mostrando Feed de Evolução Inteligente',
+    feedEvolucaoInteligente: 'Feed de Evolução Inteligente',
+    avancOSaudavel: 'Avanço Saudável',
+    necessitaAjustes: 'Necessita Ajustes',
+    paridadeCaixa: 'Paridade de Caixa',
+    analiseDoMes: '📅 Análise do Mês',
+    custoCriticoMaior: 'Custo Crítico / Maior',
+    maiorGastoEscopo: 'Maior Gasto do Escopo',
+    mediaPorGastos: 'Média por gastos',
+    mediaGastosFixos: 'Média Gastos Fixos',
+    totalText: 'Total',
+    registrosText: 'registros',
+    mediaMensalFixosGeral: 'Média mensal (Fixos Geral)',
+    quitadoNoMes: 'Quitado no mês',
+    totalQuitadoHistorico: 'Total quitado no histórico',
+    aPagarPendente: 'A Pagar Pendente',
+    totalDevedorParcelado: 'Total Devedor Parcelado',
+    sobraMediaEstimada: 'Sobra Média Estimada',
+    evolucaoOrcamentoDesc: 'Evolução do orçamento, despesas ativas e variação líquida entre os ciclos.',
+    variacaoGeral: 'Variação Geral',
+    gastosMoM: 'Gastos (MoM)',
+    sobrasEstimadas: 'Sobras Estimadas',
+    distribuicaoFluxoCaixa: '🗺 Distribuição Proporcional do Fluxo de Caixa (Mês Anterior vs Atual)',
+    entradaTotal: 'Entrada Total',
+    sobraLabel: 'Sobra',
+    mesSelecionadoText: 'Mês Selecionado',
+    despesaFixaLabel: 'Despesa Fixa',
+    despesaVariavelLabel: 'Despesa Variável',
+    debitosParceladosLabel: 'Débitos Parcelados',
+    sobraCaixaLivre: 'Sobra Estimada (Caixa Livre)',
+    distribuicaoGastosEscopo: 'Distribuição de Gastos do Escopo',
+    mesFocado: 'Mês Focado',
+    tudoText: 'Tudo',
+    rendasExtrasServicos: 'Rendas Extras & Serviços Recebidos',
+    totalExtraRecebido: 'Total Extra Recebido',
+    evolucaoMargemLiquida: 'Evolução e Margem Líquida (Últimos Ciclos Ativos)',
+    despesaTotalLabel: 'Despesa total',
+    atencaoNecessaria: 'Atenção Necessária',
+    excelenteControle: 'Excelente Controle',
+    pontosControle: 'Pontos de Controle',
+
+    // Extra Earnings Manager
+    informeOrigem: 'Por favor, informe a origem ou serviço.',
+    informeValorMaiorZero: 'Por favor, informe um valor maior que zero.',
+    escolhaData: 'Por favor, escolha uma data.',
+    rendaExtraSucesso: 'Renda extra registrada com sucesso!',
+    historicoRendasExtras: 'Histórico de Rendas Extras',
+    registreGanhosAlternativos: 'Registre ganhos alternativos por serviço ou vendas.',
+    mesAtual: 'Mês Atual',
+    registrarNovoGanho: 'Registrar Novo Ganho',
+    origemOuServico: 'Origem ou Serviço',
+    valorRecebido: 'Valor Recebido',
+    dataRecebimento: 'Data do Recebimento',
+    registrar: 'Registrar',
+    relacaoEntradas: 'Relação de Entradas',
+    semGanhosFiltro: 'Nenhuma renda extra registrada para o filtro selecionado.',
+    removerRegistro: 'Remover Registro',
+    exFreelanceLogo: 'Ex: Freelance Logo, Aula Particular',
+
+    // Goals Panel
+    preenchaTituloMeta: 'Por favor, preencha o título da meta.',
+    valorObjetivoMaiorZero: 'O valor do objetivo precisa ser maior que zero.',
+    selecioneDataLimite: 'Selecione uma data limite para o seu objetivo.',
+    projecaoPreditiva: 'Projeção Preditiva Inteligente',
+    estimativasRitmo: 'Estimativas e ritmo de acumulação acelerada para alcançar seus sonhos',
+    metaAtiva: 'Meta Ativa',
+    metasConcluidas: 'Metas Concluídas',
+    patrimonioAcumulado: 'Patrimônio Acumulado',
+    visaoPreditivaAcelerada: 'Visão Preditiva Acelerada',
+    cadastrarNovaMeta: 'Cadastrar Nova Meta',
+    oQueDesejaConquistar: 'O que você deseja conquistar?',
+    placeholderMeta: 'Comprar carro zero, Reserva de emergência, Viagem internacional...',
+    suaMeta: 'Sua Meta',
+    aporteInicialDisponivel: 'Aporte Inicial Disponível',
+    valorGuardadoHoje: 'Valor Guardado Hoje',
+    aporteMensalPrevisto: 'Aporte Mensal Previsto',
+    prazoObjetivoMeses: 'Prazo do Objetivo (Meses)',
+    dataEstimadaConclusao: 'Data Estimada de Conclusão',
+    cadastrarMeta: 'Cadastrar Meta',
+    depositar: 'Depositar',
+    retirar: 'Retirar',
+    atualizarSaldo: 'Atualizar Saldo',
+    aporteSucesso: 'Aporte registrado com sucesso!',
+    simulacaoJuros: 'Simulação de Juros Compostos',
+    rentabilidadeEstimada: 'Rentabilidade Estimada',
+    aporteAcumulado: 'Aporte Acumulado',
+    totalComRendimentos: 'Total com Rendimentos',
+    ganhoJurosEstimado: 'Ganho de Juros Estimado',
+
+    // App & Common Controls
+    sobraEstimadaCaixa: 'Sobra Estimada de Caixa',
+    totalPendentePagar: 'Total a Pagar Pendente',
+    rendaMensalBase: 'Renda Mensal Base',
+    totalReceitasFixas: 'Total Receitas Fixas',
+    receitasExtras: 'Receitas Extras',
+    alertasVencimento: 'Alertas de Vencimento',
+    semLancamentosCadastrados: 'Nenhum lançamento cadastrado para o mês selecionado.',
+    cadastrarPrimeiroLancamento: 'Clique no botão abaixo para adicionar seu primeiro lançamento.',
+    acoesMassa: 'Ações em Massa',
+    marcarTodosComoPagos: 'Marcar Selecionados como Pagos',
+    excluirSelecionados: 'Excluir Selecionados',
+    confirmarPagamento: 'Confirmar Pagamento',
+    confirmarExclusaoModal: 'Confirmar Exclusão',
+    duplicarParaOutroMes: 'Duplicar para Outro Mês',
+    selecionarMesDestino: 'Selecione o mês de destino:',
+    duplicarLancamento: 'Duplicar Lançamento',
+    sobraDisponivelDe: 'Sobra disponível de',
+    comprometidoDoMes: 'Comprometido do mês:',
+    doTotalDisponivelDe: 'Do total disponível de',
+    doTotalDe: 'Do total de',
+    pesquisarLancamentos: 'Pesquisar lançamentos...',
+    ordenarPor: 'Ordenar por:',
+    dataVencimento: 'Data de Vencimento',
+    maiorValor: 'Maior Valor',
+    menorValor: 'Menor Valor',
+    nomeAZ: 'Nome (A-Z)',
+    despesaAtrasada: 'está em atraso desde o dia',
+    despesaVenceNoDia: 'vence no dia',
+    marcarComoPago: 'Marcar como Pago',
+    desmarcarPago: 'Desmarcar Pago',
+    pagoComSucesso: 'Lançamento marcado como pago com sucesso!',
+    desmarcadoComSucesso: 'Status alterado para pendente.',
+    excluidoComSucesso: 'Lançamento excluído com sucesso!',
+    duplicadoComSucesso: 'Lançamento duplicado com sucesso!',
     erroCadastro: 'Erro de cadastro',
     erroLogin: 'Erro no login',
     minimoCaracteres: 'Mínimo de 6 caracteres',
@@ -255,6 +410,11 @@ export const translations: Record<Language, Record<string, string>> = {
     assinantePRO: '⭐ Suscriptor PRO',
     contaGratis: '⚡ Cuenta Gratuita',
     sair: 'Cerrar sesión',
+    bomDia: 'Buenos días',
+    boaTarde: 'Buenas tardes',
+    boaNoite: 'Buenas noches',
+    assinar: 'Suscribirse',
+    ativarPremium: 'Activar Premium (PRO)',
     
     // Navigation Tabs
     dashboard: 'Panel Principal',
@@ -465,6 +625,11 @@ export const translations: Record<Language, Record<string, string>> = {
     assinantePRO: '⭐ PRO Subscriber',
     contaGratis: '⚡ Free Account',
     sair: 'Sign out',
+    bomDia: 'Good morning',
+    boaTarde: 'Good afternoon',
+    boaNoite: 'Good evening',
+    assinar: 'Subscribe',
+    ativarPremium: 'Activate Premium (PRO)',
     
     // Navigation Tabs
     dashboard: 'Dashboard',
@@ -675,6 +840,11 @@ export const translations: Record<Language, Record<string, string>> = {
     assinantePRO: '⭐ Abonné PRO',
     contaGratis: '⚡ Compte Gratuit',
     sair: 'Se déconnecter',
+    bomDia: 'Bonjour',
+    boaTarde: 'Bon après-midi',
+    boaNoite: 'Bonsoir',
+    assinar: "S'abonner",
+    ativarPremium: 'Activer Premium (PRO)',
     
     // Navigation Tabs
     dashboard: 'Tableau de Bord',
@@ -883,12 +1053,33 @@ export function getTranslation(key: string, lang: Language): string {
   return dict[key] || translations['pt'][key] || key;
 }
 
+const localeMap: Record<Language, string> = {
+  pt: 'pt-BR',
+  es: 'es-ES',
+  en: 'en-US',
+  fr: 'fr-FR'
+};
+
+const defaultCurrencyMap: Record<Language, string> = {
+  pt: 'BRL',
+  es: 'EUR',
+  en: 'USD',
+  fr: 'EUR'
+};
+
+export function formatCurrencyByLang(val: number, lang: Language, customCurrency?: string): string {
+  const currency = customCurrency || defaultCurrencyMap[lang] || 'BRL';
+  const locale = localeMap[lang] || 'pt-BR';
+  return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(val);
+}
+
 export interface LanguageContextType {
   lang: Language;
   setLang: (lang: Language) => void;
   t: (key: string, fallback?: string) => string;
   monthsList: string[];
   formatMonthKey: (key: string) => string;
+  formatCurrency: (val: number, customCurrency?: string) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -926,8 +1117,12 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
     return key;
   };
 
+  const formatCurrency = (val: number, customCurrency?: string): string => {
+    return formatCurrencyByLang(val, lang, customCurrency);
+  };
+
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t, monthsList, formatMonthKey }}>
+    <LanguageContext.Provider value={{ lang, setLang, t, monthsList, formatMonthKey, formatCurrency }}>
       {children}
     </LanguageContext.Provider>
   );
@@ -949,7 +1144,8 @@ export const useLanguage = (): LanguageContextType => {
         const [year, month] = key.split('-');
         const idx = parseInt(month, 10) - 1;
         return (idx >= 0 && idx < 12) ? `${monthsList[idx]} ${year}` : key;
-      }
+      },
+      formatCurrency: (val: number, customCurrency?: string) => formatCurrencyByLang(val, 'pt', customCurrency)
     };
   }
   return context;

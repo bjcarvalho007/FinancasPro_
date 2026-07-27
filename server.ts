@@ -269,19 +269,24 @@ async function runBackgroundPushNotificationChecker() {
         }
       }
     }
-  } catch (err) {
-    console.error("❌ Falha crítica no runBackgroundPushNotificationChecker:", err);
+  } catch (err: any) {
+    const isPermissionError = err?.code === 7 || (err?.message && (err.message.includes("PERMISSION_DENIED") || err.message.includes("Missing or insufficient permissions")));
+    if (isPermissionError) {
+      console.warn("⚠️ [BACKGROUND SWEEPER] Varredura de push de fundo em pausa: O Firestore Admin do servidor requer chave de Service Account (FIREBASE_SERVICE_ACCOUNT_KEY) para consulta de assinaturas.");
+    } else {
+      console.warn("⚠️ [BACKGROUND SWEEPER] Erro na verificação em segundo plano:", err?.message || err);
+    }
   }
 }
 
 // Check on boot (after a 10s cooldown to allow server initialization) and reschedule every 3 hours
 if (!process.env.VERCEL) {
   setTimeout(() => {
-    runBackgroundPushNotificationChecker().catch(console.error);
+    runBackgroundPushNotificationChecker().catch((e) => console.warn("⚠️ Background push checker error:", e?.message || e));
   }, 10000);
 
   setInterval(() => {
-    runBackgroundPushNotificationChecker().catch(console.error);
+    runBackgroundPushNotificationChecker().catch((e) => console.warn("⚠️ Background push checker error:", e?.message || e));
   }, 1000 * 60 * 60 * 3); // 3 hours
 }
 

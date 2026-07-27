@@ -37,12 +37,12 @@ export default function SettingsPanel({
   alertThresholdDays = 3,
   settings = null
 }: SettingsPanelProps) {
-  const { t, lang } = useLanguage();
+  const { t, lang, formatCurrency } = useLanguage();
   const [incStr, setIncStr] = useState<string>(
-    baseIncome > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseIncome) : ''
+    baseIncome > 0 ? formatCurrency(baseIncome) : ''
   );
   const [balStr, setBalStr] = useState<string>(
-    baseBalance > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(baseBalance) : ''
+    baseBalance > 0 ? formatCurrency(baseBalance) : ''
   );
   const [alertDays, setAlertDays] = useState<number>(alertThresholdDays);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState<boolean>(false);

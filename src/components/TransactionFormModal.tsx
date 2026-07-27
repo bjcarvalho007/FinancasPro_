@@ -32,7 +32,7 @@ export default function TransactionFormModal({
   onCreateCategory,
   defaultType = 'fixos'
 }: TransactionFormModalProps) {
-  const { t } = useLanguage();
+  const { t, formatCurrency } = useLanguage();
   const [name, setName] = useState<string>('');
   const [amountStr, setAmountStr] = useState<string>('');
   const [type, setType] = useState<'fixos' | 'variaveis' | 'parcelas'>('fixos');
@@ -104,7 +104,7 @@ export default function TransactionFormModal({
   }, [amountStr, installmentsCount, type]);
 
   const formatMoney = (val: number): string => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    return formatCurrency(val);
   };
 
   const handleAmountInput = (val: string) => {

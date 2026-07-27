@@ -21,16 +21,11 @@ export default function ExtraEarningsManager({
   onDeleteEarning,
   showToast,
 }: ExtraEarningsManagerProps) {
-  const { t, formatMonthKey } = useLanguage();
+  const { t, formatMonthKey, formatCurrency } = useLanguage();
   const [source, setSource] = useState('');
   const [amountStr, setAmountStr] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [filterMode, setFilterMode] = useState<'current' | 'all'>('current');
-
-  const formatCurrency = (val: number): string => {
-    const locale = currentCurrency === 'BRL' ? 'pt-BR' : currentCurrency === 'USD' ? 'en-US' : 'de-DE';
-    return new Intl.NumberFormat(locale, { style: 'currency', currency: currentCurrency }).format(val);
-  };
 
   const handleMaskMoney = (val: string): string => {
     let numeric = val.replace(/\D/g, "");
@@ -47,16 +42,16 @@ export default function ExtraEarningsManager({
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!source.trim()) {
-      showToast('Por favor, informe a origem ou serviço.', 'warning');
+      showToast(t('informeOrigem'), 'warning');
       return;
     }
     const amountVal = parseMoney(amountStr);
     if (amountVal <= 0) {
-      showToast('Por favor, informe um valor maior que zero.', 'warning');
+      showToast(t('informeValorMaiorZero'), 'warning');
       return;
     }
     if (!date) {
-      showToast('Por favor, escolha uma data.', 'warning');
+      showToast(t('escolhaData'), 'warning');
       return;
     }
 
@@ -73,7 +68,7 @@ export default function ExtraEarningsManager({
 
     setSource('');
     setAmountStr('');
-    showToast('Renda extra registrada com sucesso!', 'success');
+    showToast(t('rendaExtraSucesso'), 'success');
   };
 
   // Filter items based on selected filter mode
@@ -86,21 +81,6 @@ export default function ExtraEarningsManager({
 
   const totalFilteredSum = filteredEarnings.reduce((sum, item) => sum + item.amount, 0);
 
-  // Format month name for display
-  const formatMonthTitle = (key: string) => {
-    if (!key || !key.includes('-')) return key;
-    const [year, month] = key.split('-');
-    const months = [
-      'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
-      'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
-    ];
-    const idx = parseInt(month, 10) - 1;
-    if (idx >= 0 && idx < 12) {
-      return `${months[idx]} ${year}`;
-    }
-    return key;
-  };
-
   return (
     <div className="space-y-4">
       {/* Dynamic Header */}
@@ -108,9 +88,9 @@ export default function ExtraEarningsManager({
         <div>
           <h5 className="font-display font-black text-xs text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
-            Histórico de Rendas Extras
+            {t('historicoRendasExtras')}
           </h5>
-          <p className="text-[10px] text-slate-500">Registre ganhos alternativos por serviço ou vendas.</p>
+          <p className="text-[10px] text-slate-500">{t('registreGanhosAlternativos')}</p>
         </div>
         
         {/* Toggle Scope */}
@@ -124,7 +104,7 @@ export default function ExtraEarningsManager({
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Mês Atual
+            {t('mesAtual')}
           </button>
           <button
             type="button"
@@ -135,7 +115,7 @@ export default function ExtraEarningsManager({
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Todos
+            {t('todos')}
           </button>
         </div>
       </div>
@@ -143,26 +123,26 @@ export default function ExtraEarningsManager({
       {/* Add New Earning Form */}
       <form onSubmit={handleAdd} className="p-4 bg-slate-950/40 rounded-2xl border border-white/5 space-y-3">
         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-          <Plus className="w-3.5 h-3.5 text-emerald-400" /> Registrar Novo Ganho
+          <Plus className="w-3.5 h-3.5 text-emerald-400" /> {t('registrarNovoGanho')}
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
-            <label className="text-[8px] font-bold text-slate-500 uppercase block mb-1">Origem ou Serviço</label>
+            <label className="text-[8px] font-bold text-slate-500 uppercase block mb-1">{t('origemOuServico')}</label>
             <div className="relative">
               <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
               <input
                 type="text"
                 value={source}
                 onChange={(e) => setSource(e.target.value)}
-                placeholder="Ex: Freelance Logo, Aula Particular"
+                placeholder={t('exFreelanceLogo')}
                 className="w-full bg-slate-900 border border-white/5 focus:border-indigo-500 text-slate-200 text-xs pl-9 pr-3 py-2.5 rounded-xl placeholder:text-slate-600 focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-[8px] font-bold text-slate-500 uppercase block mb-1">Valor Recebido</label>
+            <label className="text-[8px] font-bold text-slate-500 uppercase block mb-1">{t('valorRecebido')}</label>
             <div className="relative">
               <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
               <input
@@ -179,7 +159,7 @@ export default function ExtraEarningsManager({
 
         <div className="flex gap-2 items-end">
           <div className="flex-1">
-            <label className="text-[8px] font-bold text-slate-500 uppercase block mb-1">Data do Recebimento</label>
+            <label className="text-[8px] font-bold text-slate-500 uppercase block mb-1">{t('dataRecebimento')}</label>
             <div className="relative">
               <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
               <input
@@ -195,7 +175,7 @@ export default function ExtraEarningsManager({
             type="submit"
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
           >
-            <Plus className="w-4 h-4" /> Registrar
+            <Plus className="w-4 h-4" /> {t('registrar')}
           </button>
         </div>
       </form>
@@ -203,7 +183,7 @@ export default function ExtraEarningsManager({
       {/* Itemized List Panel */}
       <div className="bg-slate-950/20 border border-white/5 rounded-2xl p-4 space-y-3">
         <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none">
-          <span>Relação de Entradas ({filteredEarnings.length})</span>
+          <span>{t('relacaoEntradas')} ({filteredEarnings.length})</span>
           <span className="text-emerald-400 font-mono text-xs">{formatCurrency(totalFilteredSum)}</span>
         </div>
 
@@ -215,7 +195,7 @@ export default function ExtraEarningsManager({
                 animate={{ opacity: 1 }}
                 className="text-center py-6 text-slate-500 text-xs italic"
               >
-                Nenhuma renda extra registrada para o filtro selecionado.
+                {t('semGanhosFiltro')}
               </motion.div>
             ) : (
                 filteredEarnings.map((item) => (
@@ -256,7 +236,7 @@ export default function ExtraEarningsManager({
                         type="button"
                         onClick={() => onDeleteEarning(item.id)}
                         className="w-7 h-7 rounded-lg bg-rose-500/5 hover:bg-rose-500/15 text-rose-500 hover:text-rose-400 flex items-center justify-center cursor-pointer transition-colors border border-rose-500/10"
-                        title="Remover Registro"
+                        title={t('removerRegistro')}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

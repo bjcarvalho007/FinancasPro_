@@ -42,7 +42,7 @@ export default function GoalsPanel({
   onUpdateGoalProgress,
   onDeleteGoal
 }: GoalsPanelProps) {
-  const { t, monthsList, lang } = useLanguage();
+  const { t, monthsList, lang, formatCurrency } = useLanguage();
   const [showAddGoal, setShowAddGoal] = useState<boolean>(false);
   const [title, setTitle] = useState<string>('');
   const [targetAmountStr, setTargetAmountStr] = useState<string>('');
@@ -71,7 +71,7 @@ export default function GoalsPanel({
   }, [targetMonths, monthsList]);
 
   const formatMoney = (val: number): string => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    return formatCurrency(val);
   };
 
   const maskMoney = (val: string): string => {

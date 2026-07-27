@@ -132,7 +132,7 @@ function MainApp() {
   const [currency, setCurrency] = useState<'BRL' | 'USD' | 'EUR'>('BRL');
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
 
-  const { lang, setLang, t, monthsList, formatMonthKey } = useLanguage();
+  const { lang, setLang, t, monthsList, formatMonthKey, formatCurrency: i18nFormatCurrency } = useLanguage();
   const [isLangMenuOpen, setIsLangMenuOpen] = useState<boolean>(false);
 
   const handleMainScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -247,13 +247,13 @@ function MainApp() {
   const timeGreeting = useMemo(() => {
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) {
-      return 'Bom dia';
+      return t('bomDia');
     } else if (hour >= 12 && hour < 18) {
-      return 'Boa tarde';
+      return t('boaTarde');
     } else {
-      return 'Boa noite';
+      return t('boaNoite');
     }
-  }, []);
+  }, [t, lang]);
 
   const formattedUserName = useMemo(() => {
     if (userProfile?.username && userProfile.username.trim() !== '') {
@@ -704,9 +704,7 @@ function MainApp() {
   }
 
   const formatCurrency = (val: number): string => {
-    const symb = currency === 'USD' ? '$' : currency === 'EUR' ? '€' : 'R$';
-    const c = currency === 'USD' ? 'USD' : currency === 'EUR' ? 'EUR' : 'BRL';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: c }).format(val);
+    return i18nFormatCurrency(val, currency);
   };
 
   const handleMaskMoney = (val: string): string => {
@@ -2615,31 +2613,31 @@ function MainApp() {
           ? 'bg-white/95 border-slate-200/80 shadow-xs' 
           : 'bg-[#0b0f1a]/95 border-white/5 shadow-xs'
       }`}>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0 pr-2">
           <div className="min-w-0">
-            <h2 className={`font-display font-black text-lg sm:text-xl tracking-tight leading-tight ${
+            <h2 className={`font-display font-black text-base sm:text-lg lg:text-xl tracking-tight leading-snug truncate ${
               theme === 'light' ? 'text-slate-900' : 'text-white'
-            }`} title={formattedUserName}>
+            }`} title={`${timeGreeting}, ${formattedUserName}!`}>
               {timeGreeting}, <span className="text-emerald-400 font-extrabold">{formattedUserName}</span>!
             </h2>
             {isVIP ? (
-              <span className="inline-flex items-center gap-1 text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-0.5">
-                <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> Membro VIP
+              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-extrabold uppercase tracking-wider block mt-0.5">
+                <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" /> {t('membroVIP')}
               </span>
             ) : hasActiveSubscription ? (
-              <span className="inline-flex items-center gap-1 text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-0.5">
-                <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> Assinante PRO
+              <span className="inline-flex items-center gap-1 text-[10px] text-indigo-400 font-extrabold uppercase tracking-wider block mt-0.5">
+                <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" /> {t('assinantePRO')}
               </span>
             ) : (
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[9.5px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
-                  <Zap className="w-3 h-3 text-amber-500 shrink-0" /> Conta Grátis
+                <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider block flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-amber-500 shrink-0" /> {t('contaGratis')}
                 </span>
                 <button
                   onClick={() => setShowPaymentInfoModal(true)}
-                  className="text-[8px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
+                  className="text-[9px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-1"
                 >
-                  Assinar
+                  {t('assinar')}
                 </button>
               </div>
             )}
@@ -2652,26 +2650,26 @@ function MainApp() {
           {isWithinFiveDaysTrial && !isVIP && !hasActiveSubscription && (
             <button
               onClick={() => setShowPaymentInfoModal(true)}
-              className="hidden md:flex px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white items-center gap-2 cursor-pointer border border-emerald-500/25 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shrink-0"
+              className="hidden md:flex h-10 px-3.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white items-center gap-2 cursor-pointer border border-emerald-500/25 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 shrink-0 whitespace-nowrap"
             >
-              <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> Ativar Premium (PRO)
+              <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" /> {t('ativarPremium')}
             </button>
           )}
 
           {/* User profile details (hidden on mobile, ultra elegant on desktop) */}
-          <div className={`hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-2xl border ${
-            theme === 'light' ? 'bg-slate-50 border-slate-200/60 text-slate-705' : 'bg-white/3 border-white/5 text-slate-300'
+          <div className={`hidden sm:flex items-center gap-2.5 h-10 px-3 rounded-xl border ${
+            theme === 'light' ? 'bg-slate-50 border-slate-200/80 text-slate-700' : 'bg-white/3 border-white/10 text-slate-300'
           }`}>
-            <div className={`w-7.5 h-7.5 rounded-xl flex items-center justify-center font-bold text-[11px] shrink-0 select-none ${
+            <div className={`w-6.5 h-6.5 rounded-lg flex items-center justify-center font-bold text-[11px] shrink-0 select-none ${
               isVIP 
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                 : hasActiveSubscription
-                ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
+                : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
             }`}>
               {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
             </div>
-            <div className="min-w-0 pr-1 text-left">
+            <div className="min-w-0 pr-0.5 text-left leading-none">
               <span className={`text-[8.5px] uppercase font-black tracking-wider block leading-tight ${
                 isVIP 
                   ? 'text-emerald-400' 
@@ -2681,7 +2679,7 @@ function MainApp() {
               }`}>
                 {isVIP ? t('membroVIP') : hasActiveSubscription ? t('assinantePRO') : t('contaGratis')}
               </span>
-              <p className="text-xs font-semibold truncate leading-tight max-w-[150px]" title={user.email || ''}>
+              <p className="text-xs font-semibold truncate max-w-[130px] leading-tight mt-0.5" title={user.email || ''}>
                 {user.email || 'Conectado'}
               </p>
             </div>
@@ -2690,13 +2688,14 @@ function MainApp() {
           {/* Button: Ganhos */}
           <button
             onClick={handleOpenIncome}
-            className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
+            className={`h-10 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border whitespace-nowrap ${
               theme === 'light' 
-                ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm' 
-                : 'bg-white/3 hover:bg-white/6 text-slate-200 border border-white/5'
+                ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-xs' 
+                : 'bg-white/3 hover:bg-white/6 text-slate-200 border-white/10'
             }`}
           >
-            <DollarSign className="w-4 h-4 text-emerald-400" /> {t('ganhos')}
+            <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{t('ganhos')}</span>
           </button>
 
           {/* Button: Selector de Idiomas / Language Selector */}
@@ -2704,10 +2703,10 @@ function MainApp() {
             <button
               type="button"
               onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
-              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+              className={`h-10 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border whitespace-nowrap ${
                 theme === 'light' 
-                  ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm' 
-                  : 'bg-white/3 hover:bg-white/6 text-slate-200 border border-white/5'
+                  ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-xs' 
+                  : 'bg-white/3 hover:bg-white/6 text-slate-200 border-white/10'
               }`}
               title={t('selecionarIdioma')}
             >
@@ -2743,6 +2742,7 @@ function MainApp() {
                       type="button"
                       onClick={() => {
                         setLang(l.code);
+                        setCurrency(l.currency);
                         setIsLangMenuOpen(false);
                       }}
                       className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${

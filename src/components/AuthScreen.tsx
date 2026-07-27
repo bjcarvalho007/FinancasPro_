@@ -41,13 +41,13 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
   const { lang, setLang, t } = useLanguage();
   const [isLangMenuOpen, setIsLangMenuOpen] = useState<boolean>(false);
 
-  // Defaults to false so returning users go directly to login without visual clutter
+  // Defaults to true for first-time visitors so they see the app presentation info before login
   const [showPitch, setShowPitch] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('finpro_show_pitch');
-      return saved === 'true'; // Keep preference if they toggled pitch recently
+      return saved !== null ? saved === 'true' : true;
     } catch (_) {
-      return false;
+      return true;
     }
   });
 
@@ -322,10 +322,10 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
   const salesPitchWhatsappUrl = "https://wa.me/5563992092699?text=Olá!%20Gostaria%20de%20assinar%20o%20FinançasPro%20e%20liberar%20minhas%20credenciais%20de%20acesso.";
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 md:p-8 bg-[#070a13] bg-[radial-gradient(circle_at_50%_0%,#152039_0%,#070a13_100%)] overflow-y-auto">
+    <div className="min-h-screen w-full flex flex-col items-center justify-start p-3 sm:p-6 md:p-8 bg-[#070a13] bg-[radial-gradient(circle_at_50%_0%,#152039_0%,#070a13_100%)] overflow-y-auto">
       
       {/* Upper Navigation Header bar across the access screen */}
-      <div className="w-full max-w-6xl flex items-center justify-between py-4 border-b border-white/5 mb-2 select-none">
+      <div className="w-full max-w-6xl flex flex-wrap items-center justify-between gap-3 py-3 sm:py-4 border-b border-white/5 mb-2 select-none">
         <div className="flex items-center gap-2.5">
           <img 
             src="/app_icon.png" 
@@ -334,28 +334,28 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
             referrerPolicy="no-referrer"
           />
           <div>
-            <span className="font-display font-extrabold text-[17px] tracking-tight text-white leading-none">
+            <span className="font-display font-extrabold text-[16px] sm:text-[17px] tracking-tight text-white leading-none">
               FINANÇAS<span className="text-emerald-400 font-black ml-0.5">PRO</span>
             </span>
             <span className="text-[8.5px] text-slate-500 font-extrabold uppercase tracking-widest block leading-tight mt-0.5">{t('gestaoCaixaSeguro')}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5 ml-auto">
           {/* Language Selector Dropdown */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
-              className="px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10"
+              className="px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10"
               title={t('selecionarIdioma')}
             >
-              <Globe className="w-4 h-4 text-indigo-400" />
+              <Globe className="w-4 h-4 text-indigo-400 shrink-0" />
               <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1">
                 <span>{LANGUAGES.find(l => l.code === lang)?.flag}</span>
                 <span className="hidden sm:inline">{lang.toUpperCase()}</span>
               </span>
-              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
             </button>
 
             <AnimatePresence>
@@ -404,7 +404,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
               setShowPitch(!showPitch);
               setErrorAlert(null);
             }}
-            className={`px-4 py-2 rounded-xl text-[11px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center gap-2 border cursor-pointer ${
+            className={`px-3 sm:px-4 py-2 rounded-xl text-[11px] md:text-xs font-black uppercase tracking-wider transition-all duration-300 flex items-center gap-1.5 sm:gap-2 border cursor-pointer ${
               showPitch 
                 ? 'bg-indigo-600/15 border-indigo-500/30 text-indigo-400 hover:bg-indigo-600/25' 
                 : 'bg-emerald-600/15 border-emerald-500/30 text-emerald-450 hover:bg-emerald-600/25'
@@ -412,13 +412,13 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
           >
             {showPitch ? (
               <>
-                <Lock className="w-3.5 h-3.5" />
-                {t('irDiretoAcesso')}
+                <Lock className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('irDiretoAcesso')}</span>
               </>
             ) : (
               <>
-                <Info className="w-3.5 h-3.5" />
-                {t('oQueEComoAdquirir')}
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('oQueEComoAdquirir')}</span>
               </>
             )}
           </button>
@@ -426,7 +426,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       </div>
 
       {/* Main Responsive Dynamic Content Area */}
-      <div className="w-full max-w-6xl flex flex-col items-center justify-center py-6 flex-1">
+      <div className="w-full max-w-6xl flex flex-col items-center justify-center my-auto py-4 sm:py-6 flex-1">
         <AnimatePresence mode="wait">
           {isCadastroMode ? (
             /* ================= VIEW C: PREMIUM REGISTRATION / SIGNUP FORM ================= */

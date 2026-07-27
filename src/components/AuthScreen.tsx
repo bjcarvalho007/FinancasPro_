@@ -426,7 +426,7 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       </div>
 
       {/* Main Responsive Dynamic Content Area */}
-      <div className="w-full max-w-6xl flex flex-col items-center py-4 sm:py-6 flex-1">
+      <div className="w-full max-w-6xl flex flex-col items-center justify-center my-auto py-2 sm:py-4 flex-1">
         <AnimatePresence mode="wait">
           {isCadastroMode ? (
             /* ================= VIEW C: PREMIUM REGISTRATION / SIGNUP FORM ================= */
@@ -436,9 +436,9 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
               transition={{ duration: 0.35 }}
-              className="w-full max-w-md animate-fade-in"
+              className="w-full max-w-md animate-fade-in my-auto"
             >
-              <div className="p-6 md:p-8 rounded-3xl bg-[#090e1b] border border-white/5 shadow-2xl relative">
+              <div className="p-5 sm:p-6 md:p-8 rounded-3xl bg-[#090e1b] border border-white/5 shadow-2xl relative">
                 <div className="absolute top-4 right-4 text-emerald-400 animate-pulse">
                   <Sparkles className="w-4 h-4" />
                 </div>
@@ -593,101 +593,107 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
               transition={{ duration: 0.35 }}
-              className={`w-full ${showPitch ? 'max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-start' : 'max-w-md'}`}
+              className={`w-full ${
+                showPitch 
+                  ? 'max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 lg:gap-8 items-start' 
+                  : 'max-w-md my-auto'
+              }`}
             >
+              {/* Pitch Column: On mobile order-1 (first on top), on desktop lg:order-1 (left column) */}
               {showPitch && (
-                <div className="lg:col-span-7 space-y-6 p-6 md:p-8 rounded-3xl bg-[#090e1b]/95 border border-white/5 shadow-2xl backdrop-blur-md">
+                <div className="lg:col-span-7 order-1 space-y-4 sm:space-y-5 p-5 sm:p-6 lg:p-7 rounded-3xl bg-[#090e1b]/95 border border-white/5 shadow-2xl backdrop-blur-md flex flex-col justify-between">
                   {/* Pitch Header */}
                   <div>
-                    <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full inline-block mb-3">
+                    <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full inline-block mb-2.5">
                       {t('plataformaProfissional')}
                     </span>
-                    <h3 className="font-display font-black text-2xl md:text-3xl text-white tracking-tight leading-tight">
+                    <h3 className="font-display font-black text-xl sm:text-2xl lg:text-3xl text-white tracking-tight leading-tight">
                       {t('domineSuasFinancas')}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-2 font-normal leading-relaxed">
+                    <p className="text-xs text-slate-400 mt-1.5 font-normal leading-relaxed">
                       {t('pitchDescricao')}
                     </p>
                   </div>
 
                   {/* Highlights Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
-                        <BarChart2 className="w-5 h-5 text-indigo-400" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3 items-center">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+                        <BarChart2 className="w-4.5 h-4.5 text-indigo-400" />
                       </div>
-                      <div className="space-y-0.5">
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">{t('analyticsCompleto')}</h4>
-                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">{t('analyticsDesc')}</p>
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                        <Coins className="w-5 h-5 text-emerald-400" />
-                      </div>
-                      <div className="space-y-0.5">
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">{t('gestaoParcelas')}</h4>
-                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">{t('parcelasDesc')}</p>
+                      <div className="space-y-0.5 min-w-0">
+                        <h4 className="text-[11px] font-bold text-white uppercase tracking-wider truncate">{t('analyticsCompleto')}</h4>
+                        <p className="text-[10px] text-slate-400 leading-normal font-light line-clamp-2">{t('analyticsDesc')}</p>
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-                        <Target className="w-5 h-5 text-amber-400" />
+                    <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3 items-center">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                        <Coins className="w-4.5 h-4.5 text-emerald-400" />
                       </div>
-                      <div className="space-y-0.5">
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">{t('metasInteligentes')}</h4>
-                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">{t('metasDesc')}</p>
+                      <div className="space-y-0.5 min-w-0">
+                        <h4 className="text-[11px] font-bold text-white uppercase tracking-wider truncate">{t('gestaoParcelas')}</h4>
+                        <p className="text-[10px] text-slate-400 leading-normal font-light line-clamp-2">{t('parcelasDesc')}</p>
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
-                        <ShieldCheck className="w-5 h-5 text-sky-450" />
+                    <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3 items-center">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                        <Target className="w-4.5 h-4.5 text-amber-400" />
                       </div>
-                      <div className="space-y-0.5">
-                        <h4 className="text-xs font-bold text-white uppercase tracking-wider">{t('segurancaMaxima')}</h4>
-                        <p className="text-[10.5px] text-slate-400 leading-normal font-light">{t('segurancaDesc')}</p>
+                      <div className="space-y-0.5 min-w-0">
+                        <h4 className="text-[11px] font-bold text-white uppercase tracking-wider truncate">{t('metasInteligentes')}</h4>
+                        <p className="text-[10px] text-slate-400 leading-normal font-light line-clamp-2">{t('metasDesc')}</p>
+                      </div>
+                    </div>
+
+                    <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/40 border border-white/5 flex gap-3 items-center">
+                      <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-4.5 h-4.5 text-sky-450" />
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <h4 className="text-[11px] font-bold text-white uppercase tracking-wider truncate">{t('segurancaMaxima')}</h4>
+                        <p className="text-[10px] text-slate-400 leading-normal font-light line-clamp-2">{t('segurancaDesc')}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Call to action card inside pitch */}
-                  <div className="p-5 md:p-6 rounded-2xl bg-emerald-950/20 border border-emerald-500/15 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-1 max-w-sm">
-                      <h4 className="text-[11px] font-extrabold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" /> {t('ofertaPremium')}
+                  <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5 max-w-sm">
+                      <h4 className="text-[10.5px] font-extrabold uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> {t('ofertaPremium')}
                       </h4>
-                      <p className="text-xs text-slate-300 leading-relaxed font-light">
+                      <p className="text-[11px] text-slate-300 leading-relaxed font-light">
                         {t('ofertaDesc')}
                       </p>
                     </div>
                     <button
                       type="button"
                       onClick={handleMercadoPagoCheckout}
-                      className="shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-3 px-5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer border-none"
+                      className="shrink-0 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-2.5 px-4 rounded-xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer border-none"
                     >
                       {t('queroAssinar')}
-                      <ArrowRight className="w-4 h-4" />
+                      <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
                   {/* Trust Badge */}
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 border-t border-white/5 text-[10.5px] text-slate-500 font-bold uppercase tracking-wider">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t border-white/5 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
                     <span>{t('acessoCorporativoCompleto')}</span>
                     <span className="flex items-center gap-1.5 text-emerald-450">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" /> {t('pagamentoProtegido')}
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> {t('pagamentoProtegido')}
                     </span>
                   </div>
                 </div>
               )}
 
-              <div className={showPitch ? "lg:col-span-5 w-full" : "w-full"}>
-                <div className="p-6 md:p-8 rounded-3xl bg-[#090e1b] border border-white/5 shadow-2xl relative">
-                <div className="absolute top-4 right-4 text-emerald-400 animate-pulse">
-                  <Sparkles className="w-4 h-4" />
-                </div>
+              {/* Login Column: On mobile order-2 (or single view), on desktop lg:order-2 (right column) */}
+              <div className={showPitch ? "lg:col-span-5 order-2 w-full" : "w-full"}>
+                <div className="p-5 sm:p-6 lg:p-7 rounded-3xl bg-[#090e1b] border border-white/5 shadow-2xl relative">
+                  <div className="absolute top-4 right-4 text-emerald-400 animate-pulse">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
 
                 {/* Compact brand marker */}
                 <div className="text-center mb-6">

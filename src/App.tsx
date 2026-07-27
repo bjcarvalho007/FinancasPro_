@@ -2615,36 +2615,43 @@ function MainApp() {
       }`}>
         {/* Left Side: Greeting & User Name & Membership Badge */}
         <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-          <div className="min-w-0">
-            <h2 className={`font-display font-black text-sm xs:text-base sm:text-lg lg:text-xl tracking-tight leading-tight ${
+          <div className="min-w-0 flex flex-col justify-center">
+            {/* Line 1: Time Greeting */}
+            <span className={`text-xs xs:text-sm font-medium tracking-wide ${
+              theme === 'light' ? 'text-slate-500' : 'text-slate-400'
+            }`}>
+              {timeGreeting},
+            </span>
+
+            {/* Line 2: User Name */}
+            <h2 className={`font-display font-black text-sm xs:text-base sm:text-lg lg:text-xl tracking-tight leading-snug truncate max-w-[180px] xs:max-w-[240px] sm:max-w-md ${
               theme === 'light' ? 'text-slate-900' : 'text-white'
-            }`} title={`${timeGreeting}, ${formattedUserName}!`}>
-              <span>{timeGreeting}, </span>
-              <span className="text-emerald-400 font-extrabold max-w-[160px] xs:max-w-[220px] sm:max-w-none inline-block truncate vertical-bottom">
+            }`} title={formattedUserName}>
+              <span className="text-emerald-400 font-extrabold">
                 {formattedUserName}
               </span>
-              <span>!</span>
             </h2>
             
-            <div className="mt-0.5">
+            {/* Line 3: Membership Status Badge */}
+            <div className="mt-1 flex items-center">
               {isVIP ? (
-                <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400 font-extrabold uppercase tracking-wider">
-                  <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" />
+                <span className="inline-flex items-center gap-1 text-[9px] xs:text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+                  <Sparkles className="w-2.5 h-2.5 text-emerald-400 animate-pulse shrink-0" />
                   <span>👑 {t('membroVIP')}</span>
                 </span>
               ) : hasActiveSubscription ? (
-                <span className="inline-flex items-center gap-1.5 text-[10px] text-indigo-400 font-extrabold uppercase tracking-wider">
-                  <CheckCircle className="w-3 h-3 text-indigo-400 shrink-0" />
+                <span className="inline-flex items-center gap-1 text-[9px] xs:text-[9.5px] text-indigo-400 font-extrabold uppercase tracking-wider bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-md">
+                  <CheckCircle className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
                   <span>⭐ {t('assinantePRO')}</span>
                 </span>
               ) : (
-                <div className="inline-flex items-center gap-1.5">
-                  <span className="text-[10px] text-amber-500 font-extrabold uppercase tracking-wider inline-flex items-center gap-1">
-                    <Zap className="w-3 h-3 text-amber-500 shrink-0" /> {t('contaGratis')}
+                <div className="inline-flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[9px] xs:text-[9.5px] text-amber-400 font-extrabold uppercase tracking-wider inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md">
+                    <Zap className="w-2.5 h-2.5 text-amber-400 shrink-0" /> {t('contaGratis')}
                   </span>
                   <button
                     onClick={() => setShowPaymentInfoModal(true)}
-                    className="text-[9px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5 ml-0.5"
+                    className="text-[8.5px] xs:text-[9px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-0.5"
                   >
                     {t('assinar')}
                   </button>

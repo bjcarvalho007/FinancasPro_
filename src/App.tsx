@@ -2062,16 +2062,17 @@ function MainApp() {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setIsSupportOpen(!isSupportOpen)}
-          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-xl shadow-emerald-500/10 cursor-pointer border-none z-[60] focus:outline-none select-none font-extrabold text-[11px] uppercase tracking-wider"
+          className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-xl cursor-pointer border-none z-[60] focus:outline-none select-none"
           style={{
             boxShadow: "0 10px 25px -5px rgba(16, 185, 129, 0.45)"
           }}
+          title={t('suporteCentralAjuda', 'Suporte & Central de Ajuda')}
+          aria-label={t('suporteCentralAjuda', 'Suporte & Central de Ajuda')}
         >
           <div className="relative flex items-center justify-center">
             <span className="absolute w-2 h-2 bg-white rounded-full animate-ping opacity-75 -top-0.5 -right-0.5" />
-            <MessageCircle className="w-4.5 h-4.5 shrink-0" />
+            <MessageCircle className="w-5 h-5 shrink-0" />
           </div>
-          <span>Precisa de Ajuda?</span>
         </motion.button>
       </div>
     );
@@ -2705,14 +2706,15 @@ function MainApp() {
           {/* Button: Ganhos */}
           <button
             onClick={handleOpenIncome}
-            className={`h-9.5 px-3 sm:px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer border whitespace-nowrap ${
+            className={`w-9.5 h-9.5 rounded-xl flex items-center justify-center transition-all cursor-pointer border shrink-0 ${
               theme === 'light' 
                 ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-2xs' 
                 : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/10'
             }`}
+            title={t('ganhos')}
+            aria-label={t('ganhos')}
           >
             <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="text-xs font-bold">{t('ganhos')}</span>
           </button>
 
           {/* Button: Language Selector */}

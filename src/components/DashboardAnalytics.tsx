@@ -1311,26 +1311,26 @@ export default function DashboardAnalytics({
                     {activeDashboardMode === 'current' ? (
                       // Active Month Advice
                       transactions.length === 0 ? (
-                        <span><strong>Pronto para começar:</strong> Adicione suas contas e ganhos para ver como está seu planejamento financeiro de {formatMonthKey(currentMonthKey)}.</span>
+                        <span><strong>{t('prontoComecar', 'Pronto para começar')}:</strong> {t('adicioneContasGanhos', 'Adicione suas contas e ganhos para ver como está seu planejamento financeiro de')} {formatMonthKey(currentMonthKey)}.</span>
                       ) : leftover > 0 ? (
-                        <span>💎 <strong>Excelente resultado!</strong> Sobrou <strong>{fmt(leftover)}</strong> livre no seu bolso após o pagamento das despesas planejadas para este mês. Você fez um ótimo controle do dinheiro em {formatMonthKey(currentMonthKey)}! Esse saldo é excelente para poupar ou realizar metas.</span>
+                        <span>💎 <strong>{t('excelenteResultado', 'Excelente resultado!')}</strong> {t('sobrouText', 'Sobrou')} <strong>{fmt(leftover)}</strong> {t('livreBolsoText', 'livre no seu bolso após o pagamento das despesas planejadas para este mês. Você fez um ótimo controle do dinheiro em')} {formatMonthKey(currentMonthKey)}! {t('esseSaldoExcelente', 'Esse saldo é excelente para poupar ou realizar metas.')}</span>
                       ) : leftover < 0 ? (
-                        <span>🚨 <strong>Atenção (Gasto um pouco alto):</strong> Seus gastos e contas superaram o dinheiro disponível deste mês em <strong>{fmt(Math.abs(leftover))}</strong>. No momento, você gastou mais do que ganhou. Recomendamos priorizar contas básicas e evitar compras extras até equilibrar o saldo.</span>
+                        <span>🚨 <strong>{t('atencaoGastoAlto', 'Atenção (Gasto um pouco alto):')}</strong> {t('superaramDinheiro', 'Seus gastos e contas superaram o dinheiro disponível deste mês em')} <strong>{fmt(Math.abs(leftover))}</strong>. {t('recomendamosPriorizar', 'No momento, você gastou mais do que ganhou. Recomendamos priorizar contas básicas e evitar compras extras até equilibrar o saldo.')}</span>
                       ) : (
-                        <span>⚠️ <strong>Saldo no limite perfeito:</strong> Você fechou o mês de {formatMonthKey(currentMonthKey)} equilibrado em <strong>R$ 0,00</strong>. Não há saldo negativo, mas também não sobrou nenhuma quantia livre para poupar. Tente controlar pequenas despesas extras para fazer sobrar dinheiro no próximo mês.</span>
+                        <span>⚠️ <strong>{t('saldoLimitePerfeito', 'Saldo no limite perfeito:')}</strong> {t('voceFechouMes', 'Você fechou o mês de')} {formatMonthKey(currentMonthKey)} {t('equilibradoEm', 'equilibrado em')} <strong>R$ 0,00</strong>. {t('naoHaSaldoNegativo', 'Não há saldo negativo, mas também não sobrou nenhuma quantia livre para poupar. Tente controlar pequenas despesas extras para fazer sobrar dinheiro no próximo mês.')}</span>
                       )
                     ) : (
                       // Historical Long-Term Advice / Planejamento Geral
                       allTransactions.length === 0 ? (
-                        <span><strong>Sem histórico suficiente:</strong> Cadastre as contas do seu dia a dia e logo você verá dicas de evolução detalhadas aqui.</span>
+                        <span><strong>{t('semHistoricoSuficiente', 'Sem histórico suficiente:')}</strong> {t('cadastreContasDia', 'Cadastre as contas do seu dia a dia e logo você verá dicas de evolução detalhadas aqui.')}</span>
                       ) : pastUnreconciledTx.length > 0 ? (
-                        <span>🔴 <strong>Lembrete de contas pendentes:</strong> Encontramos <strong>{pastUnreconciledTx.length} conta(s) de meses anteriores</strong> que ainda não foram marcadas como pagas. Para manter seu controle em ordem, mude para os meses passados no topo da tela e registre a quitação delas se já tiver pago.</span>
+                        <span>🔴 <strong>{t('lembreteContasPendentes', 'Lembrete de contas pendentes:')}</strong> {t('encontramosContasAnteriores', 'Encontramos')} <strong>{pastUnreconciledTx.length} {pastUnreconciledTx.length === 1 ? t('contaMesesAnteriores', 'conta de meses anteriores') : t('contasMesesAnteriores', 'conta(s) de meses anteriores')}</strong> {t('aindaNaoPagas', 'que ainda não foram marcadas como pagas. Para manter seu controle em ordem, mude para os meses passados no topo da tela e registre a quitação delas se já tiver pago.')}</span>
                       ) : installmentRatio > 40 ? (
-                        <span>⚠️ <strong>Cuidado com o peso de parcelas:</strong> Seus parcelamentos no cartão comprometem <strong>{Math.round(installmentRatio)}%</strong> do seu histórico financeiro ({fmt(totalParcelasAll)}). Muitas compras parceladas prendem sua renda futura. Evite novos parcelamentos até aliviar essa porcentagem!</span>
+                        <span>⚠️ <strong>{t('cuidadoPesoParcelas', 'Cuidado com o peso de parcelas:')}</strong> {t('parcelamentosComprometem', 'Seus parcelamentos no cartão comprometem')} <strong>{Math.round(installmentRatio)}%</strong> {t('historicoFinanceiroText', 'do seu histórico financeiro')} ({fmt(totalParcelasAll)}). {t('eviteNovosParcelamentos', 'Muitas compras parceladas prendem sua renda futura. Evite novos parcelamentos até aliviar essa porcentagem!')}</span>
                       ) : globalHealthScore >= 75 ? (
-                        <span>💎 <strong>Organização brilhante!</strong> Suas faturas antigas estão pagas, você não tem nenhuma pendência pendente e seus parcelamentos comprometem apenas <strong>{Math.round(installmentRatio)}%</strong> do seu orçamento — uma margem perfeitamente saudável de segurança!</span>
+                        <span>💎 <strong>{t('organizacaoBrilhante', 'Organização brilhante!')}</strong> {t('faturasAntigasPagas', 'Suas faturas antigas estão pagas, você não tem nenhuma pendência pendente e seus parcelamentos comprometem apenas')} <strong>{Math.round(installmentRatio)}%</strong> {t('doSeuOrcamento', 'do seu orçamento — uma margem perfeitamente saudável de segurança!')}</span>
                       ) : (
-                        <span>📈 <strong>Rumo ao equilíbrio!:</strong> O seu nível geral de controle está em <strong>{globalHealthScore} pontos</strong>. Concentre-se em fazer sobrar um dinheirinho mês a mês para subir sua nota.</span>
+                        <span>📈 <strong>{t('rumoAoEquilibrio', 'Rumo ao equilíbrio!:')}</strong> {t('nivelGeralControle', 'O seu nível geral de controle está em')} <strong>{globalHealthScore} {t('pontos', 'pontos')}</strong>. {t('concentreseSobra', 'Concentre-se em fazer sobrar um dinheirinho mês a mês para subir sua nota.')}</span>
                       )
                     )}
                   </p>
@@ -1343,7 +1343,7 @@ export default function DashboardAnalytics({
                   onClick={() => setShowAssistantTip(false)}
                   className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-lg shadow-indigo-600/15 hover:shadow-indigo-500/20 active:scale-95 border-none"
                 >
-                  Entendi, obrigado!
+                  {t('entendiObrigado', 'Entendi, obrigado!')}
                 </button>
               </div>
             </motion.div>
@@ -1429,10 +1429,10 @@ export default function DashboardAnalytics({
               <div className="flex items-start justify-between pb-3 border-b border-white/5">
                 <div>
                   <div className="flex items-center gap-1.5 text-indigo-400 font-extrabold text-[9.5px] uppercase tracking-wider">
-                    <Sparkles className="w-3.5 h-3.5" /> IA de Diagnóstico FinançasPro
+                    <Sparkles className="w-3.5 h-3.5" /> {t('iaDiagnostico', 'IA de Diagnóstico FinançasPro')}
                   </div>
                   <h4 className={`font-display font-black text-lg tracking-tight mt-1 ${isLight ? 'text-slate-955' : 'text-white'}`}>
-                    Avisos & Alertas Importantes
+                    {t('avisosAlertasImportantes', 'Avisos & Alertas Importantes')}
                   </h4>
                 </div>
                 <button
@@ -1453,7 +1453,7 @@ export default function DashboardAnalytics({
                 {/* 1. Feed de Evolução Inteligente Section */}
                 <div className="space-y-2">
                   <h5 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                    Mostrando Feed de Evolução Inteligente
+                    {t('mostrandoFeedEvolucao', 'Mostrando Feed de Evolução Inteligente')}
                   </h5>
                   {hasPrevData ? (
                     <div className={`p-4 rounded-2xl border-l-4 flex items-start gap-3.5 leading-relaxed text-[12px] font-light ${
@@ -1472,7 +1472,7 @@ export default function DashboardAnalytics({
                             ? isLight ? 'text-emerald-700 font-bold' : 'text-emerald-400' 
                             : isLight ? 'text-rose-700 font-bold' : 'text-rose-450'
                         }`}>
-                          Feed de Evolução Inteligente ({moMAnalysisNarrative.status === 'positive' ? 'Avanço Saudável' : moMAnalysisNarrative.status === 'negative' ? 'Necessita Ajustes' : 'Paridade de Caixa'})
+                          {t('feedEvolucaoInteligente', 'Feed de Evolução Inteligente')} ({moMAnalysisNarrative.status === 'positive' ? t('avancOSaudavel', 'Avanço Saudável') : moMAnalysisNarrative.status === 'negative' ? t('necessitaAjustes', 'Necessita Ajustes') : t('paridadeCaixa', 'Paridade de Caixa')})
                         </h6>
                         <p className={`leading-relaxed text-[11.5px] ${isLight ? 'text-slate-800' : 'text-slate-305'}`}>
                           {moMAnalysisNarrative.text.split('**').map((item, idx) => idx % 2 === 1 ? <strong key={idx} className={isLight ? 'text-slate-950 font-black' : 'text-white'}>{item}</strong> : item)}
@@ -1486,10 +1486,10 @@ export default function DashboardAnalytics({
                       <Sparkles className="w-4.5 h-4.5 shrink-0 mt-0.5 text-indigo-400" />
                       <div className="space-y-1 flex-1 text-left">
                         <h6 className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
-                          Histórico de Meses Não Encontrado
+                          {t('historicoNaoEncontrado', 'Histórico de Meses Não Encontrado')}
                         </h6>
                         <p className="mt-1">
-                          Adicione transações em mais de um ciclo mensal para habilitar a geração de seu Feed Comparativo Inteligente.
+                          {t('adicioneTransacoesComparativo', 'Adicione transações em mais de um ciclo mensal para habilitar a geração de seu Feed Comparativo Inteligente.')}
                         </p>
                       </div>
                     </div>
@@ -1499,14 +1499,14 @@ export default function DashboardAnalytics({
                 {/* 2. List of Deduplicated Alerts */}
                 <div className="space-y-2">
                   <h5 className={`text-[10px] font-black uppercase tracking-widest ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                    ⚠️ Alertas de Caixa & Faturas
+                    ⚠️ {t('alertasCaixaFaturas', 'Alertas de Caixa & Faturas')}
                   </h5>
                   {uniqueSystemAlerts.length === 0 ? (
                     <div className={`p-4 rounded-2xl border text-center ${
                       isLight ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-emerald-500/5 border-emerald-500/15 text-emerald-400'
                     }`}>
-                      <p className="text-xs font-bold uppercase tracking-wider">🎉 Saúde financeira está excelente!</p>
-                      <p className="text-[10.5px] text-slate-400 mt-1">Nenhum desvio foi detectado no balanceamento das suas despesas.</p>
+                      <p className="text-xs font-bold uppercase tracking-wider">🎉 {t('saudeExcelente', 'Saúde financeira está excelente!')}</p>
+                      <p className="text-[10.5px] text-slate-400 mt-1">{t('nenhumDesvioDetectado', 'Nenhum desvio foi detectado no balanceamento das suas despesas.')}</p>
                     </div>
                   ) : (
                     <div className="space-y-3">

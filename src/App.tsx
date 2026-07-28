@@ -3702,10 +3702,10 @@ function MainApp() {
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 border-t border-dashed border-white/5 pt-3">
                                       <div className="space-y-0.5">
                                         <span className={`text-[10px] uppercase tracking-wider font-extrabold block ${theme === 'light' ? 'text-indigo-600' : 'text-indigo-400'}`}>
-                                          Quanto deseja pagar este mês?
+                                          {t('quantoDesejaPagar', 'Quanto deseja pagar este mês?')}
                                         </span>
                                         <span className="text-[9.5px] text-slate-500 leading-tight block">
-                                          Digite o valor e clique no botão Lançar ou tecle Enter
+                                          {t('digiteValorLancar', 'Digite o valor e clique no botão Lançar ou tecle Enter')}
                                         </span>
                                       </div>
                                       
@@ -3742,7 +3742,7 @@ function MainApp() {
                                           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-md shadow-indigo-600/15 active:scale-95 flex items-center gap-1.5 shrink-0 border-none"
                                         >
                                           <span>🚀</span>
-                                          <span>Lançar</span>
+                                          <span>{t('lancar', 'Lançar')}</span>
                                         </button>
                                       </div>
                                     </div>
@@ -3768,14 +3768,14 @@ function MainApp() {
                     : 'bg-white/2 border-white/5 text-slate-400'
                 } text-xs space-y-2`}>
                   <p className="font-bold text-indigo-400 uppercase tracking-wider text-[9px] flex items-center gap-1 leading-none">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> Dificuldades de caixa?
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> {t('dificuldadesCaixa', 'Dificuldades de caixa?')}
                   </p>
                   <p className="font-light leading-relaxed text-[11px]">
                     {transactions.length === 0 
-                      ? 'Adicione despesas recorrentes e parcelas para auditar suas margens de sobrevivência líquidas.'
+                      ? t('adicioneDespesasRecorrentesAuditar', 'Adicione despesas recorrentes e parcelas para auditar suas margens de sobrevivência líquidas.')
                       : leftoverCash < 0 
-                        ? 'Alerta crítico: Suas despesas excederam seus ganhos. Tente parcializar faturas ou reduzir despesas variáveis.'
-                        : 'Organização em dia! Seu caixa está limpo e suas obrigações orçamentárias estão controladas.'
+                        ? t('alertaCriticoExcederam', 'Alerta crítico: Suas despesas excederam seus ganhos. Tente parcializar faturas ou reduzir despesas variáveis.')
+                        : t('organizacaoEmDia', 'Organização em dia! Seu caixa está limpo e suas obrigações orçamentárias estão controladas.')
                     }
                   </p>
                 </div>
@@ -3856,10 +3856,10 @@ function MainApp() {
               <div className="flex items-start justify-between">
                 <div>
                   <h4 className="font-display font-extrabold text-sm text-white uppercase tracking-wider mb-1 flex items-center gap-2">
-                    <Receipt className="w-4 h-4 text-rose-400" /> Contas Pendentes do Mês
+                    <Receipt className="w-4 h-4 text-rose-400" /> {t('contasPendentesDoMes', 'Contas Pendentes do Mês')}
                   </h4>
                   <p className="text-xs text-slate-400">
-                    Selecione qualquer lançamento pendente de {monthsPortuguese[calendarDate.getMonth()]} para dar baixa ou parcelar.
+                    {t('selecioneLancamentoPendente', 'Selecione qualquer lançamento pendente de')} {monthsList[calendarDate.getMonth()]} {t('paraDarBaixaOuParcelar', 'para dar baixa ou parcelar.')}
                   </p>
                 </div>
                 <button
@@ -3876,7 +3876,7 @@ function MainApp() {
                 ).length === 0 ? (
                   <div className="p-8 text-center border border-dashed border-white/5 rounded-2xl text-slate-400 text-xs py-12 flex flex-col items-center justify-center h-full">
                     <CheckCircle className="w-8 h-8 text-emerald-500 mb-3 animate-pulse" />
-                    Parabéns! Nenhuma conta pendente para {monthsPortuguese[calendarDate.getMonth()]} de {calendarDate.getFullYear()}. 🎉
+                    🎉 {t('parabensNenhumaContaPendente', 'Parabéns! Nenhuma conta pendente para')} {monthsList[calendarDate.getMonth()]} {t('deText', 'de')} {calendarDate.getFullYear()}. 🎉
                   </div>
                 ) : (
                   activeMonthTransactions
@@ -4035,10 +4035,10 @@ function MainApp() {
                 {/* Col 1: Standard configs */}
                 <div className="lg:col-span-5 space-y-4">
                   <div className="p-4 bg-slate-950/40 border border-white/5 rounded-2xl space-y-3">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Configurações Base</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t('configuracoesBase', 'Configurações Base')}</div>
                     
                     <div>
-                      <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">Renda Mensal do Mês</label>
+                      <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">{t('rendaMensalDoMes', 'Renda Mensal do Mês')}</label>
                       <input
                         id="income-modal-input"
                         type="text"
@@ -4051,7 +4051,7 @@ function MainApp() {
                     </div>
 
                     <div>
-                      <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">Reserva / Dinheiro em Mãos</label>
+                      <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">{t('reservaComercialMaos', 'Reserva / Dinheiro em Mãos')}</label>
                       <input
                         id="balance-modal-input"
                         type="text"
@@ -4079,7 +4079,7 @@ function MainApp() {
                         disabled
                       />
                       <p className="text-[8.5px] text-slate-500 leading-relaxed mt-1.5">
-                        Esta soma é atualizada de forma automática ao preencher/remover itens do histórico ao lado.
+                        {t('somaAtualizadaAutomatica', 'Esta soma é atualizada de forma automática ao preencher/remover itens do histórico ao lado.')}
                       </p>
                     </div>
                   </div>
@@ -4153,12 +4153,12 @@ function MainApp() {
 
               <div className="space-y-2">
                 <h4 className="font-display font-black text-sm uppercase tracking-wider">
-                  Sair do Sistema?
+                  {t('sairDoSistema', 'Sair do Sistema?')}
                 </h4>
                 <p className={`text-xs leading-relaxed ${
                   theme === 'light' ? 'text-slate-500' : 'text-slate-400'
                 }`}>
-                  Ao desconectar, sua sessão segura será imediatamente finalizada e você precisará se autenticar novamente para visualizar o painel das suas economias.
+                  {t('desconectarSessaoAviso', 'Ao desconectar, sua sessão segura será imediatamente finalizada e você precisará se autenticar novamente para visualizar o painel das suas economias.')}
                 </p>
               </div>
 
@@ -4168,7 +4168,7 @@ function MainApp() {
                   onClick={executeLogout}
                   className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg shadow-rose-600/10 active:scale-[0.98] rounded-xl"
                 >
-                  Sim, Desconectar
+                  {t('simDesconectar', 'Sim, Desconectar')}
                 </button>
                 <button
                   onClick={() => setIsLogoutOpen(false)}
@@ -4178,7 +4178,7 @@ function MainApp() {
                       : 'bg-slate-900 border-white/10 hover:bg-slate-850 text-slate-400 hover:text-white'
                   }`}
                 >
-                  Cancelar
+                  {t('cancelar', 'Cancelar')}
                 </button>
               </div>
             </motion.div>

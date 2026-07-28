@@ -55,7 +55,8 @@ export default function DashboardAnalytics({
   currentTheme = 'dark',
   settings = null
 }: DashboardAnalyticsProps) {
-  const { t, formatMonthKey, lang } = useLanguage();
+  const { t, formatMonthKey, formatCurrency, lang } = useLanguage();
+  const fmt = (val: number) => formatCurrency(val, settings?.currency);
 
   // Toggle between active month 'current' or total lifetime records 'history'
   const [activeDashboardMode, setActiveDashboardMode] = useState<'current' | 'history'>('current');
@@ -585,11 +586,6 @@ export default function DashboardAnalytics({
     return acc;
   }, [] as typeof monthAlerts);
 
-  // Render variables helper
-  const fmt = (v: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
-  };
-
   const circumference = 2 * Math.PI * 34;
   const strokeDashoffsetCurrent = circumference - (activeMonthHealthScore / 100) * circumference;
   const strokeDashoffsetHistory = circumference - (globalHealthScore / 100) * circumference;
@@ -704,38 +700,69 @@ export default function DashboardAnalytics({
     let negativeCount = 0;
     
     if (inflowDiff > 0) {
-      text += `Você recebeu **${fmt(inflowDiff)}** a mais (+${inflowPct.toFixed(1)}%) do que no mês de ${formatMonthKey(prevMonthKey)}. `;
+      if (lang === 'en') text += `You received **${fmt(inflowDiff)}** more (+${inflowPct.toFixed(1)}%) than in ${formatMonthKey(prevMonthKey)}. `;
+      else if (lang === 'es') text += `Recibiste **${fmt(inflowDiff)}** más (+${inflowPct.toFixed(1)}%) que en el mes de ${formatMonthKey(prevMonthKey)}. `;
+      else if (lang === 'fr') text += `Vous avez reçu **${fmt(inflowDiff)}** de plus (+${inflowPct.toFixed(1)}%) qu'en ${formatMonthKey(prevMonthKey)}. `;
+      else text += `Você recebeu **${fmt(inflowDiff)}** a mais (+${inflowPct.toFixed(1)}%) do que no mês de ${formatMonthKey(prevMonthKey)}. `;
       positiveCount++;
     } else if (inflowDiff < 0) {
-      text += `Sua renda total disponível encolheu em **${fmt(Math.abs(inflowDiff))}** (-${Math.abs(inflowPct).toFixed(1)}%). `;
+      if (lang === 'en') text += `Your total available income decreased by **${fmt(Math.abs(inflowDiff))}** (-${Math.abs(inflowPct).toFixed(1)}%). `;
+      else if (lang === 'es') text += `Tu ingreso total disponible se redujo en **${fmt(Math.abs(inflowDiff))}** (-${Math.abs(inflowPct).toFixed(1)}%). `;
+      else if (lang === 'fr') text += `Votre revenu total disponible a diminué de **${fmt(Math.abs(inflowDiff))}** (-${Math.abs(inflowPct).toFixed(1)}%). `;
+      else text += `Sua renda total disponível encolheu em **${fmt(Math.abs(inflowDiff))}** (-${Math.abs(inflowPct).toFixed(1)}%). `;
       negativeCount++;
     } else {
-      text += `Sua renda disponível se manteve idêntica à do mês passado. `;
+      if (lang === 'en') text += `Your available income remained identical to last month. `;
+      else if (lang === 'es') text += `Tu ingreso disponible se mantuvo idéntico al del mes pasado. `;
+      else if (lang === 'fr') text += `Votre revenu disponible est resté identique au mois dernier. `;
+      else text += `Sua renda disponível se manteve idêntica à do mês passado. `;
     }
 
     if (spentDiff > 0) {
-      text += `Por outro lado, as contas e gastos consolidaram um aumento de **${fmt(spentDiff)}** (+${spentPct.toFixed(1)}%). `;
-      if (inflowDiff > 0) {
-        text += `Isso significa que o dinheiro extra obtido acabou indo para despesas novas. `;
+      if (lang === 'en') {
+        text += `On the other hand, bills and expenses increased by **${fmt(spentDiff)}** (+${spentPct.toFixed(1)}%). `;
+        text += inflowDiff > 0 ? `This means the extra money went toward new expenses. ` : `Since you earned less and spent more, avoid new purchases until your balance stabilizes. `;
+      } else if (lang === 'es') {
+        text += `Por otro lado, los gastos aumentaron un **${fmt(spentDiff)}** (+${spentPct.toFixed(1)}%). `;
+        text += inflowDiff > 0 ? `Esto significa que el dinero extra se destinó a nuevos gastos. ` : `Como ganaste menos y gastaste más, recomendamos evitar compras innecesarias. `;
+      } else if (lang === 'fr') {
+        text += `D'autre part, les dépenses ont augmenté de **${fmt(spentDiff)}** (+${spentPct.toFixed(1)}%). `;
+        text += inflowDiff > 0 ? `Cela signifie que l'argent extra a été absorbé par de nouvelles dépenses. ` : `Comme vous avez gagné moins et dépensé plus, évitez les nouveaux achats. `;
       } else {
-        text += `Como você ganhou menos e gastou mais, recomendamos evitar novas compras até reequilibrar seu saldo. `;
+        text += `Por outro lado, as contas e gastos consolidaram um aumento de **${fmt(spentDiff)}** (+${spentPct.toFixed(1)}%). `;
+        text += inflowDiff > 0 ? `Isso significa que o dinheiro extra obtido acabou indo para despesas novas. ` : `Como você ganhou menos e gastou mais, recomendamos evitar novas compras até reequilibrar seu saldo. `;
       }
       negativeCount++;
     } else if (spentDiff < 0) {
-      text += `Que boa notícia! Seus gastos diminuíram em **${fmt(Math.abs(spentDiff))}** (-${Math.abs(spentPct).toFixed(1)}%), mostrando ótimo controle das suas faturas! `;
+      if (lang === 'en') text += `Great news! Your expenses decreased by **${fmt(Math.abs(spentDiff))}** (-${Math.abs(spentPct).toFixed(1)}%), showing great control over your bills! `;
+      else if (lang === 'es') text += `¡Buenas noticias! Tus gastos disminuyeron un **${fmt(Math.abs(spentDiff))}** (-${Math.abs(spentPct).toFixed(1)}%), mostrando un excelente control. `;
+      else if (lang === 'fr') text += `Bonne nouvelle ! Vos dépenses ont diminué de **${fmt(Math.abs(spentDiff))}** (-${Math.abs(spentPct).toFixed(1)}%), montrant une excellente maîtrise ! `;
+      else text += `Que boa notícia! Seus gastos diminuíram em **${fmt(Math.abs(spentDiff))}** (-${Math.abs(spentPct).toFixed(1)}%), mostrando ótimo controle das suas faturas! `;
       positiveCount++;
     } else {
-      text += `Você gastou a mesma quantia que no mês correspondente anterior. `;
+      if (lang === 'en') text += `You spent the same amount as in the previous month. `;
+      else if (lang === 'es') text += `Gastaste la misma cantidad que el mes pasado. `;
+      else if (lang === 'fr') text += `Vous avez dépensé le même montant que le mois dernier. `;
+      else text += `Você gastou a mesma quantia que no mês correspondente anterior. `;
     }
 
     if (leftoverDiff > 0) {
-      text += `Dessa forma, a sobra de dinheiro livre cresceu em **${fmt(leftoverDiff)}** comparado a ${formatMonthKey(prevMonthKey)}. Continue operando com essa incrível disciplina!`;
+      if (lang === 'en') text += `Your cash surplus grew by **${fmt(leftoverDiff)}** compared to ${formatMonthKey(prevMonthKey)}. Keep up the amazing discipline!`;
+      else if (lang === 'es') text += `Tu excedente de caja creció un **${fmt(leftoverDiff)}** en comparación con ${formatMonthKey(prevMonthKey)}. ¡Sigue con esa gran disciplina!`;
+      else if (lang === 'fr') text += `Votre excédent de trésorerie a augmenté de **${fmt(leftoverDiff)}** par rapport à ${formatMonthKey(prevMonthKey)}. Continuez ainsi !`;
+      else text += `Dessa forma, a sobra de dinheiro livre cresceu em **${fmt(leftoverDiff)}** comparado a ${formatMonthKey(prevMonthKey)}. Continue operando com essa incrível disciplina!`;
       positiveCount++;
     } else if (leftoverDiff < 0) {
-      text += `Com isso, o saldo que sobrou na carteira diminuiu em **${fmt(Math.abs(leftoverDiff))}**. Dica: revise pequenos desvios em faturas e economize para voltar a ter uma sobra maior.`;
+      if (lang === 'en') text += `Your leftover cash decreased by **${fmt(Math.abs(leftoverDiff))}**. Tip: review small invoice variances to save more.`;
+      else if (lang === 'es') text += `Tu saldo libre disminuyó un **${fmt(Math.abs(leftoverDiff))}**. Consejo: revisa pequeños desvíos en tus facturas.`;
+      else if (lang === 'fr') text += `Votre solde disponible a diminué de **${fmt(Math.abs(leftoverDiff))}**. Conseil : vérifiez vos petites dépenses.`;
+      else text += `Com isso, o saldo que sobrou na carteira diminuiu em **${fmt(Math.abs(leftoverDiff))}**. Dica: revise pequenos desvios em faturas e economize para voltar a ter uma sobra maior.`;
       negativeCount++;
     } else {
-      text += `Sua sobra mensal de dinheiro permaneceu equilibrada. Continue monitorando para acumular um dinheirinho livre!`;
+      if (lang === 'en') text += `Your monthly cash surplus remained balanced. Keep monitoring to grow your savings!`;
+      else if (lang === 'es') text += `Tu excedente mensual permaneció equilibrado. ¡Sigue monitoreando para ahorrar!`;
+      else if (lang === 'fr') text += `Votre excédent mensuel est resté équilibré. Continuez à surveiller !`;
+      else text += `Sua sobra mensal de dinheiro permaneceu equilibrada. Continue monitorando para acumular um dinheirinho livre!`;
     }
 
     return { 
@@ -855,20 +882,20 @@ export default function DashboardAnalytics({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3.5 border-b border-dashed border-slate-200 dark:border-white/5">
           <div>
             <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 block mb-0.5">
-              ⚖️ Rateio de Despesas do Mês
+              ⚖️ {t('rateioDespesasMes', 'Rateio de Despesas do Mês')}
             </span>
             <h4 className={`font-display font-black text-sm md:text-base tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
-              Distribuição Financeira por Aba ({formatMonthKey(currentMonthKey)})
+              {t('distribuicaoFinanceiraAba', 'Distribuição Financeira por Aba')} ({formatMonthKey(currentMonthKey)})
             </h4>
             <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'} font-medium`}>
-              Identifique em tempo real qual tipo de compromisso está consumindo a maior parte do seu orçamento.
+              {t('identifiqueTempoReal', 'Identifique em tempo real qual tipo de compromisso está consumindo a maior parte do seu orçamento.')}
             </p>
           </div>
           
           <div className="flex items-center gap-1.5 self-start sm:self-center shrink-0">
             <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
             <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-450">
-              Total Comprometido: {fmt(totalSpentMonth)}
+              {t('comprometidoMes', 'Total Comprometido')}: {fmt(totalSpentMonth)}
             </span>
           </div>
         </div>
@@ -902,17 +929,17 @@ export default function DashboardAnalytics({
                 </div>
                 <div>
                   <h5 className={`font-display font-black text-xs uppercase tracking-wider ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
-                    Contas Fixas
+                    {t('contasFixas', 'Contas Fixas')}
                   </h5>
                   <span className={`text-[9.5px] font-bold ${isLight ? 'text-slate-450' : 'text-slate-500'} block`}>
-                    {countFixosMonth} {countFixosMonth === 1 ? 'lançamento ativo' : 'lançamentos ativos'}
+                    {countFixosMonth} {countFixosMonth === 1 ? t('lancamentoAtivo', 'lançamento ativo') : t('lancamentosAtivos', 'lançamentos ativos')}
                   </span>
                 </div>
               </div>
 
               {totalFixosMonth === maxMonthVal && maxMonthVal > 0 && (
                 <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-500 border border-rose-500/10 shrink-0">
-                  ⚠️ Maior Gasto
+                  ⚠️ {t('maiorGasto', 'Maior Gasto')}
                 </span>
               )}
             </div>
@@ -966,17 +993,17 @@ export default function DashboardAnalytics({
                 </div>
                 <div>
                   <h5 className={`font-display font-black text-xs uppercase tracking-wider ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
-                    Gastos Variáveis
+                    {t('gastoVariavel', 'Gastos Variáveis')}
                   </h5>
                   <span className={`text-[9.5px] font-bold ${isLight ? 'text-slate-450' : 'text-slate-500'} block`}>
-                    {countVariaveisMonth} {countVariaveisMonth === 1 ? 'lançamento ativo' : 'lançamentos ativos'}
+                    {countVariaveisMonth} {countVariaveisMonth === 1 ? t('lancamentoAtivo', 'lançamento ativo') : t('lancamentosAtivos', 'lançamentos ativos')}
                   </span>
                 </div>
               </div>
 
               {totalVariaveisMonth === maxMonthVal && maxMonthVal > 0 && (
                 <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-500 border border-rose-500/10 shrink-0">
-                  ⚠️ Maior Gasto
+                  ⚠️ {t('maiorGasto', 'Maior Gasto')}
                 </span>
               )}
             </div>
@@ -1030,17 +1057,17 @@ export default function DashboardAnalytics({
                 </div>
                 <div>
                   <h5 className={`font-display font-black text-xs uppercase tracking-wider ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
-                    Gastos Parcelados
+                    {t('parcelados', 'Gastos Parcelados')}
                   </h5>
                   <span className={`text-[9.5px] font-bold ${isLight ? 'text-slate-450' : 'text-slate-500'} block`}>
-                    {countParcelasMonth} {countParcelasMonth === 1 ? 'parcela este mês' : 'parcelas este mês'}
+                    {countParcelasMonth} {countParcelasMonth === 1 ? t('parcelaEsteMes', 'parcela este mês') : t('parcelasEsteMes', 'parcelas este mês')}
                   </span>
                 </div>
               </div>
 
               {totalParcelasMonth === maxMonthVal && maxMonthVal > 0 && (
                 <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-500 border border-rose-500/10 shrink-0">
-                  ⚠️ Maior Gasto
+                  ⚠️ {t('maiorGasto', 'Maior Gasto')}
                 </span>
               )}
             </div>
@@ -1089,7 +1116,7 @@ export default function DashboardAnalytics({
         >
           {activeDashboardMode === 'current' && (
             <div className="absolute top-3 right-3 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-md text-[8.5px] font-black uppercase tracking-widest leading-none">
-              Visualização Ativa
+              {t('visualizacaoAtiva', 'Visualização Ativa')}
             </div>
           )}
 
@@ -1109,7 +1136,7 @@ export default function DashboardAnalytics({
               <span className="font-mono text-2xl font-extrabold text-white leading-none">
                 {activeMonthHealthScore}
               </span>
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Pontos</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{t('pontos', 'Pontos')}</span>
             </div>
           </div>
 
@@ -1120,20 +1147,20 @@ export default function DashboardAnalytics({
                 ● {activeMonthLabel}
               </span>
               <span className="text-[9.5px] text-slate-500 font-extrabold uppercase tracking-widest flex items-center gap-0.5">
-                <Calendar className="w-2.5 h-2.5 text-indigo-400" /> Mês: {formatMonthKey(currentMonthKey)}
+                <Calendar className="w-2.5 h-2.5 text-indigo-400" /> {t('mes', 'Mês')}: {formatMonthKey(currentMonthKey)}
               </span>
             </div>
             <h3 className="font-display font-black text-sm text-slate-100 tracking-tight leading-tight">
-              Como você foi no mês
+              {t('comoVoceFoiNoMes', 'Como você foi no mês')}
             </h3>
             <p className="text-[11.5px] text-slate-400 leading-normal font-light">
-              Mede quanto sobrou do seu dinheiro e se as suas contas do mês de {formatMonthKey(currentMonthKey)} já foram pagas.
+              {t('medeQuantoSobrou', 'Mede quanto sobrou do seu dinheiro e se as suas contas do mês já foram pagas.')}
             </p>
 
             {/* Sub-metrics progress tracks */}
             <div className="space-y-1 pt-1 opacity-90">
               <div className="flex justify-between text-[9px] font-bold text-slate-400">
-                <span>Dinheiro que sobrou</span>
+                <span>{t('dinheiroQueSobrou', 'Dinheiro que sobrou')}</span>
                 <span>{liquidezScoreMonth}%</span>
               </div>
               <div className="h-1 w-full bg-slate-950/45 rounded-full overflow-hidden">
@@ -1161,7 +1188,7 @@ export default function DashboardAnalytics({
         >
           {activeDashboardMode === 'history' && (
             <div className="absolute top-3 right-3 bg-zinc-400/10 text-slate-200 border border-slate-400/20 px-2 py-0.5 rounded-md text-[8.5px] font-black uppercase tracking-widest leading-none">
-              Visualização Ativa
+              {t('visualizacaoAtiva', 'Visualização Ativa')}
             </div>
           )}
 
@@ -1181,7 +1208,7 @@ export default function DashboardAnalytics({
               <span className="font-mono text-2xl font-extrabold text-white leading-none">
                 {globalHealthScore}
               </span>
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Nível</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{t('nivel', 'Nível')}</span>
             </div>
           </div>
 
@@ -1192,20 +1219,20 @@ export default function DashboardAnalytics({
                 ● {globalLabel}
               </span>
               <span className="text-[9.5px] text-slate-500 font-extrabold uppercase tracking-widest flex items-center gap-0.5">
-                <History className="w-2.5 h-2.5 text-indigo-400" /> Histórico Geral (Tudo)
+                <History className="w-2.5 h-2.5 text-indigo-400" /> {t('historicoGeralTudo', 'Histórico Geral (Tudo)')}
               </span>
             </div>
             <h3 className="font-display font-black text-sm text-slate-100 tracking-tight leading-tight">
-              Resumo de todas as contas
+              {t('resumoTodasContas', 'Resumo de todas as contas')}
             </h3>
             <p className="text-[11.5px] text-slate-400 leading-normal font-light">
-              Mede o controle das suas contas ao longo do tempo, se tem parcelas futuras acumuladas e se os meses passados terminaram pagos.
+              {t('medeControleContas', 'Mede o controle das suas contas ao longo do tempo, se tem parcelas futuras acumuladas e se os meses passados terminaram pagos.')}
             </p>
 
             {/* Sub-metrics progress tracks */}
             <div className="space-y-1 pt-1 opacity-90">
               <div className="flex justify-between text-[9px] font-bold text-slate-400">
-                <span>Total de contas pagas</span>
+                <span>{t('totalContasPagas', 'Total de contas pagas')}</span>
                 <span>{quitacaoScoreAll}%</span>
               </div>
               <div className="h-1 w-full bg-slate-950/45 rounded-full overflow-hidden">
@@ -1352,27 +1379,27 @@ export default function DashboardAnalytics({
                 <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full ${
                   isLight ? 'bg-indigo-50 text-indigo-700' : 'bg-indigo-500/15 text-indigo-400'
                 }`}>
-                  🧠 Diagnóstico Exclusivo
+                  🧠 {t('diagnosticoExclusivo', 'Diagnóstico Exclusivo')}
                 </span>
                 {uniqueSystemAlerts.length > 0 && (
                   <span className={`text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-0.5 rounded-full animate-pulse ${
                     isLight ? 'bg-rose-50 text-rose-700' : 'bg-rose-500/15 text-rose-450'
                   }`}>
-                    {uniqueSystemAlerts.length} Notificações de Saúde
+                    {uniqueSystemAlerts.length} {t('notificacoesSaude', 'Notificações de Saúde')}
                   </span>
                 )}
               </div>
               <h4 className={`font-display font-black text-base tracking-tight mt-1.5 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                Avisos & Alertas Importantes (Histórico Geral)
+                {t('avisosAlertasImportantes', 'Avisos & Alertas Importantes (Histórico Geral)')}
               </h4>
               <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'} font-light mt-1`}>
-                Toque para abrir seu painel inteligente com feed de evolução comparativo, desvios e diagnósticos.
+                {t('toqueParaAbrirPainel', 'Toque para abrir seu painel inteligente com feed de evolução comparativo, desvios e diagnósticos.')}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-[11px] uppercase tracking-wider px-4.5 py-3 rounded-xl transition-all shadow-md group-hover:shadow-indigo-500/15 shrink-0 self-start md:self-center border-none">
-            Analisar Painel
+            {t('analisarPainel', 'Analisar Painel')}
             <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
           </div>
         </div>
@@ -1553,10 +1580,10 @@ export default function DashboardAnalytics({
             <span className={`text-[9px] font-black uppercase tracking-widest block leading-none ${
               isLight ? 'text-indigo-600' : 'text-indigo-400'
             }`}>
-              Análise Avançada
+              {t('analiseAvancada', 'Análise Avançada')}
             </span>
             <h4 className={`font-display font-black text-xs sm:text-sm tracking-tight leading-tight mt-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-              Escopo Ativo de Métricas do Painel
+              {t('escopoAtivoMetricas', 'Escopo Ativo de Métricas do Painel')}
             </h4>
           </div>
         </div>
@@ -1574,7 +1601,7 @@ export default function DashboardAnalytics({
                   : 'bg-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            📅 Análise do Mês
+            📅 {t('analiseDoMes', 'Análise do Mês')}
           </button>
           <button
             onClick={() => setMetricsScope('general')}
@@ -1588,7 +1615,7 @@ export default function DashboardAnalytics({
                   : 'bg-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            🌍 Análise Geral
+            🌍 {t('analiseGeral', 'Análise Geral')}
           </button>
         </div>
       </div>
@@ -1630,7 +1657,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>{isScopeMonth ? 'Custo Crítico / Maior' : 'Maior Gasto do Escopo'}</span>
+                }`}>{isScopeMonth ? t('custoCriticoMaior', 'Custo Crítico / Maior') : t('maiorGastoEscopo', 'Maior Gasto do Escopo')}</span>
                 <span className={`text-base font-mono font-extrabold truncate block mb-0.5 ${
                   isLight ? 'text-rose-600' : 'text-rose-400'
                 }`} title={highestExpense.name}>
@@ -1640,7 +1667,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] truncate block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                {highestExpense.name}
+                {highestExpense.name === 'Nenhum' ? t('nenhum', 'Nenhum') : highestExpense.name}
               </span>
             </div>
 
@@ -1650,7 +1677,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>{isScopeMonth ? 'Média por gastos' : 'Média Gastos Fixos'}</span>
+                }`}>{isScopeMonth ? t('mediaPorGastos', 'Média por gastos') : t('mediaGastosFixos', 'Média Gastos Fixos')}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   isLight ? 'text-slate-800' : 'text-slate-200'
                 }`}>
@@ -1660,7 +1687,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                {isScopeMonth ? `Total ${scopeTransactions.length} registros` : 'Média mensal (Fixos Geral)'}
+                {isScopeMonth ? `Total ${scopeTransactions.length} ${t('registros', 'registros')}` : t('mediaMensalFixosGeral', 'Média mensal (Fixos Geral)')}
               </span>
             </div>
 
@@ -1670,7 +1697,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>{isScopeMonth ? 'Relação Comprometida' : 'Comprometimento Geral'}</span>
+                }`}>{isScopeMonth ? t('relacaoComprometida', 'Relação Comprometida') : t('comprometimentoGeral', 'Comprometimento Geral')}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   isLight ? 'text-amber-600 font-bold' : 'text-amber-400'
                 }`}>
@@ -1680,7 +1707,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                {isScopeMonth ? 'Obrigações do mês' : 'Fixos Médios + Var + Devedor'}
+                {isScopeMonth ? t('obrigacoesDoMes', 'Obrigações do mês') : t('fixosMediosVarDevedor', 'Fixos Médios + Var + Devedor')}
               </span>
             </div>
 
@@ -1690,7 +1717,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>Saldo Liquidado Real</span>
+                }`}>{t('saldoLiquidadoReal', 'Saldo Liquidado Real')}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   isLight ? 'text-emerald-600' : 'text-emerald-400'
                 }`}>
@@ -1700,7 +1727,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                {isScopeMonth ? 'Quitado no mês' : 'Total quitado no histórico'}
+                {isScopeMonth ? t('quitadoNoMes', 'Quitado no mês') : t('totalQuitadoHistorico', 'Total quitado no histórico')}
               </span>
             </div>
 
@@ -1710,7 +1737,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>{isScopeMonth ? 'A Pagar Pendente' : 'Total Devedor Parcelado'}</span>
+                }`}>{isScopeMonth ? t('aPagarPendente', 'A Pagar Pendente') : t('totalDevedorParcelado', 'Total Devedor Parcelado')}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   isLight ? 'text-orange-600' : 'text-orange-400'
                 }`}>
@@ -1720,7 +1747,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                {isScopeMonth ? 'Pendente de quitação no mês' : 'Saldo devedor restante simples'}
+                {isScopeMonth ? t('pendenteQuitacaoMes', 'Pendente de quitação no mês') : t('saldoDevedorRestante', 'Saldo devedor restante simples')}
               </span>
             </div>
 
@@ -1730,7 +1757,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 font-black ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>{isScopeMonth ? 'Sobra Estimada' : 'Sobra Média Estimada'}</span>
+                }`}>{isScopeMonth ? t('sobraEstimada', 'Sobra Estimada') : t('sobraMediaEstimada', 'Sobra Média Estimada')}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   estimatedSurplus >= 0 
                     ? isLight ? 'text-emerald-600' : 'text-emerald-400' 
@@ -1742,7 +1769,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                {isScopeMonth ? 'Saldo livre projetado do mês' : 'Média livre mensal projetada'}
+                {isScopeMonth ? t('saldoLivreProjetado', 'Saldo livre projetado do mês') : t('mediaLivreMensalProjetada', 'Média livre mensal projetada')}
               </span>
             </div>
 
@@ -1760,16 +1787,16 @@ export default function DashboardAnalytics({
           <div>
             <h4 className={`font-display font-black text-sm tracking-wide flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
               <Activity className="w-4.5 h-4.5 text-indigo-400 animate-pulse" />
-              Comparativo Intermensal: {formatMonthKey(prevMonthKey)} vs. {formatMonthKey(currentMonthKey)}
+              {t('comparativoIntermensal', 'Comparativo Intermensal')}: {formatMonthKey(prevMonthKey)} vs. {formatMonthKey(currentMonthKey)}
             </h4>
-            <p className="text-[11px] text-slate-500 mt-1">Evolução do orçamento, despesas ativas e variação líquida entre os ciclos.</p>
+            <p className="text-[11px] text-slate-500 mt-1">{t('evolucaoOrcamentoDespesas', 'Evolução do orçamento, despesas ativas e variação líquida entre os ciclos.')}</p>
           </div>
           <span className={`text-[9.5px] font-black uppercase tracking-widest px-2.5 py-1 rounded-md ${
             isLight 
               ? 'bg-indigo-50 text-indigo-700 font-bold border border-indigo-100' 
               : 'bg-white/5 text-slate-400'
           }`}>
-            Análise Dinâmica MoM
+            {t('analiseDinamicaMoM', 'Análise Dinâmica MoM')}
           </span>
         </div>
 
@@ -1777,10 +1804,10 @@ export default function DashboardAnalytics({
           <div className="py-7 text-center rounded-2xl bg-slate-500/5 border border-dashed border-white/5 p-6">
             <TrendingUp className="w-8 h-8 text-indigo-400/50 mx-auto mb-3" />
             <h5 className={`text-xs font-bold ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
-              Aguardando histórico financeiro
+              {t('aguardandoHistorico', 'Aguardando histórico financeiro')}
             </h5>
             <p className="text-[11px] text-slate-500 mt-1.5 max-w-md mx-auto leading-relaxed">
-              Para ver esta visão comparativa automatizada, continue utilizando o FinançasPro! Assim que tiver lançamentos ativos cadastrados no mês anterior ({formatMonthKey(prevMonthKey)}), o sistema cruzará os dados automaticamente aqui.
+              {t('paraVerEstaVisao', 'Para ver esta visão comparativa automatizada, continue utilizando o FinançasPro!')}
             </p>
           </div>
         ) : (
@@ -1793,19 +1820,19 @@ export default function DashboardAnalytics({
               <div className={`p-4 rounded-2xl border transition-all ${
                 isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
               }`}>
-                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">Entradas (MoM)</span>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">{t('entradas', 'Entradas')} (MoM)</span>
                 
                 <div className="flex items-baseline justify-between gap-1 mt-1">
                   <span className={`text-base font-mono font-extrabold ${isLight ? 'text-slate-900' : 'text-slate-250'}`}>
                     {fmt(curInflows)}
                   </span>
                   <span className={`text-xs font-mono text-slate-500`}>
-                    Antes: {fmt(prevInflows)}
+                    {t('antes', 'Antes')}: {fmt(prevInflows)}
                   </span>
                 </div>
 
                 <div className="mt-2.5 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400 font-medium">Variação Geral</span>
+                  <span className="text-[10px] text-slate-400 font-medium">{t('variacaoGeral', 'Variação Geral')}</span>
                   <span className={`px-2 py-0.5 rounded-lg text-[9.5px] font-black tracking-wide flex items-center gap-0.5 ${
                     inflowDiff > 0
                       ? isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400'
@@ -1823,19 +1850,19 @@ export default function DashboardAnalytics({
               <div className={`p-4 rounded-2xl border transition-all ${
                 isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
               }`}>
-                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">Gastos (MoM)</span>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">{t('gastos', 'Gastos')} (MoM)</span>
                 
                 <div className="flex items-baseline justify-between gap-1 mt-1">
                   <span className={`text-base font-mono font-extrabold ${isLight ? 'text-slate-900' : 'text-slate-250'}`}>
                     {fmt(curSpent)}
                   </span>
                   <span className={`text-xs font-mono text-slate-500`}>
-                    Antes: {fmt(prevSpent)}
+                    {t('antes', 'Antes')}: {fmt(prevSpent)}
                   </span>
                 </div>
 
                 <div className="mt-2.5 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400 font-medium">Variação Geral</span>
+                  <span className="text-[10px] text-slate-400 font-medium">{t('variacaoGeral', 'Variação Geral')}</span>
                   <span className={`px-2 py-0.5 rounded-lg text-[9.5px] font-black tracking-wide flex items-center gap-0.5 ${
                     spentDiff < 0
                       ? isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400'
@@ -1853,7 +1880,7 @@ export default function DashboardAnalytics({
               <div className={`p-4 rounded-2xl border transition-all ${
                 isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
               }`}>
-                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">Sobras Estimadas</span>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">{t('sobrasEstimadas', 'Sobras Estimadas')}</span>
                 
                 <div className="flex items-baseline justify-between gap-1 mt-1">
                   <span className={`text-base font-mono font-extrabold ${
@@ -1864,12 +1891,12 @@ export default function DashboardAnalytics({
                     {fmt(curLeftover)}
                   </span>
                   <span className="text-xs font-mono text-slate-500">
-                    Antes: {fmt(prevLeftover)}
+                    {t('antes', 'Antes')}: {fmt(prevLeftover)}
                   </span>
                 </div>
 
                 <div className="mt-2.5 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400 font-medium font-bold uppercase tracking-wider">Variação Geral</span>
+                  <span className="text-[10px] text-slate-400 font-medium font-bold uppercase tracking-wider">{t('variacaoGeral', 'Variação Geral')}</span>
                   <span className={`px-2 py-0.5 rounded-lg text-[9.5px] font-black tracking-wide flex items-center gap-0.5 ${
                     leftoverDiff > 0
                       ? isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400'
@@ -1887,19 +1914,19 @@ export default function DashboardAnalytics({
               <div className={`p-4 rounded-2xl border transition-all ${
                 isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
               }`}>
-                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">Taxa de Quitação</span>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">{t('taxaQuitacao', 'Taxa de Quitação')}</span>
                 
                 <div className="flex items-baseline justify-between gap-1 mt-1">
                   <span className={`text-base font-mono font-extrabold ${isLight ? 'text-slate-900 border-rose-550/15' : 'text-slate-250'}`}>
                     {currentAdimplencia}%
                   </span>
                   <span className="text-xs font-mono text-slate-500">
-                    Antes: {prevAdimplencia}%
+                    {t('antes', 'Antes')}: {prevAdimplencia}%
                   </span>
                 </div>
 
                 <div className="mt-2.5 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400 font-medium font-bold uppercase tracking-wider">Desvio Pontos</span>
+                  <span className="text-[10px] text-slate-400 font-medium font-bold uppercase tracking-wider">{t('desvioPontos', 'Desvio Pontos')}</span>
                   <span className={`px-2 py-0.5 rounded-lg text-[9.5px] font-black tracking-wide ${
                     adimplenciaDiff > 0
                       ? isLight ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-emerald-500/10 text-emerald-400'
@@ -1907,7 +1934,7 @@ export default function DashboardAnalytics({
                         ? isLight ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-rose-500/10 text-rose-400'
                         : 'bg-white/5 text-slate-400'
                   }`}>
-                    {adimplenciaDiff > 0 ? `+${adimplenciaDiff} pp` : adimplenciaDiff < 0 ? `${adimplenciaDiff} pp` : 'Estável'}
+                    {adimplenciaDiff > 0 ? `+${adimplenciaDiff} pp` : adimplenciaDiff < 0 ? `${adimplenciaDiff} pp` : t('estavel', 'Estável')}
                   </span>
                 </div>
               </div>
@@ -1919,7 +1946,7 @@ export default function DashboardAnalytics({
               isLight ? 'bg-slate-50/40 border-slate-150' : 'bg-slate-950/20 border-white/5'
             } space-y-5`}>
               <h5 className={`text-[10px] uppercase font-black tracking-widest ${isLight ? 'text-slate-700' : 'text-slate-400'}`}>
-                🗺 Distribuição Proporcional do Fluxo de Caixa (Mês Anterior vs Atual)
+                🗺 {t('distribuicaoProporcionalFluxo', 'Distribuição Proporcional do Fluxo de Caixa (Mês Anterior vs Atual)')}
               </h5>
 
               <div className="space-y-4">
@@ -1930,7 +1957,7 @@ export default function DashboardAnalytics({
                       {formatMonthKey(prevMonthKey)}
                     </span>
                     <span className="font-mono text-[10.5px] text-slate-500">
-                      Entrada Total: <strong>{fmt(prevInflows)}</strong> • Sobra: <strong>{fmt(Math.max(0, prevLeftover))}</strong>
+                      {t('entradas', 'Entrada Total')}: <strong>{fmt(prevInflows)}</strong> • {t('sobra', 'Sobra')}: <strong>{fmt(Math.max(0, prevLeftover))}</strong>
                     </span>
                   </div>
                   <div className="h-3 w-full rounded-lg bg-slate-200/50 dark:bg-white/5 overflow-hidden flex shadow-inner">
@@ -1946,10 +1973,10 @@ export default function DashboardAnalytics({
                 <div className="space-y-2">
                   <div className="flex justify-between items-center text-[11px] font-bold">
                     <span className={isLight ? 'text-slate-800 font-extrabold' : 'text-slate-200'}>
-                      {formatMonthKey(currentMonthKey)} (Mês Selecionado)
+                      {formatMonthKey(currentMonthKey)} ({t('mesSelecionado', 'Mês Selecionado')})
                     </span>
                     <span className={`font-mono text-[10.5px] ${isLight ? 'text-slate-700' : 'text-slate-400'}`}>
-                      Entrada Total: <strong>{fmt(curInflows)}</strong> • Sobra: <strong>{fmt(Math.max(0, curLeftover))}</strong>
+                      {t('entradas', 'Entrada Total')}: <strong>{fmt(curInflows)}</strong> • {t('sobra', 'Sobra')}: <strong>{fmt(Math.max(0, curLeftover))}</strong>
                     </span>
                   </div>
                   <div className="h-3 w-full rounded-lg bg-slate-200/50 dark:bg-white/5 overflow-hidden flex shadow-inner">
@@ -1965,16 +1992,16 @@ export default function DashboardAnalytics({
               {/* Legends container for structural understanding */}
               <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-white/5 text-[9.5px] font-bold uppercase tracking-wider text-slate-450 text-slate-400 select-none">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-indigo-500 inline-block" /> Despesa Fixa
+                  <span className="w-2.5 h-2.5 rounded bg-indigo-500 inline-block" /> {t('despesaFixa', 'Despesa Fixa')}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> Despesa Variável
+                  <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> {t('despesaVariavel', 'Despesa Variável')}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-amber-500 inline-block" /> Debitos Parcelados
+                  <span className="w-2.5 h-2.5 rounded bg-amber-500 inline-block" /> {t('debitosParcelados', 'Débitos Parcelados')}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded bg-teal-400 inline-block" /> Sobra Estimada (Caixa Livre)
+                  <span className="w-2.5 h-2.5 rounded bg-teal-400 inline-block" /> {t('sobraEstimadaCaixaLivre', 'Sobra Estimada (Caixa Livre)')}
                 </span>
               </div>
             </div>
@@ -1995,14 +2022,14 @@ export default function DashboardAnalytics({
         <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
           <h4 className={`font-display font-extrabold text-sm tracking-wide flex items-center gap-2 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
             <BarChart2 className="w-4 h-4 text-emerald-400" /> 
-            Distribuição de Gastos do Escopo ({activeDashboardMode === 'current' ? 'Mês Focado' : 'Tudo'})
+            {t('distribuicaoGastosEscopo', 'Distribuição de Gastos do Escopo')} ({activeDashboardMode === 'current' ? t('mesFocado', 'Mês Focado') : t('tudo', 'Tudo')})
           </h4>
         </div>
         
         {modeSortedCategories.length === 0 ? (
           <div className={`h-48 flex flex-col items-center justify-center text-xs ${isLight ? 'text-slate-400' : 'text-slate-500'}`}>
             <BarChart2 className="w-8 h-8 opacity-25 mb-2" />
-            Aguardando lançamentos para compor gráfico de colunas
+            {t('aguardandoLancamentosGrafico', 'Aguardando lançamentos para compor gráfico de colunas')}
           </div>
         ) : (
           <div className="w-full flex flex-col justify-center">
@@ -2177,37 +2204,37 @@ export default function DashboardAnalytics({
           <div>
             <h4 className={`font-display font-extrabold text-sm tracking-wide flex items-center gap-2 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
               <TrendingUp className="w-4 h-4 text-emerald-400" /> 
-              Rendas Extras & Serviços Recebidos ({activeDashboardMode === 'current' ? 'Mês Focado' : 'Histórico Geral'})
+              {t('rendasExtrasServicos', 'Rendas Extras & Serviços Recebidos')} ({activeDashboardMode === 'current' ? t('mesFocado', 'Mês Focado') : t('historicoGeral', 'Histórico Geral')})
             </h4>
-            <p className="text-[11px] text-slate-500 mt-1">Breakdown detalhado dos ingressos financeiros e extras adicionados.</p>
+            <p className="text-[11px] text-slate-500 mt-1">{t('breakdownDetalhadosIngressos', 'Breakdown detalhado dos ingressos financeiros e extras adicionados.')}</p>
           </div>
         </div>
 
         {/* Mini stats dashboard */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 my-4 select-none">
           <div className={`p-3.5 rounded-2xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-white/2 border-white/5'}`}>
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">Total Extra Recebido</span>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">{t('totalExtraRecebido', 'Total Extra Recebido')}</span>
             <span className="text-sm font-mono font-black text-emerald-400">
               {fmt(totalExtras)}
             </span>
           </div>
           <div className={`p-3.5 rounded-2xl border ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-white/2 border-white/5'}`}>
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">Serviços / Lançamentos</span>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">{t('servicosLancamentos', 'Serviços / Lançamentos')}</span>
             <span className={`text-sm font-mono font-black ${isLight ? 'text-slate-700' : 'text-slate-200'}`}>
-              {filteredExtras.length} registros
+              {filteredExtras.length} {t('registros', 'registros')}
             </span>
           </div>
           <div className={`p-3.5 rounded-2xl border col-span-2 md:col-span-1 ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-white/2 border-white/5'}`}>
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">Maior Origem</span>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-0.5">{t('maiorOrigem', 'Maior Origem')}</span>
             <span className={`text-xs font-bold truncate block mt-0.5 uppercase ${isLight ? 'text-slate-755' : 'text-slate-350'}`} title={topSource?.source}>
-              {topSource ? `${topSource.source} (${fmt(topSource.amount)})` : 'Nenhuma'}
+              {topSource ? `${topSource.source} (${fmt(topSource.amount)})` : t('nenhuma', 'Nenhuma')}
             </span>
           </div>
         </div>
 
         {filteredExtras.length === 0 ? (
           <div className={`py-8 text-center text-xs italic ${isLight ? 'text-slate-400' : 'text-slate-505'}`}>
-            Nenhuma renda extra ou serviço adicional registrado para este escopo.
+            {t('nenhumaRendaExtra', 'Nenhuma renda extra ou serviço adicional registrado para este escopo.')}
           </div>
         ) : (
           <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1">
@@ -2265,12 +2292,12 @@ export default function DashboardAnalytics({
           <div className="flex items-center gap-2 mb-4">
             <Activity className="w-4.5 h-4.5 text-indigo-400" />
             <h4 className="font-display font-black text-sm text-slate-100 uppercase tracking-wider">
-              Evolução e Margem Líquida (Últimos Ciclos Ativos)
+              {t('evolucaoMargemLiquida', 'Evolução e Margem Líquida (Últimos Ciclos Ativos)')}
             </h4>
           </div>
 
           {monthlyBalanceEvolution.length === 0 ? (
-            <p className="text-xs text-slate-500 py-4 text-center">Nenhum histórico registrado.</p>
+            <p className="text-xs text-slate-500 py-4 text-center">{t('nenhumHistoricoRegistrado', 'Nenhum histórico registrado.')}</p>
           ) : (
             <div className="space-y-3">
               {monthlyBalanceEvolution.map((evol) => {
@@ -2283,15 +2310,15 @@ export default function DashboardAnalytics({
                     <div>
                       <span className="text-xs font-black text-slate-200">{evol.label}</span>
                       <div className="flex gap-2 text-[10.5px] text-slate-450 mt-1">
-                        <span>Lançamentos: <strong>{evol.txCount}</strong></span>
+                        <span>{t('lancamentos', 'Lançamentos')}: <strong>{evol.txCount}</strong></span>
                         <span>•</span>
-                        <span>Despesa total: <strong>{fmt(evol.spent)}</strong></span>
+                        <span>{t('despesaTotal', 'Despesa total')}: <strong>{fmt(evol.spent)}</strong></span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-3.5 justify-between md:justify-end">
                       <div className="text-right">
-                        <span className="text-[10px] uppercase font-bold text-slate-500 block mb-0.5">Saldo Mensal</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-500 block mb-0.5">{t('saldoMensal', 'Saldo Mensal')}</span>
                         <span className={`text-[12.5px] font-mono font-extrabold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {evol.balance > 0 ? '+' : ''}{fmt(evol.balance)}
                         </span>
@@ -2302,7 +2329,7 @@ export default function DashboardAnalytics({
                           ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
                           : 'bg-rose-500/10 text-rose-400 border border-rose-500/15'
                       }`}>
-                        {isPositive ? '✔ Superávit' : '🗙 Déficit'}
+                        {isPositive ? `✔ ${t('superavit', 'Superávit')}` : `🗙 ${t('deficit', 'Déficit')}`}
                       </span>
                     </div>
                   </div>

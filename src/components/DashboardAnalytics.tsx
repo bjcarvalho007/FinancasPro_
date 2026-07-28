@@ -238,29 +238,29 @@ export default function DashboardAnalytics({
       ? Math.max(15, rawMonthHealthScore - 15) // Penalize slightly for deficit
       : rawMonthHealthScore;
 
-  let activeMonthLabel = 'Tudo Certo';
+  let activeMonthLabel = t('tudoCerto', 'Tudo Certo');
   let activeMonthColor = 'text-emerald-400';
   let activeStrokeColor = '#10b981';
 
   if (leftover > 0) {
-    activeMonthLabel = 'Superavit (Sobrou Dinheiro)';
+    activeMonthLabel = t('superavitSobrouDinheiro', 'Superavit (Sobrou Dinheiro)');
     activeMonthColor = 'text-emerald-400';
     activeStrokeColor = '#10b981';
   } else if (leftover < 0) {
-    activeMonthLabel = 'Atenção (Gasto Alto)';
+    activeMonthLabel = t('atencaoGastoAlto', 'Atenção (Gasto Alto)');
     activeMonthColor = 'text-rose-400';
     activeStrokeColor = '#f43f5e';
   } else {
     if (activeMonthHealthScore < 50) {
-      activeMonthLabel = 'Precisa de Atenção';
+      activeMonthLabel = t('precisaAtencao', 'Precisa de Atenção');
       activeMonthColor = 'text-rose-400';
       activeStrokeColor = '#f43f5e';
     } else if (activeMonthHealthScore < 75) {
-      activeMonthLabel = 'Contas no Limite';
+      activeMonthLabel = t('contasNoLimite', 'Contas no Limite');
       activeMonthColor = 'text-amber-400';
       activeStrokeColor = '#f59e0b';
     } else {
-      activeMonthLabel = 'Muito Organizado';
+      activeMonthLabel = t('muitoOrganizado', 'Muito Organizado');
       activeMonthColor = 'text-emerald-400';
       activeStrokeColor = '#10b981';
     }
@@ -439,15 +439,15 @@ export default function DashboardAnalytics({
     alavancagemScoreAll * 0.20
   );
 
-  let globalLabel = 'Tudo Pago no Passado!';
+  let globalLabel = t('tudoPagoNoPassado', 'Tudo Pago no Passado!');
   let globalColor = 'text-emerald-400';
   let globalStrokeColor = '#10b981';
   if (globalHealthScore < 50) {
-    globalLabel = 'Ficou Conta Pendente';
+    globalLabel = t('ficouContaPendente', 'Ficou Conta Pendente');
     globalColor = 'text-rose-400';
     globalStrokeColor = '#f43f5e';
   } else if (globalHealthScore < 75) {
-    globalLabel = 'Bons Resultados';
+    globalLabel = t('bonsResultados', 'Bons Resultados');
     globalColor = 'text-amber-400';
     globalStrokeColor = '#f59e0b';
   }
@@ -460,8 +460,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-legacy-unpaid',
       type: 'error',
-      text: `${legacyPending.length} conta(s) pendente(s) em meses passados`,
-      details: `Dica amigável: Mude para os meses anteriores no menu superior e marque essas contas como pagas se você já pagou elas.`
+      text: `${legacyPending.length} ${t('contasPendentesPassado', 'conta(s) pendente(s) em meses passados')}`,
+      details: t('descContasPendentesPassado', 'Dica amigável: Mude para os meses anteriores no menu superior e marque essas contas como pagas se você já pagou elas.')
     });
   }
 
@@ -469,8 +469,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-excessive-card',
       type: 'warning',
-      text: `Muitas parcelas no cartão (${Math.round(installmentRatio)}% do total)`,
-      details: `Suas faturas parceladas somam ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalParcelasAll)}. Evitar novos parcelamentos ajuda a ter mais dinheiro livre todo mês.`
+      text: `${t('muitasParcelasCartao', 'Muitas parcelas no cartão')} (${Math.round(installmentRatio)}%)`,
+      details: t('descMuitasParcelasCartao', 'Suas faturas parceladas somam um valor alto. Evitar novos parcelamentos ajuda a ter mais dinheiro livre todo mês.')
     });
   }
 
@@ -493,8 +493,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-deficit-warning',
       type: 'warning',
-      text: `Meses em que gastou mais do que ganhou: ${deficitMonthsCount} ocorrência(s)`,
-      details: `Em alguns meses anteriores, seu consumo superou a renda padrão cadastrada nas configurações.`
+      text: `${t('mesesGastouMaisGanhou', 'Meses em que gastou mais do que ganhou')}: ${deficitMonthsCount}`,
+      details: t('descMesesGastouMaisGanhou', 'Em alguns meses anteriores, seu consumo superou a renda padrão cadastrada nas configurações.')
     });
   }
 
@@ -502,8 +502,8 @@ export default function DashboardAnalytics({
     historyAlerts.push({
       id: 'history-clean-success',
       type: 'success',
-      text: 'Tudo certinho nos meses passados!',
-      details: 'Parabéns pela organização! Todas as suas faturas dos meses anteriores já foram pagas.'
+      text: t('tudoCertinhoMesesPassados', 'Tudo certinho nos meses passados!'),
+      details: t('descTudoCertinhoMesesPassados', 'Parabéns pela organização! Todas as suas faturas dos meses anteriores já foram pagas.')
     });
   }
 
@@ -515,9 +515,9 @@ export default function DashboardAnalytics({
         colorClass: activeMonthColor,
         stroke: activeStrokeColor,
         metrics: [
-          { name: 'Dinheiro Livre', val: liquidezScoreMonth, desc: 'Dinheiro que sobrou em relação aos ganhos' },
-          { name: 'Contas Pagas', val: adimplenciaScoreMonth, desc: 'Porcentagem de contas que já foram quitadas' },
-          { name: 'Contas em Dia', val: pontualidadeScoreMonth, desc: 'Verifica se restam contas vencidas sem pagar' }
+          { name: t('dinheiroLivre', 'Dinheiro Livre'), val: liquidezScoreMonth, desc: t('descDinheiroLivre', 'Dinheiro que sobrou em relação aos ganhos') },
+          { name: t('contasPagas', 'Contas Pagas'), val: adimplenciaScoreMonth, desc: t('descContasPagas', 'Porcentagem de contas que já foram quitadas') },
+          { name: t('contasEmDia', 'Contas em Dia'), val: pontualidadeScoreMonth, desc: t('descContasEmDia', 'Verifica se restam contas vencidas sem pagar') }
         ],
         alerts: monthAlerts,
         totalSpent: totalSpentMonth,
@@ -531,9 +531,9 @@ export default function DashboardAnalytics({
         colorClass: globalColor,
         stroke: globalStrokeColor,
         metrics: [
-          { name: 'Contas Pagas', val: quitacaoScoreAll, desc: 'Porcentagem de todas as contas que você já pagou' },
-          { name: 'Verificação Mensal', val: conciliacaoScoreAll, desc: 'Garantia de que os meses anteriores terminaram pagos' },
-          { name: 'Nível de Parcelas', val: alavancagemScoreAll, desc: 'Quanto de parcelamentos você tem no total' }
+          { name: t('contasPagas', 'Contas Pagas'), val: quitacaoScoreAll, desc: t('descContasPagasGeral', 'Porcentagem de todas as contas que você já pagou') },
+          { name: t('verificacaoMensal', 'Verificação Mensal'), val: conciliacaoScoreAll, desc: t('medeOControleDasContas', 'Mede o controle das suas contas ao longo do tempo, se tem parcelas futuras acumuladas e se os meses passados terminaram pagos.') },
+          { name: t('nivelDeParcelas', 'Nível de Parcelas'), val: alavancagemScoreAll, desc: t('descNivelParcelas', 'Quanto de parcelamentos você tem no total') }
         ],
         alerts: historyAlerts,
         totalSpent: totalSpentAll,
@@ -793,13 +793,13 @@ export default function DashboardAnalytics({
             <div className="space-y-4">
               <div>
                 <span className="text-[10px] font-black uppercase text-indigo-400 tracking-widest block mb-1">
-                  Seja muito bem-vindo ao FinançasPro Premium
+                  {t('sejaMuitoBemVindo', 'Seja muito bem-vindo ao FinançasPro Premium')}
                 </span>
                 <h2 className="font-display font-black text-2xl tracking-tight leading-none mb-2">
-                  Pronto para estruturar sua vida financeira? 🚀
+                  {t('prontoEstruturarVida', 'Pronto para estruturar sua vida financeira?')} 🚀
                 </h2>
                 <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'} leading-relaxed font-light`}>
-                  Seu painel de análise avançada e inteligência está esperando seu primeiro lançamento. Como este é o seu primeiro acesso e não há transações cadastradas ainda, siga o guia passo a passo abaixo para desbloquear suas métricas em poucos segundos:
+                  {t('descPainelPrimeiroAcesso', 'Seu painel de análise avançada e inteligência está esperando seu primeiro lançamento. Como este é o seu primeiro acesso e não há transações cadastradas ainda, siga o guia passo a passo abaixo para desbloquear suas métricas em poucos segundos:')}
                 </p>
               </div>
 
@@ -809,10 +809,10 @@ export default function DashboardAnalytics({
                 }`}>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="w-5 h-5 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-black flex items-center justify-center">1</span>
-                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-205'}`}>Definir Ganhos</span>
+                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-205'}`}>{t('definirGanhos', 'Definir Ganhos')}</span>
                   </div>
                   <p className={`text-[11px] ${isLight ? 'text-slate-505' : 'text-slate-450'} leading-relaxed font-light`}>
-                    Toque no botão <strong className="text-emerald-450 font-black">Ganhos</strong> no topo para cadastrar seu salário ou saldo em mãos do mês.
+                    {t('primeiroPassoGanhosText', 'Toque no botão Ganhos no topo para cadastrar seu salário ou saldo em mãos do mês.')}
                   </p>
                 </div>
 
@@ -821,10 +821,10 @@ export default function DashboardAnalytics({
                 }`}>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="w-5 h-5 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-black flex items-center justify-center">2</span>
-                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-205'}`}>Primeiro Lançamento</span>
+                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-205'}`}>{t('primeiroLancamento', 'Primeiro Lançamento')}</span>
                   </div>
                   <p className={`text-[11px] ${isLight ? 'text-slate-505' : 'text-slate-450'} leading-relaxed font-light`}>
-                    Clique em <strong className="text-indigo-400">Novo Lançamento</strong> para registrar suas primeiras faturas ou despesas recorrentes.
+                    {t('primeiroPassoDespesasText', 'Clique em Novo Lançamento para registrar suas primeiras faturas ou despesas recorrentes.')}
                   </p>
                 </div>
 
@@ -833,10 +833,10 @@ export default function DashboardAnalytics({
                 }`}>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="w-5 h-5 rounded-full bg-indigo-500/10 text-indigo-400 text-xs font-black flex items-center justify-center">3</span>
-                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-205'}`}>Acompanhar Insights</span>
+                    <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-205'}`}>{t('acompanharInsights', 'Acompanhar Insights')}</span>
                   </div>
                   <p className={`text-[11px] ${isLight ? 'text-slate-505' : 'text-slate-450'} leading-relaxed font-light`}>
-                    Pronto! Nosso sistema calculará automaticamente o seu <strong className="text-indigo-400">Score de Saúde</strong> e apresentará insights!
+                    {t('prontoAguardandoInsightsText', 'Pronto! Nosso sistema calculará automaticamente o seu Score de Saúde e apresentará insights!')}
                   </p>
                 </div>
               </div>
@@ -852,9 +852,9 @@ export default function DashboardAnalytics({
             <Activity className="w-5 h-5 text-indigo-400 animate-pulse" />
           </div>
           <div className="space-y-1">
-            <h3 className={`font-display font-medium text-xs sm:text-sm uppercase tracking-widest ${isLight ? 'text-slate-700' : 'text-slate-250'}`}>Aguardando Seus Dados</h3>
+            <h3 className={`font-display font-medium text-xs sm:text-sm uppercase tracking-widest ${isLight ? 'text-slate-700' : 'text-slate-250'}`}>{t('aguardandoSeusDados', 'Aguardando Seus Dados')}</h3>
             <p className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-slate-400'} leading-relaxed font-light`}>
-              Assim que você registrar sua primeira despesa fixa, variável ou parcelada, este gráfico e os cartões de inteligência financeira serão gerados em tempo real de forma totalmente automatizada.
+              {t('descGraficosGeradosRealTime', 'Assim que você registrar sua primeira despesa fixa, variável ou parcelada, este gráfico e os cartões de inteligência financeira serão gerados em tempo real de forma totalmente automatizada.')}
             </p>
           </div>
         </div>
@@ -1280,12 +1280,12 @@ export default function DashboardAnalytics({
                   </div>
                   <div>
                     <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest block leading-tight">
-                      🤖 FinançasPro Assistente
+                      🤖 {t('financasProAssistente', 'FinançasPro Assistente')}
                     </span>
                     <h3 className={`font-display font-black text-sm sm:text-base tracking-tight leading-none mt-1 ${
                       isLight ? 'text-slate-900' : 'text-white'
                     }`}>
-                      Dica: {activeDashboardMode === 'current' ? 'Como você foi no Mês' : 'Resumo de todas as contas'}
+                      {t('dicaLabel', 'Dica:')} {activeDashboardMode === 'current' ? t('comoVoceFoiNoMes', 'Como você foi no Mês') : t('resumoTodasAsContas', 'Resumo de todas as contas')}
                     </h3>
                   </div>
                 </div>

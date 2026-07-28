@@ -609,10 +609,10 @@ export default function SettingsPanel({
               <div className="max-w-[70%]">
                 <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${isPushSubscribed ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                  Alertas em Segundo Plano (PWA)
+                  {t('alertasSegundoPlano', 'Alertas em Segundo Plano (PWA)')}
                 </span>
                 <span className="text-[10px] text-slate-500 block leading-normal mt-0.5">
-                  Receba avisos instantâneos mesmo se o navegador ou app estiverem fechados.
+                  {t('recebaAvisosInstantaneos', 'Receba avisos instantâneos mesmo se o navegador ou app estiverem fechados.')}
                 </span>
               </div>
               <button
@@ -642,14 +642,14 @@ export default function SettingsPanel({
                   ) : (
                     <Smartphone className="w-3.5 h-3.5" />
                   )}
-                  Disparar Notificação de Teste
+                  {t('dispararNotificacaoTeste', 'Disparar Notificação de Teste')}
                 </button>
               </div>
             )}
 
             {!isPushSupported && (
               <p className="text-[9.5px] text-amber-500/80 bg-amber-500/5 border border-amber-500/10 p-2.5 rounded-xl leading-normal">
-                ⚠️ As notificações push de segundo plano não são suportadas neste navegador ou dispositivo. Instale como PWA para garantir suporte total.
+                ⚠️ {t('notificacoesNaosuportadas', 'As notificações push de segundo plano não são suportadas neste navegador ou dispositivo. Instale como PWA para garantir suporte total.')}
               </p>
             )}
           </div>
@@ -659,7 +659,7 @@ export default function SettingsPanel({
       {/* Preset values master base template */}
       <div className="p-6 rounded-3xl glass-panel border-white/5">
         <h5 className="font-display font-black text-white text-sm mb-4 leading-none">
-          Parâmetros Estimados Médios
+          {t('parametrosEstimadosMedios', 'Parâmetros Estimados Médios')}
         </h5>
         
         <div className="space-y-4">

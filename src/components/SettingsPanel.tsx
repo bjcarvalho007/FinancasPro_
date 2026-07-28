@@ -522,8 +522,8 @@ export default function SettingsPanel({
             <Settings className="w-5 h-5 animate-spin-slow" />
           </div>
           <div>
-            <h4 className="font-display font-black text-white text-base">Painel de Preferências</h4>
-            <p className="text-xs text-slate-500">Ajuste os parâmetros visuais, cambiais e operacionais do seu aplicativo.</p>
+            <h4 className="font-display font-black text-white text-base">{t('painelPreferencias', 'Painel de Preferências')}</h4>
+            <p className="text-xs text-slate-500">{t('ajusteParametrosVisuales', 'Ajuste os parâmetros visuais, cambiais e operacionais do seu aplicativo.')}</p>
           </div>
         </div>
 
@@ -531,8 +531,8 @@ export default function SettingsPanel({
           {/* Theme selector */}
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs font-bold text-slate-300 block">Tema do App</span>
-              <span className="text-[10px] text-slate-500">Alternar contraste da plataforma.</span>
+              <span className="text-xs font-bold text-slate-300 block">{t('temaDoApp', 'Tema do App')}</span>
+              <span className="text-[10px] text-slate-500">{t('alternarContraste', 'Alternar contraste da plataforma.')}</span>
             </div>
             <div className="flex bg-slate-900 border border-white/5 rounded-xl p-1 gap-1">
               <button
@@ -563,8 +563,8 @@ export default function SettingsPanel({
           {/* Currency selection */}
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs font-bold text-slate-300 block">Moeda Conversora</span>
-              <span className="text-[10px] text-slate-500">Define o símbolo de exibição.</span>
+              <span className="text-xs font-bold text-slate-300 block">{t('moedaConversora', 'Moeda Conversora')}</span>
+              <span className="text-[10px] text-slate-500">{t('defineSimboloExibicao', 'Define o símbolo de exibição.')}</span>
             </div>
             <select
               value={currentCurrency}
@@ -580,8 +580,8 @@ export default function SettingsPanel({
           {/* Day alert threshold */}
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs font-bold text-slate-300 block">Antecedência dos Avisos</span>
-              <span className="text-[10px] text-slate-500">Mapear faturas quantos dias antes do vencimento.</span>
+              <span className="text-xs font-bold text-slate-300 block">{t('antecedenciaAvisos', 'Antecedência dos Avisos')}</span>
+              <span className="text-[10px] text-slate-500">{t('mapearFaturasAntes', 'Mapear faturas quantos dias antes do vencimento.')}</span>
             </div>
             <select
               value={alertDays}
@@ -589,15 +589,15 @@ export default function SettingsPanel({
                 const val = parseInt(e.target.value);
                 setAlertDays(val);
                 onSavePreferences(parseMoney(incStr), parseMoney(balStr), val);
-                showToast(`Alerta configurado para ${val} dias de antecedência!`, 'success');
+                showToast(`${t('alertaConfiguradoPara', 'Alerta configurado para')} ${val} ${t('diasAntecedencia', 'dias de antecedência!')}`, 'success');
               }}
               className="bg-slate-900 border border-white/5 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl focus:outline-none cursor-pointer"
             >
-              <option value="1">1 dia antes</option>
-              <option value="2">2 dias antes</option>
-              <option value="3">3 dias antes</option>
-              <option value="5">5 dias antes</option>
-              <option value="7">7 dias antes</option>
+              <option value="1">1 {t('diaAntes', 'dia antes')}</option>
+              <option value="2">2 {t('diasAntes', 'dias antes')}</option>
+              <option value="3">3 {t('diasAntes', 'dias antes')}</option>
+              <option value="5">5 {t('diasAntes', 'dias antes')}</option>
+              <option value="7">7 {t('diasAntes', 'dias antes')}</option>
               <option value="10">10 dias antes</option>
               <option value="15">15 dias antes</option>
             </select>
@@ -665,7 +665,7 @@ export default function SettingsPanel({
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Renda Mensal Base (R$)</label>
+              <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{t('rendaMensalBase', 'Renda Mensal Base')}</label>
               <input
                 type="text"
                 placeholder="R$ 0,00"
@@ -675,7 +675,7 @@ export default function SettingsPanel({
               />
             </div>
             <div>
-              <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Reserva Comercial / Mãos (R$)</label>
+              <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{t('reservaComercialMaos', 'Reserva Comercial / Mãos')}</label>
               <input
                 type="text"
                 placeholder="R$ 0,00"
@@ -687,14 +687,14 @@ export default function SettingsPanel({
           </div>
 
           <p className="text-[10px] text-slate-500 leading-normal">
-            Estes valores são usados para preenchimento automático das suas economias no início de cada novo mês.
+            {t('valoresUsadosPreenchimento', 'Estes valores são usados para preenchimento automático das suas economias no início de cada novo mês.')}
           </p>
 
           <button
             onClick={handleSaveConfigs}
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
           >
-            Salvar Padrões de Caixa
+            {t('salvarPadroesCaixa', 'Salvar Padrões de Caixa')}
           </button>
         </div>
       </div>
@@ -707,16 +707,16 @@ export default function SettingsPanel({
           </div>
           <div>
             <h5 className="font-display font-black text-white text-sm leading-none">
-              Central de Ajuda & Suporte
+              {t('centralAjudaSuporte', 'Central de Ajuda & Suporte')}
             </h5>
             <p className="text-[10px] text-slate-400 mt-1">
-              Fale com nosso atendimento humano ou tire dúvidas no WhatsApp.
+              {t('faleAtendimentoHumano', 'Fale com nosso atendimento humano ou tire dúvidas no WhatsApp.')}
             </p>
           </div>
         </div>
 
         <p className="text-xs text-slate-350 leading-relaxed font-light mb-4">
-          Dúvidas sobre o funcionamento, faturas ou precisa de suporte técnico? Nosso atendimento via WhatsApp está sempre pronto para te ajudar a manter as finanças sob total controle.
+          {t('duvidasFuncionamento', 'Dúvidas sobre o funcionamento, faturas ou precisa de suporte técnico? Nosso atendimento via WhatsApp está sempre pronto para te ajudar a manter as finanças sob total controle.')}
         </p>
 
         <a
@@ -726,34 +726,34 @@ export default function SettingsPanel({
           className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all shadow-md active:translate-y-0.5 cursor-pointer no-underline"
         >
           <MessageCircle className="w-4 h-4" />
-          Falar com Suporte no WhatsApp
+          {t('falarSuporteWhatsApp', 'Falar com Suporte no WhatsApp')}
         </a>
       </div>
 
       {/* Action panel for Exportation and Credentials */}
       <div className="p-6 rounded-3xl glass-panel border-white/5 space-y-4">
         <h5 className="font-display font-black text-white text-sm leading-none">
-          Ações e Segurança Corporativa
+          {t('acoesSegurancaCorporativa', 'Ações e Segurança Corporativa')}
         </h5>
 
         <div className="space-y-4 pt-2">
           {/* Selector for PDF / Spreadsheet Scope */}
           <div className="p-4 bg-slate-950/40 rounded-2xl border border-white/5 space-y-2">
             <label className="block text-[9.5px] font-extrabold text-slate-350 uppercase tracking-widest leading-none">
-              Abrangência dos Relatórios
+              {t('abrangenciaRelatorios', 'Abrangência dos Relatórios')}
             </label>
             <p className="text-[9.5px] text-slate-500 leading-normal">
-              Escolha extrair do diário a relação de um mês específico ou o consolidado geral contendo todo o histórico acumulado.
+              {t('escolhaExtrairDiario', 'Escolha extrair do diário a relação de um mês específico ou o consolidado geral contendo todo o histórico acumulado.')}
             </p>
             <select
               value={selectedReportMonth}
               onChange={(e) => setSelectedReportMonth(e.target.value)}
               className="w-full bg-slate-900 border border-white/5 text-slate-300 text-xs font-bold px-3 py-2.5 rounded-xl focus:outline-none cursor-pointer mt-1"
             >
-              <option value="all">📊 Relatório Geral (Todo o Histórico Acumulado)</option>
+              <option value="all">📊 {t('relatorioGeralHistorico', 'Relatório Geral (Todo o Histórico Acumulado)')}</option>
               {uniqueMonths.map(mKey => (
                 <option key={mKey} value={mKey}>
-                  📅 Relatório Mensal — {formatMonthLabel(mKey)}
+                  📅 {t('relatorioMensal', 'Relatório Mensal')} — {formatMonthLabel(mKey)}
                 </option>
               ))}
             </select>
@@ -769,8 +769,8 @@ export default function SettingsPanel({
               <div className="flex items-center gap-3">
                 <FileDown className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
                 <div>
-                  <span className="text-xs font-bold text-slate-300 block">Demonstrativo Detalhado (.PDF)  <span className="ml-1 px-1 bg-indigo-500/30 text-[8px] text-indigo-300 rounded font-black uppercase tracking-wider">Premium</span></span>
-                  <span className="text-[9px] text-slate-500">Baixe o relatório polido de faturas, categorias e fluxos para a abrangência selecionada.</span>
+                  <span className="text-xs font-bold text-slate-300 block">{t('demonstrativoDetalhadoPDF', 'Demonstrativo Detalhado (.PDF)')} <span className="ml-1 px-1 bg-indigo-500/30 text-[8px] text-indigo-300 rounded font-black uppercase tracking-wider">Premium</span></span>
+                  <span className="text-[9px] text-slate-500">{t('baixeRelatorioPolido', 'Baixe o relatório polido de faturas, categorias e fluxos para a abrangência selecionada.')}</span>
                 </div>
               </div>
               <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>
@@ -785,8 +785,8 @@ export default function SettingsPanel({
               <div className="flex items-center gap-3">
                 <FileSpreadsheet className="w-4 h-4 text-sky-400 group-hover:scale-110 transition-transform" />
                 <div>
-                  <span className="text-xs font-bold text-slate-300 block">Exportar Planilha de Auditoria (.CSV)</span>
-                  <span className="text-[9px] text-slate-500">Gere uma planilha corporativa estruturada do período desejado para Excel ou Google Sheets.</span>
+                  <span className="text-xs font-bold text-slate-300 block">{t('exportarPlanilhaAuditoria', 'Exportar Planilha de Auditoria (.CSV)')}</span>
+                  <span className="text-[9px] text-slate-500">{t('gerePlanilhaCorporativa', 'Gere uma planilha corporativa estruturada do período desejado para Excel ou Google Sheets.')}</span>
                 </div>
               </div>
               <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>
@@ -801,8 +801,8 @@ export default function SettingsPanel({
               <div className="flex items-center gap-3">
                 <KeyRound className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
                 <div>
-                  <span className="text-xs font-bold text-slate-300 block">Redefinir Senha do Usuário</span>
-                  <span className="text-[9px] text-slate-500">Receba um código de acesso por e-mail para atualizar a credencial.</span>
+                  <span className="text-xs font-bold text-slate-300 block">{t('redefinirSenhaUsuario', 'Redefinir Senha do Usuário')}</span>
+                  <span className="text-[9px] text-slate-500">{t('recebaCodigoAcessoEmail', 'Receba um código de acesso por e-mail para atualizar a credencial.')}</span>
                 </div>
               </div>
               <span className="text-slate-500 text-xs group-hover:text-white transition-colors">➔</span>
@@ -816,8 +816,8 @@ export default function SettingsPanel({
               <div className="flex items-center gap-3">
                 <Trash2 className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
                 <div>
-                  <span className="text-xs font-bold text-rose-400 block">Excluir Conta</span>
-                  <span className="text-[9px] text-rose-500">Deleta permanentemente seu cadastro e logs.</span>
+                  <span className="text-xs font-bold text-rose-400 block">{t('excluirConta', 'Excluir Conta')}</span>
+                  <span className="text-[9px] text-rose-500">{t('deletaPermanentemente', 'Deleta permanentemente seu cadastro e logs.')}</span>
                 </div>
               </div>
               <span className="text-rose-500/60 text-xs group-hover:text-rose-500 transition-colors">➔</span>
@@ -859,12 +859,12 @@ export default function SettingsPanel({
 
               <div className="space-y-2">
                 <h4 className="font-display font-black text-sm uppercase tracking-wider text-rose-500">
-                  Operação Crítica Irreversível!
+                  {t('operacaoCriticaIrreversivel', 'Operação Crítica Irreversível!')}
                 </h4>
                 <p className={`text-xs leading-relaxed ${
                   currentTheme === 'light' ? 'text-slate-500' : 'text-slate-400'
                 }`}>
-                  Você tem certeza definitiva? Ao prosseguir, seu perfil, configurações cambiais, e todos os lançamentos financeiros vinculados serão deletados permanentemente do banco de dados.
+                  {t('temCertezaDefinitiva', 'Você tem certeza definitiva? Ao prosseguir, seu perfil, configurações cambiais, e todos os lançamentos financeiros vinculados serão deletados permanentemente do banco de dados.')}
                 </p>
               </div>
 
@@ -874,7 +874,7 @@ export default function SettingsPanel({
                   onClick={executeDeleteAccount}
                   className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 text-[10px] uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg shadow-rose-600/10 active:scale-[0.98] rounded-xl"
                 >
-                  Excluir Permanentemente
+                  {t('excluirPermanentemente', 'Excluir Permanentemente')}
                 </button>
                 <button
                   onClick={() => setIsDeleteAccountOpen(false)}
@@ -884,7 +884,7 @@ export default function SettingsPanel({
                       : 'bg-slate-900 border-white/10 hover:bg-slate-850 text-slate-400 hover:text-white'
                   }`}
                 >
-                  Voltar ao Painel
+                  {t('voltarAoPainel', 'Voltar ao Painel')}
                 </button>
               </div>
             </motion.div>

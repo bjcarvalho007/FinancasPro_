@@ -48,68 +48,68 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
     onClose();
   };  const steps = [
     {
-      title: "Boas-vindas ao FinançasPro!",
-      subtitle: "Seu cockpit financeiro premium",
+      title: t('boasVindas', 'Boas-vindas ao FinançasPro!'),
+      subtitle: t('cockpitFinanceiro', 'Seu cockpit financeiro premium'),
       icon: <TrendingUp className="w-10 h-10 text-emerald-400" />,
-      description: "Esqueça planilhas confusas ou sistemas corporativos burocráticos. O FinançasPro foi feito para pessoas que valorizam precisão e um visual impecável. Vamos te guiar rapidamente sobre como funciona sua nova gestão de caixa inteligente.",
+      description: t('descBoasVindas', 'Esqueça planilhas confusas ou sistemas corporativos burocráticos. O FinançasPro foi feito para pessoas que valorizam precisão e um visual impecável. Vamos te guiar rapidamente sobre como funciona sua nova gestão de caixa inteligente.'),
       color: "from-emerald-500/20 to-teal-500/5",
-      badge: "Início"
+      badge: t('inicio', 'Início')
     },
     {
-      title: "📌 Contas Recorrentes (Contas/Fixos)",
-      subtitle: "Preveja o futuro sem falhas",
+      title: `📌 ${t('contasRecorrentesTitulo', 'Contas Recorrentes (Contas/Fixos)')}`,
+      subtitle: t('prevejaFuturo', 'Preveja o futuro sem falhas'),
       icon: <Calendar className="w-10 h-10 text-indigo-400" />,
-      description: "Aqui ficam suas contas fixas (aluguel, condomínio, internet, assinaturas). O nosso motor projeta essas contas automaticamente para todos os meses futuros! Basta cadastrá-las uma única vez e elas aparecerão todo mês aguardando seu clique de quitação.",
+      description: t('descContasFixasTutorial', 'Aqui ficam suas contas fixas (aluguel, condomínio, internet, assinaturas). O nosso motor projeta essas contas automaticamente para todos os meses futuros! Basta cadastrá-las uma única vez e elas aparecerão todo mês aguardando seu clique de quitação.'),
       color: "from-indigo-500/20 to-indigo-600/5",
-      badge: "Passo 1 de 7"
+      badge: `${t('passo', 'Passo')} 1 ${t('de', 'de')} 7`
     },
     {
-      title: "📊 Gastos do Cotidiano (Variados)",
-      subtitle: "Para onde está indo o dinheiro?",
+      title: `📊 ${t('gastosCotidianoTitulo', 'Gastos do Cotidiano (Variados)')}`,
+      subtitle: t('paraOndeVaiDinheiro', 'Para onde está indo o dinheiro?'),
       icon: <Receipt className="w-10 h-10 text-amber-500" />,
-      description: "São as suas despesas variáveis que acontecem apenas no mês atual (restaurantes, transporte, farmácia, lazer). Registre esses gastos rápidos para mapear furos de orçamento e entender seu padrão de consumo mensal sem mistérios.",
+      description: t('descGastosVariadosTutorial', 'São as suas despesas variáveis que acontecem apenas no mês atual (restaurantes, transporte, farmácia, lazer). Registre esses gastos rápidos para mapear furos de orçamento e entender seu padrão de consumo mensal sem mistérios.'),
       color: "from-amber-500/20 to-orange-500/5",
-      badge: "Passo 2 de 7"
+      badge: `${t('passo', 'Passo')} 2 ${t('de', 'de')} 7`
     },
     {
-      title: "💳 Compras Parceladas (Parcelados)",
-      subtitle: "Inteligência futura em parcelas",
+      title: `💳 ${t('comprasParceladasTitulo', 'Compras Parceladas (Parcelados)')}`,
+      subtitle: t('inteligenciaFutura', 'Inteligência futura em parcelas'),
       icon: <CreditCard className="w-10 h-10 text-sky-400" />,
-      description: "Ideal para quando você parcela uma compra no cartão de crédito. Você insere o valor total e o histórico de parcelados monitora quanto ainda resta pagar nos devedores e o peso acumulado disso no seu saldo disponível de longo prazo.",
+      description: t('descParceladosTutorial', 'Ideal para quando você parcela uma compra no cartão de crédito. Você insere o valor total e o histórico de parcelados monitora quanto ainda resta pagar nos devedores e o peso acumulado disso no seu saldo disponível de longo prazo.'),
       color: "from-sky-500/20 to-blue-500/5",
-      badge: "Passo 3 de 7"
+      badge: `${t('passo', 'Passo')} 3 ${t('de', 'de')} 7`
     },
     {
-      title: "💵 Rendas, Saldo e Sobras",
-      subtitle: "O cálculo exato do seu bolso",
+      title: `💵 ${t('rendasSaldoSobras', 'Rendas, Saldo e Sobras')}`,
+      subtitle: t('calculoExatoBolso', 'O cálculo exato do seu bolso'),
       icon: <DollarSign className="w-10 h-10 text-emerald-400" />,
-      description: "No botão 'Ganhos', configure seu Salário/Renda padrão, as sobras do mês anterior (Saldo Inicial) e eventuais rendimentos Extras. O FinançasPro abate todas as suas contas cadastradas de forma cumulativa, te dando a sobra exata estimada para poupar livremente.",
+      description: t('descRendasTutorial', 'No botão \'Ganhos\', configure seu Salário/Renda padrão, as sobras do mês anterior (Saldo Inicial) e eventuais rendimentos Extras. O FinançasPro abate todas as suas contas cadastradas de forma cumulativa, te dando a sobra exata estimada para poupar livremente.'),
       color: "from-teal-500/20 to-green-500/5",
-      badge: "Passo 4 de 7"
+      badge: `${t('passo', 'Passo')} 4 ${t('de', 'de')} 7`
     },
     {
-      title: "💎 Dashboard & Metas Reais",
-      subtitle: "Governança de caixa e metas",
+      title: `💎 ${t('dashboardMetasReais', 'Dashboard & Metas Reais')}`,
+      subtitle: t('governancaCaixa', 'Governança de caixa e metas'),
       icon: <LayoutDashboard className="w-10 h-10 text-violet-400" />,
-      description: "Na aba 'Dashboard', consulte sua nota de controle e ganhe orientações automáticas de como policiar seus limites. Use a aba de 'Metas' para criar objetivos de poupança (metas de investimento, cofrinhos) e adicione fundos conforme economiza para realizar seus sonhos passo a passo.",
+      description: t('descDashboardMetasTutorial', 'Na aba \'Dashboard\', consulte sua nota de controle e ganhe orientações automáticas de como policiar seus limites. Use a aba de \'Metas\' para criar objetivos de poupança (metas de investimento, cofrinhos) e adicione fundos conforme economiza para realizar seus sonhos passo a passo.'),
       color: "from-violet-500/20 to-fuchsia-500/5",
-      badge: "Passo 5 de 7"
+      badge: `${t('passo', 'Passo')} 5 ${t('de', 'de')} 7`
     },
     {
-      title: "🔔 Lembretes de Vencimento",
-      subtitle: "Controle ativo e configurável",
+      title: `🔔 ${t('lembretesVencimentoTutorial', 'Lembretes de Vencimento')}`,
+      subtitle: t('controleAtivoConfiguravel', 'Controle ativo e configurável'),
       icon: <Bell className="w-10 h-10 text-rose-450 text-rose-400" />,
-      description: "Nunca mais atrase suas faturas! O FinançasPro monitora ativamente as datas de vencimento das suas contas pendentes e cria lembretes automáticos na tela. Você escolhe quantos dias de antecedência para os alertas na aba de 'Configurações' e pode ativar notificações nativas de desktop direto no navegador.",
+      description: t('descLembretesTutorial', 'Nunca mais atrase suas faturas! O FinançasPro monitora ativamente as datas de vencimento das suas contas pendentes e cria lembretes automáticos na tela. Você escolhe quantos dias de antecedência para os alertas na aba de \'Configurações\' e pode ativar notificações nativas de desktop direto no navegador.'),
       color: "from-rose-500/20 to-rose-600/5",
-      badge: "Passo 6 de 7"
+      badge: `${t('passo', 'Passo')} 6 ${t('de', 'de')} 7`
     },
     {
-      title: "📞 Suporte & Central de Ajuda",
-      subtitle: "Atendimento no WhatsApp",
+      title: `📞 ${t('suporteCentralAjuda', 'Suporte & Central de Ajuda')}`,
+      subtitle: t('atendimentoWhatsApp', 'Atendimento no WhatsApp'),
       icon: <MessageCircle className="w-10 h-10 text-emerald-400" />,
-      description: "Precisa de ajuda com o aplicativo ou quer tirar alguma dúvida? Nós oferecemos suporte humano rápido para você. Além de poder tirar suas dúvidas aqui, você pode falar diretamente com nossa equipe no WhatsApp a qualquer momento acessando a aba 'Ajustes' no menu de navegação e clicando em 'Falar com Suporte'.",
+      description: t('descSuporteTutorial', 'Precisa de ajuda com o aplicativo ou quer tirar alguma dúvida? Nós oferecemos suporte humano rápido para você. Além de poder tirar suas dúvidas aqui, você pode falar diretamente com nossa equipe no WhatsApp a qualquer momento acessando a aba \'Ajustes\' no menu de navegação e clicando em \'Falar com Suporte\'.'),
       color: "from-emerald-500/20 to-teal-500/10",
-      badge: "Passo 7 de 7"
+      badge: `${t('passo', 'Passo')} 7 ${t('de', 'de')} 7`
     }
   ];
 
@@ -237,7 +237,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                     <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
                       theme === 'light' ? 'bg-indigo-50/50 border-indigo-100 text-indigo-750' : 'bg-indigo-950/15 border-indigo-500/10 text-indigo-300'
                     }`}>
-                      💡 <strong>Super Dica:</strong> Ganhos e faturas fixados ajudam você a ver se terá dinheiro no fim do mês mesmo antes de pagar qualquer uma de suas contas!
+                      💡 <strong>{t('dicaLabel', 'Dica')}:</strong> {t('tipSuperDicaGanhos', 'Ganhos e faturas fixados ajudam você a ver se terá dinheiro no fim do mês mesmo antes de pagar qualquer uma de suas contas!')}
                     </div>
                   )}
 
@@ -245,7 +245,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                     <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
                       theme === 'light' ? 'bg-sky-50/50 border-sky-100 text-sky-750' : 'bg-sky-950/15 border-sky-500/10 text-sky-300'
                     }`}>
-                      💡 <strong>Gestão de Cartão:</strong> Acompanhando as parcelas que restam (Ex: 3/10) você reduz gastos desnecessários que engessam seu saldo pros próximos meses.
+                      💡 <strong>{t('gestaoCartao', 'Gestão de Cartão')}:</strong> {t('tipGestaoCartao', 'Acompanhando as parcelas que restam você reduz gastos desnecessários que engessam seu saldo pros próximos meses.')}
                     </div>
                   )}
 
@@ -253,7 +253,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                     <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
                       theme === 'light' ? 'bg-emerald-50/50 border-emerald-100 text-emerald-750' : 'bg-emerald-950/15 border-emerald-500/10 text-emerald-300'
                     }`}>
-                      💡 <strong>Sobra Líquida:</strong> Sempre reabasteça as sobras acumuladas de meses passados informando o valor em &quot;Saldo Inicial&quot;. Isso assegura a precisão do seu montante!
+                      💡 <strong>{t('sobraLiquida', 'Sobra Líquida')}:</strong> {t('tipSobraLiquida', 'Sempre reabasteça as sobras acumuladas de meses passados informando o valor em Saldo Inicial. Isso assegura a precisão do seu montante!')}
                     </div>
                   )}
 
@@ -261,7 +261,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                     <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
                       theme === 'light' ? 'bg-rose-50/50 border-rose-100 text-rose-750' : 'bg-rose-950/15 border-rose-500/10 text-rose-300'
                     }`}>
-                      💡 <strong>Notificações no Dispositivo:</strong> Ative a autorização de notificações nas Configurações para que o sistema te lembre das datas mesmo se o app estiver fechado ou em segundo plano.
+                      💡 <strong>{t('notificacoesDispositivo', 'Notificações no Dispositivo')}:</strong> {t('tipNotificacoesDispositivo', 'Ative a autorização de notificações nas Configurações para que o sistema te lembre das datas mesmo se o app estiver fechado ou em segundo plano.')}
                     </div>
                   )}
 
@@ -274,14 +274,14 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                         className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all shadow-md hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                       >
                         <MessageCircle className="w-4.5 h-4.5" />
-                        Chamar no WhatsApp
+                        {t('chamarNoWhatsApp', 'Chamar no WhatsApp')}
                       </a>
 
                       <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
                         theme === 'light' ? 'bg-violet-50/50 border-violet-100 text-violet-750' : 'bg-violet-950/15 border-violet-500/10 text-violet-300'
                       } flex items-center gap-2 font-medium`}>
                         <Sparkles className="w-4 h-4 text-violet-400 animate-pulse shrink-0" />
-                        <span>Seu onboarding está completo! Pronto para usufruir de ferramentas financeiras premium.</span>
+                        <span>{t('onboardingCompleto', 'Seu onboarding está completo! Pronto para usufruir de ferramentas financeiras premium.')}</span>
                       </div>
                     </div>
                   )}
@@ -317,7 +317,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                           : 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10'
                       }`}
                     >
-                      <ChevronLeft className="w-4 h-4" /> Anterior
+                      <ChevronLeft className="w-4 h-4" /> {t('anterior', 'Anterior')}
                     </button>
                   )}
 
@@ -327,11 +327,11 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                   >
                     {currentStep === steps.length - 1 ? (
                       <>
-                        <CheckCircle2 className="w-4 h-4" /> Concluído
+                        <CheckCircle2 className="w-4 h-4" /> {t('concluido', 'Concluído')}
                       </>
                     ) : (
                       <>
-                        Avançar <ChevronRight className="w-4 h-4" />
+                        {t('avancar', 'Avançar')} <ChevronRight className="w-4 h-4" />
                       </>
                     )}
                   </button>

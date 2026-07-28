@@ -343,21 +343,21 @@ export default function GoalsPanel({
                     className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                   />
                   <div className="flex justify-between text-[8px] text-slate-500 font-bold mt-1 uppercase tracking-wider">
-                    <span>1 mês</span>
-                    <span>12 meses</span>
-                    <span>3 anos (36m)</span>
-                    <span>5 anos (60m)</span>
+                    <span>1 {t('mesLabel', 'mês')}</span>
+                    <span>12 {t('meses', 'meses')}</span>
+                    <span>3 {t('anos', 'anos')} (36m)</span>
+                    <span>5 {t('anos', 'anos')} (60m)</span>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[9px] font-bold text-slate-405 uppercase tracking-widest mb-1.5">Data Final Estimada de Destino</label>
+                  <label className="block text-[9px] font-bold text-slate-405 uppercase tracking-widest mb-1.5">{t('dataEstimadaConclusao', 'Data Estimada de Finalização')}</label>
                   <input
                     type="text"
                     value={deadline}
                     onChange={(e) => setDeadline(e.target.value)}
                     className="w-full bg-slate-900 border border-white/5 focus:border-indigo-500 text-slate-350 text-xs px-4 py-2.5 rounded-xl font-bold"
-                    placeholder="Ex: Janeiro 2027"
+                    placeholder="Ex: 12/2027"
                   />
                 </div>
               </div>
@@ -367,10 +367,10 @@ export default function GoalsPanel({
                 <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10 text-[10.5px] text-slate-350 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <span className="font-semibold flex items-center gap-1 text-slate-300">
                     <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                    Ritmo Requerido Recomendado:
+                    {t('ritmoRequeridoRecomendado', 'Ritmo Requerido Recomendado:')}
                   </span>
                   <span className="font-mono text-xs font-extrabold text-indigo-300">
-                    {formatMoney(Math.max(0, (parseMoney(targetAmountStr) - (parseMoney(currentAmountStr) || parseMoney(initialAmountStr))) / targetMonths))}/mês durante estes {targetMonths} meses.
+                    {formatMoney(Math.max(0, (parseMoney(targetAmountStr) - (parseMoney(currentAmountStr) || parseMoney(initialAmountStr))) / targetMonths))}/{t('mesLabel', 'mês')} {t('duranteEstes', 'durante estes')} {targetMonths} {t('meses', 'meses')}.
                   </span>
                 </div>
               )}

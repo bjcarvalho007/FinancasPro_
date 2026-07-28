@@ -1871,13 +1871,13 @@ function MainApp() {
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>Sobra Estimada de Caixa</span>
+            <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>{t('sobraEstimadaCaixa', 'Sobra Estimada de Caixa')}</span>
             <h3 className={`font-mono text-3xl font-extrabold ${theme === 'light' ? 'text-emerald-700' : 'text-white'} tracking-tight leading-none mb-2`}>
               {formatCurrency(leftoverCash)}
             </h3>
           </div>
           <div className={`text-[11px] ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400/80'} font-bold uppercase tracking-wider mt-4`}>
-            Sobre disponível de {formatCurrency(totalInflowsSum)}
+            {t('sobreDisponivelDe', 'Sobra disponível de')} {formatCurrency(totalInflowsSum)}
           </div>
         </motion.div>
 
@@ -1896,13 +1896,13 @@ function MainApp() {
           } border flex flex-col justify-between cursor-pointer transition-all`}
         >
           <div>
-            <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>Total a Pagar Pendente</span>
+            <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>{t('totalPagarPendente', 'Total a Pagar Pendente')}</span>
             <h3 className="font-mono text-3xl font-extrabold text-rose-450 tracking-tight leading-none mb-2">
               {formatCurrency(pendingTotalDebt)}
             </h3>
           </div>
           <div className={`text-[11px] font-bold uppercase tracking-wider mt-4 ${theme === 'light' ? 'text-slate-500' : 'text-slate-500'}`}>
-            Comprometido do mês: {formatCurrency(totalSpentInMonth)}
+            {t('comprometidoDoMes', 'Comprometido do mês:')} {formatCurrency(totalSpentInMonth)}
           </div>
         </motion.div>
       </div>
@@ -1926,13 +1926,13 @@ function MainApp() {
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <span className={`text-[9px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>Sobra Estimada de Caixa</span>
+            <span className={`text-[9px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>{t('sobraEstimadaCaixa', 'Sobra Estimada de Caixa')}</span>
             <h3 className={`font-mono text-2xl font-black ${theme === 'light' ? 'text-emerald-700' : 'text-white'} tracking-tight leading-none`}>
               {formatCurrency(leftoverCash)}
             </h3>
           </div>
           <div className={`text-[10px] ${theme === 'light' ? 'text-emerald-650' : 'text-emerald-400/80'} font-extrabold uppercase tracking-wider`}>
-            Do total de {formatCurrency(totalInflowsSum)}
+            {t('doTotalDe', 'Do total de')} {formatCurrency(totalInflowsSum)}
           </div>
         </motion.div>
 
@@ -5068,8 +5068,8 @@ function MainApp() {
             title="Novo Gasto"
           >
             <Plus className="w-5 h-5 shrink-0 text-white" />
-            <span className="hidden md:inline font-bold">Novo Lançamento</span>
-            <span className="md:hidden font-bold">Novo</span>
+            <span className="hidden md:inline font-bold">{t('novoLancamento', 'Novo Lançamento')}</span>
+            <span className="md:hidden font-bold">{t('novo', 'Novo')}</span>
           </motion.button>
         )}
       </AnimatePresence>
@@ -5086,13 +5086,13 @@ function MainApp() {
             whileTap={{ scale: 0.95 }}
             onClick={() => setIsRecentItemsOpen(true)}
             className="fixed bottom-[148px] lg:bottom-6 right-4 md:right-6 lg:right-[215px] z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-4.5 py-3 rounded-full flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30 transition-all font-black text-xs uppercase tracking-wider border-none"
-            title="Últimos Lançamentos"
+            title={t('ultimosLancamentos', 'Últimos Lançamentos')}
             style={{
               boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.45)"
             }}
           >
             <Clock className="w-4.5 h-4.5 shrink-0 text-white" />
-            <span className="font-extrabold text-[10.5px] tracking-wider">Últimos lançados</span>
+            <span className="font-extrabold text-[10.5px] tracking-wider">{t('ultimosLancados', 'Últimos lançados')}</span>
           </motion.button>
         )}
       </AnimatePresence>
@@ -5127,12 +5127,12 @@ function MainApp() {
                   </div>
                   <div>
                     <h3 className="font-display font-black text-base md:text-lg tracking-tight leading-none">
-                      Últimos Lançamentos 🕒
+                      {t('ultimosLancamentos', 'Últimos Lançamentos')} 🕒
                     </h3>
                     <p className={`text-[10.5px] font-bold uppercase tracking-wider mt-1.5 ${
                       theme === 'light' ? 'text-slate-500' : 'text-slate-400'
                     }`}>
-                      Itens adicionados recentemente
+                      {t('itensAdicionadosRecentemente', 'Itens adicionados recentemente')}
                     </p>
                   </div>
                 </div>

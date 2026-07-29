@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Transaction, Category } from '../types';
 import { useLanguage } from '../utils/i18n';
-import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles } from 'lucide-react';
+import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const EMOJI_OPTIONS = [
@@ -47,6 +47,7 @@ interface TransactionFormModalProps {
   initialData?: Transaction | null;
   categoriesList: Category[];
   onCreateCategory: (icon: string, label: string) => void;
+  onDeleteCategory?: (category: Category) => void;
   defaultType?: 'fixos' | 'variaveis' | 'parcelas';
 }
 
@@ -57,6 +58,7 @@ export default function TransactionFormModal({
   initialData,
   categoriesList,
   onCreateCategory,
+  onDeleteCategory,
   defaultType = 'fixos'
 }: TransactionFormModalProps) {
   const { t, formatCurrency } = useLanguage();
@@ -75,6 +77,44 @@ export default function TransactionFormModal({
   const [showAddCustomCat, setShowAddCustomCat] = useState<boolean>(false);
   const [customCatIcon, setCustomCatIcon] = useState<string>('🏷️');
   const [customCatName, setCustomCatName] = useState<string>('');
+
+  // Long-press deletion state
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressRef = useRef<boolean>(false);
+
+  const handlePressStart = (item: Category) => {
+    isLongPressRef.current = false;
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressRef.current = true;
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(60); } catch (e) {}
+      }
+      setCategoryToDelete(item);
+    }, 500);
+  };
+
+  const handlePressEnd = (item: Category) => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (!isLongPressRef.current) {
+      setCat(item.value);
+      setShowCatDropdown(false);
+    }
+    setTimeout(() => {
+      isLongPressRef.current = false;
+    }, 120);
+  };
+
+  const handlePressCancel = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
 
   const justOpenedRef = useRef<boolean>(true);
 
@@ -370,21 +410,43 @@ export default function TransactionFormModal({
                   animate={{ opacity: 1, y: 0 }}
                   className="absolute left-0 right-0 mt-2 p-4 rounded-2xl bg-slate-900/95 border border-white/10 shadow-xl z-20"
                 >
-                  <div className="grid grid-cols-3 gap-2 max-h-[160px] overflow-y-auto pr-1">
+                  <div className="flex items-center justify-between mb-2 px-1 text-[9px] font-semibold text-slate-400">
+                    <span>💡 Clique p/ escolher</span>
+                    <span className="text-slate-500">Pressione & segure p/ apagar</span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 max-h-[170px] overflow-y-auto pr-1">
                     {categoriesList.map((item) => (
                       <div
                         key={item.value}
-                        onClick={() => {
-                          setCat(item.value);
-                          setShowCatDropdown(false);
-                        }}
-                        className={`p-2 rounded-xl text-center cursor-pointer transition-colors border ${
+                        onMouseDown={() => handlePressStart(item)}
+                        onMouseUp={() => handlePressEnd(item)}
+                        onMouseLeave={handlePressCancel}
+                        onTouchStart={() => handlePressStart(item)}
+                        onTouchEnd={() => handlePressEnd(item)}
+                        onTouchMove={handlePressCancel}
+                        className={`group relative p-2.5 rounded-xl text-center cursor-pointer transition-all border select-none ${
                           cat === item.value 
-                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' 
-                            : 'bg-slate-950/40 border-transparent text-slate-300 hover:bg-slate-950/80'
+                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400 font-bold' 
+                            : 'bg-slate-950/40 border-transparent text-slate-300 hover:bg-slate-950/80 hover:border-white/10'
                         }`}
                       >
-                        <span className="block text-lg mb-1">{item.icon}</span>
+                        {onDeleteCategory && (
+                          <button
+                            type="button"
+                            title="Excluir Categoria"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              handlePressCancel();
+                              setCategoryToDelete(item);
+                            }}
+                            className="absolute top-1 right-1 p-1 rounded-md bg-slate-900/90 hover:bg-rose-600 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                        <span className="block text-xl mb-1">{item.icon}</span>
                         <span className="text-[10px] uppercase font-bold tracking-wider truncate block">
                           {item.label}
                         </span>
@@ -550,6 +612,55 @@ export default function TransactionFormModal({
           </div>
         </motion.div>
       </div>
+
+      {/* Confirmation Modal for Category Deletion */}
+      {categoryToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs select-none">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-[#0f1524] border border-white/10 p-6 rounded-3xl max-w-xs w-full shadow-2xl space-y-4 text-center relative"
+          >
+            <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto text-3xl shadow-inner">
+              {categoryToDelete.icon || '🗑️'}
+            </div>
+            <div>
+              <h4 className="text-sm font-extrabold text-white uppercase tracking-wider">
+                Excluir Categoria?
+              </h4>
+              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                Tem certeza que deseja apagar a categoria <strong className="text-white">"{categoryToDelete.label}"</strong>?
+              </p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setCategoryToDelete(null)}
+                className="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteCategory) {
+                    onDeleteCategory(categoryToDelete);
+                  }
+                  if (cat === categoryToDelete.value) {
+                    setCat('outros');
+                  }
+                  setCategoryToDelete(null);
+                }}
+                className="flex-1 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Sim, Apagar
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </AnimatePresence>
   );
 }

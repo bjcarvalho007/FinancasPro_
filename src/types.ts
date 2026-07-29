@@ -75,6 +75,7 @@ export interface Setting {
   alertEmail?: string;
   alertPhone?: string;
   alertThresholdDays?: number;
+  hiddenCategories?: string[];
 }
 
 export interface AppNotification {

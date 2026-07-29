@@ -1217,6 +1217,24 @@ function MainApp() {
     }
   };
 
+  const handleDeleteCategory = async (category: Category) => {
+    if (!user) return;
+    try {
+      if (category.id) {
+        await deleteDoc(doc(db, 'categories', category.id));
+      } else {
+        const currentHidden = settings?.hiddenCategories || [];
+        if (!currentHidden.includes(category.value)) {
+          const updatedHidden = [...currentHidden, category.value];
+          await setDoc(doc(db, 'settings', user.uid), { hiddenCategories: updatedHidden }, { merge: true });
+        }
+      }
+      triggerToast(`Categoria "${category.label}" excluída com sucesso!`, 'success');
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `categories/${category.id || category.value}`);
+    }
+  };
+
   // Goals operations bound: ADD/PROGRESS/DELETE
   const handleCreateGoal = async (
     title: string,
@@ -1500,7 +1518,11 @@ function MainApp() {
   };
 
   // Math ledger computation definitions
-  const activeMonthCategoryList = [...defaultCategories, ...categories];
+  const activeMonthCategoryList = useMemo(() => {
+    const hidden = settings?.hiddenCategories || [];
+    const all = [...defaultCategories, ...categories];
+    return all.filter(c => !hidden.includes(c.value));
+  }, [categories, settings?.hiddenCategories]);
   const activeMonthTransactions = useMemo(() => {
     // 1. Get real transactions for this month
     const realTransactionsThisMonth = transactions.filter(t => t.monthKey === currentMonthKey);
@@ -3956,6 +3978,7 @@ function MainApp() {
         initialData={editingTransaction}
         categoriesList={activeMonthCategoryList}
         onCreateCategory={handleCreateCustomCategory}
+        onDeleteCategory={handleDeleteCategory}
         defaultType={(activeTab === 'fixos' || activeTab === 'variaveis' || activeTab === 'parcelas') ? activeTab : 'fixos'}
       />
 

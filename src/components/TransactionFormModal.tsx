@@ -160,7 +160,48 @@ export default function TransactionFormModal({
     pressStartPosRef.current = null;
   };
 
-  const handleReceiptScan = (e: ChangeEvent<HTMLInputElement>) => {
+  const compressImageFile = (file: File, maxDimension = 1200, quality = 0.8): Promise<{ base64: string; mimeType: string }> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Não foi possível processar a imagem no navegador.'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const mimeType = 'image/jpeg';
+        const base64 = canvas.toDataURL(mimeType, quality);
+        resolve({ base64, mimeType });
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Falha ao carregar a imagem capturada.'));
+      };
+      img.src = url;
+    });
+  };
+
+  const handleReceiptScan = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -168,55 +209,53 @@ export default function TransactionFormModal({
     setError(null);
     setScanSuccessNote(null);
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64Data = reader.result as string;
-      try {
-        const res = await fetch('/api/gemini/scan-receipt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: base64Data,
-            mimeType: file.type || 'image/jpeg'
-          })
-        });
+    try {
+      // Compress full-res camera image to max 1200px to prevent mobile browser out-of-memory crashes
+      const { base64, mimeType } = await compressImageFile(file, 1200, 0.8);
 
-        const json = await res.json();
-        if (!res.ok || !json.success) {
-          throw new Error(json.error || 'Erro ao processar a imagem.');
-        }
+      const res = await fetch('/api/gemini/scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64,
+          mimeType: mimeType
+        })
+      });
 
-        const data = json.data;
-        if (data.name) setName(data.name);
-        if (data.amount && !isNaN(data.amount)) setAmountStr(formatMoney(Number(data.amount)));
-        if (data.type && ['fixos', 'variaveis', 'parcelas'].includes(data.type)) {
-          setType(data.type as any);
-        } else {
-          setType('variaveis');
-        }
-        if (data.due) setDue(data.due);
-        if (data.establishment) setEstablishment(data.establishment);
-        if (data.cat) {
-          const matched = categoriesList.find(c => 
-            c.value === data.cat || 
-            c.value.toLowerCase().includes(data.cat.toLowerCase()) ||
-            c.label.toLowerCase().includes(data.cat.toLowerCase())
-          );
-          if (matched) setCat(matched.value);
-        }
-
-        setScanSuccessNote(data.summary || 'Informações do comprovante extraídas com sucesso! Os campos do formulário foram preenchidos.');
-      } catch (err: any) {
-        console.error('Falha ao escanear comprovante:', err);
-        setError('Erro ao ler a foto do comprovante: ' + (err.message || 'Tente tirar outra foto mais nítida.'));
-      } finally {
-        setIsScanning(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Erro ao processar a imagem.');
       }
-    };
-    reader.readAsDataURL(file);
+
+      const data = json.data;
+      if (data.name) setName(data.name);
+      if (data.amount && !isNaN(data.amount)) setAmountStr(formatMoney(Number(data.amount)));
+      if (data.type && ['fixos', 'variaveis', 'parcelas'].includes(data.type)) {
+        setType(data.type as any);
+      } else {
+        setType('variaveis');
+      }
+      if (data.due) setDue(data.due);
+      if (data.establishment) setEstablishment(data.establishment);
+      if (data.cat) {
+        const matched = categoriesList.find(c => 
+          c.value === data.cat || 
+          c.value.toLowerCase().includes(data.cat.toLowerCase()) ||
+          c.label.toLowerCase().includes(data.cat.toLowerCase())
+        );
+        if (matched) setCat(matched.value);
+      }
+
+      setScanSuccessNote(data.summary || 'Informações do comprovante extraídas com sucesso! Os campos do formulário foram preenchidos.');
+    } catch (err: any) {
+      console.error('Falha ao escanear comprovante:', err);
+      setError('Erro ao ler a foto do comprovante: ' + (err.message || 'Tente tirar outra foto mais nítida.'));
+    } finally {
+      setIsScanning(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   const justOpenedRef = useRef<boolean>(true);

@@ -117,10 +117,12 @@ app.use((req, res, next) => {
 
 // Enable raw body tracking on express.json to support secure Stripe signature validation
 app.use(express.json({
+  limit: "25mb",
   verify: (req: any, res, buf) => {
     req.rawBody = buf;
   }
 }));
+app.use(express.urlencoded({ limit: "25mb", extended: true }));
 
 // Generate dynamic VAPID keys on boot if not configured, ensuring immediate zero-config functionality
 let vapidPublic = (process.env.VAPID_PUBLIC_KEY || "").trim();

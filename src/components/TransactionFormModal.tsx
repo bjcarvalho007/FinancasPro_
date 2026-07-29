@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, MouseEvent, TouchEvent, ChangeEvent } from 'react';
+import { useState, useEffect, useRef, MouseEvent, TouchEvent } from 'react';
 import { Transaction, Category } from '../types';
 import { useLanguage } from '../utils/i18n';
-import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2, ArrowLeft, Search, Camera, Image, Loader2 } from 'lucide-react';
+import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2, ArrowLeft, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const EMOJI_OPTIONS = [
@@ -72,12 +72,6 @@ export default function TransactionFormModal({
   const [installmentsCount, setInstallmentsCount] = useState<string>('');
   const [installmentAmountStr, setInstallmentAmountStr] = useState<string>('');
   
-  // AI Receipt Camera Scanner state
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-  const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [scanSuccessNote, setScanSuccessNote] = useState<string | null>(null);
-
   // Custom interactive sub-state for creating categories on the flow
   const [showCatDropdown, setShowCatDropdown] = useState<boolean>(false);
   const [showAddCustomCat, setShowAddCustomCat] = useState<boolean>(false);
@@ -161,152 +155,11 @@ export default function TransactionFormModal({
     pressStartPosRef.current = null;
   };
 
-  const compressImageFile = (file: File, maxDimension = 1200, quality = 0.8): Promise<{ base64: string; mimeType: string }> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = Math.round((height * maxDimension) / width);
-            width = maxDimension;
-          } else {
-            width = Math.round((width * maxDimension) / height);
-            height = maxDimension;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('Não foi possível processar a imagem no navegador.'));
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, width, height);
-        const mimeType = 'image/jpeg';
-        const base64 = canvas.toDataURL(mimeType, quality);
-        resolve({ base64, mimeType });
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error('Falha ao carregar a imagem capturada.'));
-      };
-      img.src = url;
-    });
-  };
-
-  const handleReceiptScan = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsScanning(true);
-    setError(null);
-    setScanSuccessNote(null);
-
-    try {
-      let base64 = '';
-      let mimeType = file.type || 'image/jpeg';
-
-      try {
-        const compressed = await compressImageFile(file, 1200, 0.8);
-        base64 = compressed.base64;
-        mimeType = compressed.mimeType;
-      } catch (e) {
-        // Fallback: Read file directly if canvas compression fails
-        base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-      }
-
-      const res = await fetch('/api/gemini/scan-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: base64,
-          mimeType: mimeType
-        })
-      });
-
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Erro ao processar a imagem do comprovante.');
-      }
-
-      const data = json.data || {};
-
-      // Smart extraction with fallback: priority on Establishment/Name and Amount
-      const extractedName = data.name || data.establishment || 'Gasto com Comprovante';
-      setName(extractedName);
-
-      if (data.establishment || data.name) {
-        setEstablishment(data.establishment || data.name || '');
-      }
-
-      if (data.amount !== undefined && data.amount !== null && !isNaN(Number(data.amount))) {
-        setAmountStr(formatMoney(Number(data.amount)));
-      }
-
-      // Type fallback
-      if (data.type && ['fixos', 'variaveis', 'parcelas'].includes(data.type)) {
-        setType(data.type as any);
-      } else {
-        setType('variaveis');
-      }
-
-      // Date fallback
-      if (data.due) {
-        setDue(data.due);
-      }
-
-      // Category matching or default to 'outros'
-      if (data.cat) {
-        const matched = categoriesList.find(c => 
-          c.value === data.cat || 
-          c.value.toLowerCase() === data.cat.toLowerCase() ||
-          c.label.toLowerCase().includes(data.cat.toLowerCase())
-        );
-        if (matched) {
-          setCat(matched.value);
-        } else {
-          setCat('outros');
-        }
-      } else {
-        setCat('outros');
-      }
-
-      setScanSuccessNote(data.summary || `Preenchido: R$ ${data.amount || ''} em ${extractedName}`);
-    } catch (err: any) {
-      console.error('Falha ao escanear comprovante:', err);
-      const errMsg = err.message || '';
-      if (errMsg.includes('GEMINI_API_KEY')) {
-        setError(errMsg);
-      } else {
-        setError('Erro ao ler a foto do comprovante: ' + (errMsg || 'Tente tirar outra foto mais nítida.'));
-      }
-    } finally {
-      setIsScanning(false);
-      if (cameraInputRef.current) cameraInputRef.current.value = '';
-      if (galleryInputRef.current) galleryInputRef.current.value = '';
-    }
-  };
-
   const justOpenedRef = useRef<boolean>(true);
 
   useEffect(() => {
     if (isOpen) {
       setError(null);
-      setScanSuccessNote(null);
-      setIsScanning(false);
       justOpenedRef.current = true;
       if (initialData) {
         setName(initialData.name);
@@ -452,7 +305,7 @@ export default function TransactionFormModal({
           className="bg-[#0f1524] border border-white/10 w-full max-w-lg rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-visible max-h-[90vh] overflow-y-auto z-10"
         >
           {/* Header */}
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-6">
             <h3 className="font-display font-extrabold text-lg text-white">
               {initialData ? `✏️ ${t('editarTransacao', 'Editar Lançamento')}` : `💸 ${t('novaTransacao', 'Novo Lançamento')}`}
             </h3>
@@ -463,111 +316,6 @@ export default function TransactionFormModal({
               <X className="w-4 h-4" />
             </button>
           </div>
-
-          {/* Quick AI Camera / Gallery Receipt Scanner */}
-          {!initialData && (
-            <div className="mb-5 space-y-2">
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={handleReceiptScan}
-              />
-              <input
-                ref={galleryInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleReceiptScan}
-              />
-
-              <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
-                <span className="flex items-center gap-1 text-indigo-400">
-                  <Sparkles className="w-3.5 h-3.5" /> Leitura Automática por IA (Gemini)
-                </span>
-                <span className="text-[9px] text-slate-500 font-medium">Preenche sem salvar foto</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                {/* Option 1: Direct Camera Snap */}
-                <button
-                  type="button"
-                  onClick={() => cameraInputRef.current?.click()}
-                  disabled={isScanning}
-                  className="relative group overflow-hidden rounded-2xl p-[1px] bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 transition-all shadow-md shadow-indigo-500/10 active:scale-[0.98] disabled:opacity-60 cursor-pointer"
-                >
-                  <div className="bg-[#0b0f19] hover:bg-[#121827] p-3 rounded-[15px] flex items-center gap-2.5 transition-colors h-full">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform shrink-0">
-                      {isScanning ? (
-                        <Loader2 className="w-4.5 h-4.5 animate-spin text-indigo-400" />
-                      ) : (
-                        <Camera className="w-4.5 h-4.5 text-indigo-400" />
-                      )}
-                    </div>
-                    <div className="text-left min-w-0 flex-1">
-                      <span className="text-xs font-extrabold text-white block truncate">
-                        {isScanning ? "Lendo..." : "📷 Tirar Foto"}
-                      </span>
-                      <span className="text-[10px] text-slate-400 block truncate">
-                        Abrir câmera
-                      </span>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Option 2: Gallery Picker */}
-                <button
-                  type="button"
-                  onClick={() => galleryInputRef.current?.click()}
-                  disabled={isScanning}
-                  className="relative group overflow-hidden rounded-2xl p-[1px] bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 hover:from-purple-400 hover:to-indigo-400 transition-all shadow-md shadow-purple-500/10 active:scale-[0.98] disabled:opacity-60 cursor-pointer"
-                >
-                  <div className="bg-[#0b0f19] hover:bg-[#121827] p-3 rounded-[15px] flex items-center gap-2.5 transition-colors h-full">
-                    <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-transform shrink-0">
-                      {isScanning ? (
-                        <Loader2 className="w-4.5 h-4.5 animate-spin text-purple-400" />
-                      ) : (
-                        <Image className="w-4.5 h-4.5 text-purple-400" />
-                      )}
-                    </div>
-                    <div className="text-left min-w-0 flex-1">
-                      <span className="text-xs font-extrabold text-white block truncate">
-                        {isScanning ? "Lendo..." : "🖼️ Galeria"}
-                      </span>
-                      <span className="text-[10px] text-slate-400 block truncate">
-                        Escolher da galeria
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {scanSuccessNote && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-3.5 mb-5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs flex items-start justify-between gap-2.5"
-            >
-              <div className="flex items-start gap-2.5">
-                <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold block text-emerald-250 mb-0.5">✨ Dados extraídos com sucesso!</span>
-                  <span className="opacity-90">{scanSuccessNote}</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setScanSuccessNote(null)}
-                className="text-emerald-400/60 hover:text-emerald-300 text-xs font-bold p-1"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </motion.div>
-          )}
 
           {error && (
             <motion.div

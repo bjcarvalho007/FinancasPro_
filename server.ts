@@ -6,7 +6,6 @@ import Stripe from "stripe";
 import admin from "firebase-admin";
 import fs from "fs";
 import crypto from "crypto";
-import { GoogleGenAI, Type } from "@google/genai";
 
 // Load environment variables in Node
 import dotenv from "dotenv";
@@ -117,12 +116,10 @@ app.use((req, res, next) => {
 
 // Enable raw body tracking on express.json to support secure Stripe signature validation
 app.use(express.json({
-  limit: "25mb",
   verify: (req: any, res, buf) => {
     req.rawBody = buf;
   }
 }));
-app.use(express.urlencoded({ limit: "25mb", extended: true }));
 
 // Generate dynamic VAPID keys on boot if not configured, ensuring immediate zero-config functionality
 let vapidPublic = (process.env.VAPID_PUBLIC_KEY || "").trim();
@@ -296,97 +293,6 @@ if (!process.env.VERCEL) {
 // API route 1: Healthcheck
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-// Gemini Vision Receipt Scanning endpoint (does NOT persist image, returns parsed fields)
-app.post("/api/gemini/scan-receipt", async (req, res) => {
-  try {
-    const { imageBase64, mimeType } = req.body;
-    if (!imageBase64) {
-      return res.status(400).json({ error: "Imagem não fornecida." });
-    }
-
-    const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY || process.env.GEMINI_KEY || process.env.VITE_GEMINI_API_KEY || "";
-    console.log("[Scan-Receipt] Available env keys:", Object.keys(process.env).filter(k => k.includes("GEMINI") || k.includes("API") || k.includes("KEY") || k.includes("GOOGLE")));
-    console.log("[Scan-Receipt] rawKey length:", rawKey.length, "val:", rawKey === "MY_GEMINI_API_KEY" ? "MY_GEMINI_API_KEY" : rawKey ? "PRESENT" : "EMPTY");
-    
-    const apiKey = rawKey.trim();
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-      return res.status(400).json({ 
-        error: "A chave da API Gemini (GEMINI_API_KEY) ainda não foi configurada. Para ativar a leitura automática por foto/galeria, configure a GEMINI_API_KEY no menu de Configurações / Segredos (Secrets) do projeto." 
-      });
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-
-    let cleanBase64 = imageBase64;
-    let actualMime = mimeType || "image/jpeg";
-    if (imageBase64.includes(";base64,")) {
-      const parts = imageBase64.split(";base64,");
-      const mimeMatch = parts[0].match(/data:(.*?);/);
-      if (mimeMatch) {
-        actualMime = mimeMatch[1];
-      }
-      cleanBase64 = parts[1];
-    }
-
-    const todayDate = new Date().toISOString().substring(0, 10);
-    const prompt = `Você é um leitor ultra-inteligente e flexível de comprovantes, notas fiscais, recibos, fotos de telas de maquininhas e extratos.
-Sua missão prioritária é identificar o VALOR TOTAL (amount) e o ESTABELECIMENTO / NOME DO LOCAL (name/establishment).
-
-Regras de leitura:
-1. 'name': Nome da loja, empresa, prestador ou local (ex: "Drogaria Raia", "Padaria Real", "Uber", "Posto Ipiranga"). Se não houver nome da loja visível, descreva resumidamente o gasto.
-2. 'amount': Valor total da compra/pagamento em formato numérico decimal (ex: 45.90, 12.50).
-3. 'establishment': Nome do estabelecimento comercial (igual ou similar a 'name').
-4. 'type': Use 'fixos' para contas de consumo/mensalidades, 'parcelas' se houver parcelamento explícito, e 'variaveis' para compras normais e do dia a dia.
-5. 'cat': Categoria estimada: 'alimentacao', 'mercado', 'moradia', 'transporte', 'lazer', 'saude', 'educacao', 'servicos', 'salario', 'freelance', 'investimentos', 'outros'. Se a categoria não estiver 100% clara, retorne 'outros'.
-6. 'due': Data da compra em formato YYYY-MM-DD. Se a data estiver ausente ou ilegível, retorne '${todayDate}'.
-7. 'summary': Frase de confirmação curta em português (ex: "R$ 45,90 em Drogaria Raia").`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: actualMime,
-              data: cleanBase64
-            }
-          },
-          {
-            text: prompt
-          }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING },
-            amount: { type: Type.NUMBER },
-            type: { type: Type.STRING },
-            cat: { type: Type.STRING },
-            due: { type: Type.STRING },
-            establishment: { type: Type.STRING },
-            summary: { type: Type.STRING }
-          },
-          required: ["name", "amount"]
-        }
-      }
-    });
-
-    const text = response.text;
-    if (!text) {
-      throw new Error("Não foi possível ler o texto da imagem.");
-    }
-
-    const data = JSON.parse(text);
-    res.json({ success: true, data });
-  } catch (err: any) {
-    console.error("❌ Erro ao escanear recibo no Gemini:", err);
-    res.status(500).json({ error: err.message || "Falha ao processar a imagem do comprovante." });
-  }
 });
 
 // Temporary debug-users endpoint to inspect Firestore state

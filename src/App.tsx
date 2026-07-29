@@ -40,6 +40,7 @@ import {
   Calendar, 
   Sparkles, 
   CheckCircle, 
+  CheckCircle2,
   AlertCircle, 
   Bell, 
   FolderLock,
@@ -2185,7 +2186,7 @@ function MainApp() {
                   Lote Promocional: Apenas 8 vagas totais!
                 </h4>
                 <p className="text-[10.5px] text-amber-450 leading-relaxed font-semibold">
-                  Restam apenas 5 vagas promocionais! Garanta já seu desconto definitivo.
+                  Restam apenas 2 vagas promocionais! Garanta já seu desconto definitivo.
                 </p>
               </div>
             </div>
@@ -2281,59 +2282,77 @@ function MainApp() {
             <motion.div
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
-              className="bg-[#0f1524] border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative z-50 flex flex-col space-y-4 text-left"
+              className="bg-[#0f1524] border border-amber-500/20 w-full max-w-sm rounded-3xl p-5 shadow-2xl relative z-50 flex flex-col space-y-3.5 text-left"
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[9px] text-amber-450 font-extrabold uppercase tracking-widest bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse">
-                    <Sparkles className="w-3 h-3 text-amber-450" /> Vagas Limitadas
+                  <span className="text-[9px] text-amber-400 font-extrabold uppercase tracking-widest bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 animate-pulse">
+                    <Sparkles className="w-3 h-3 text-amber-400" /> RESTAM APENAS 2 VAGAS DE 8
                   </span>
-                  <h4 className="font-display font-black text-base text-white tracking-tight leading-snug mt-1.5">
+                  <h4 className="font-display font-black text-base text-white tracking-tight leading-snug mt-2">
                     Oferta de Lançamento Limitada
                   </h4>
                 </div>
                 <button
                   onClick={() => setShowPaymentInfoModal(false)}
-                  className="p-1 px-2 rounded-lg bg-slate-900 border border-white/10 text-slate-450 hover:text-white text-xs cursor-pointer"
+                  className="p-1 px-2 rounded-lg bg-slate-900 border border-white/10 text-slate-400 hover:text-white text-xs cursor-pointer transition-colors"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 space-y-3.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-450 shrink-0">
+              <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/15 space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
                     <Zap className="w-4 h-4" />
                   </div>
                   <div>
                     <h5 className="text-[10.5px] font-black uppercase text-amber-400 tracking-wider leading-none">
                       Lote Promocional de Estreia
                     </h5>
-                    <p className="text-[9.5px] text-amber-300 font-semibold mt-1">
-                      Apenas 8 assinaturas promocionais disponíveis! Restam apenas 5 vagas promocionais com valor especial de R$ 11,99 mensal. Após o preenchimento destas vagas, novas assinaturas serão realizadas pelo valor regular do plano.
+                    <p className="text-[10px] text-slate-300 font-medium leading-tight mt-1">
+                      Garantia de 58% de desconto exclusivo para os primeiros assinantes.
                     </p>
                   </div>
                 </div>
 
-                <div className="space-y-0.5 bg-slate-950/50 p-2.5 rounded-xl border border-white/5 text-center">
-                  <p className="text-[9.5px] text-slate-500 font-black uppercase tracking-wider">Você garante o valor de:</p>
-                  <div className="flex items-center justify-center gap-1.5 mt-0.5">
-                    <span className="text-[11px] text-slate-450 line-through font-bold">R$ 28,99</span>
-                    <span className="text-lg font-black text-emerald-400">R$ 11,99</span>
-                    <span className="text-[9.5px] text-slate-400 font-semibold">/ mês</span>
+                <div className="space-y-1 bg-slate-950/70 p-3 rounded-xl border border-amber-500/20 text-center relative overflow-hidden">
+                  <div className="absolute top-0 right-0 bg-emerald-500/20 text-emerald-400 text-[8.5px] font-extrabold px-2 py-0.5 rounded-bl-lg border-b border-l border-emerald-500/30 uppercase tracking-wider">
+                    Desconto Vitalício
+                  </div>
+                  <p className="text-[9.5px] text-slate-400 font-bold uppercase tracking-wider">Você garante o valor especial de:</p>
+                  <div className="flex items-center justify-center gap-2 mt-0.5">
+                    <span className="text-xs text-slate-450 line-through font-bold">R$ 28,99</span>
+                    <span className="text-xl font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">R$ 11,99</span>
+                    <span className="text-[10px] text-slate-300 font-semibold">/ mês</span>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-slate-300 leading-normal font-light">
-                  O lote promocional possui apenas <strong className="font-bold text-white">8 vagas</strong> e restam apenas <strong className="font-bold text-yellow-400">5 vagas promocionais</strong>. Garanta seu valor especial de <strong className="font-bold text-emerald-400">R$ 11,99 mensal</strong> antes que esgote!
-                </p>
+                <div className="space-y-2 pt-0.5">
+                  <div className="flex items-start gap-2 text-[10.5px] text-slate-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span><strong className="text-white font-bold">Preço congelado para sempre:</strong> Seu valor de R$ 11,99/mês não aumenta nas próximas renovações.</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-[10.5px] text-slate-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span><strong className="text-white font-bold">Acesso imediato e completo:</strong> Liberado na hora no seu e-mail após a confirmação.</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-[10.5px] text-slate-200">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                    <span><strong className="text-white font-bold">Sem fidelidade:</strong> Cancele a qualquer momento com apenas 1 clique.</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-[10px] text-amber-300/90 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 mt-1 leading-tight">
+                    <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                    <span><strong>Atenção:</strong> Restam apenas 2 vagas deste lote. Após o preenchimento, o plano volta para R$ 28,99/mês.</span>
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-2.5 text-center text-xs">
                 <button
                   type="button"
                   onClick={() => setShowPaymentInfoModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/10 text-slate-450 font-bold uppercase tracking-wider transition-colors cursor-pointer text-[10px]"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/10 text-slate-400 font-bold uppercase tracking-wider transition-colors cursor-pointer text-[10px]"
                 >
                   Voltar
                 </button>
@@ -2341,7 +2360,7 @@ function MainApp() {
                   type="button"
                   disabled={checkoutLoading}
                   onClick={handleDynamicMercadoPagoCheckout}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 px-4 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-1 cursor-pointer border-none text-[10px] disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="flex-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black py-2.5 px-3 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none text-[10px] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {checkoutLoading ? "Carregando..." : "Ir para o Pagamento"}
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -4378,52 +4397,70 @@ function MainApp() {
           <motion.div
             initial={{ scale: 0.95, y: 20 }}
             animate={{ scale: 1, y: 0 }}
-            className="bg-[#0f1524] border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative z-50 flex flex-col space-y-4 text-left"
+            className="bg-[#0f1524] border border-amber-500/20 w-full max-w-sm rounded-3xl p-5 shadow-2xl relative z-50 flex flex-col space-y-3.5 text-left"
           >
             <div className="flex items-start justify-between">
               <div>
-                <span className="text-[9px] text-amber-450 font-extrabold uppercase tracking-widest bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 animate-pulse">
-                  <Sparkles className="w-3 h-3 text-amber-450" /> Vagas Limitadas
+                <span className="text-[9px] text-amber-400 font-extrabold uppercase tracking-widest bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 animate-pulse">
+                  <Sparkles className="w-3 h-3 text-amber-400" /> RESTAM APENAS 2 VAGAS DE 8
                 </span>
-                <h4 className="font-display font-black text-base text-white tracking-tight leading-snug mt-1.5">
+                <h4 className="font-display font-black text-base text-white tracking-tight leading-snug mt-2">
                   Oferta de Lançamento Limitada
                 </h4>
               </div>
               <button
                 onClick={() => setShowPaymentInfoModal(false)}
-                className="p-1 px-2 rounded-lg bg-slate-900 border border-white/10 text-slate-450 hover:text-white text-xs cursor-pointer"
+                className="p-1 px-2 rounded-lg bg-slate-900 border border-white/10 text-slate-400 hover:text-white text-xs cursor-pointer transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 space-y-3.5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-450 shrink-0">
+            <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/15 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
                   <Zap className="w-4 h-4" />
                 </div>
                 <div>
                   <h5 className="text-[10.5px] font-black uppercase text-amber-400 tracking-wider leading-none">
                     Lote Promocional de Estreia
                   </h5>
-                  <p className="text-[9.5px] text-amber-300 font-semibold mt-1">
-                    Apenas 8 assinaturas promocionais disponíveis! Restam apenas 5 vagas promocionais com valor especial de R$ 11,99 mensal. Após o preenchimento destas vagas, novas assinaturas serão realizadas pelo valor regular do plano.
+                  <p className="text-[10px] text-slate-300 font-medium leading-tight mt-1">
+                    Garantia de 58% de desconto exclusivo para os primeiros assinantes.
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-0.5 bg-slate-950/50 p-2.5 rounded-xl border border-white/5 text-center">
-                <p className="text-[9.5px] text-slate-500 font-black uppercase tracking-wider">Você garante o valor de:</p>
-                <div className="flex items-center justify-center gap-1.5 mt-0.5">
-                  <span className="text-[11px] text-slate-450 line-through font-bold">R$ 28,99</span>
-                  <span className="text-lg font-black text-emerald-400">R$ 11,99</span>
-                  <span className="text-[9.5px] text-slate-400 font-semibold">/ mês</span>
+              <div className="space-y-1 bg-slate-950/70 p-3 rounded-xl border border-amber-500/20 text-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-emerald-500/20 text-emerald-400 text-[8.5px] font-extrabold px-2 py-0.5 rounded-bl-lg border-b border-l border-emerald-500/30 uppercase tracking-wider">
+                  Desconto Vitalício
+                </div>
+                <p className="text-[9.5px] text-slate-400 font-bold uppercase tracking-wider">Você garante o valor especial de:</p>
+                <div className="flex items-center justify-center gap-2 mt-0.5">
+                  <span className="text-xs text-slate-450 line-through font-bold">R$ 28,99</span>
+                  <span className="text-xl font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">R$ 11,99</span>
+                  <span className="text-[10px] text-slate-300 font-semibold">/ mês</span>
                 </div>
               </div>
 
-              <p className="text-[11px] text-slate-300 leading-normal font-light">
-                O lote promocional possui apenas <strong className="font-bold text-white">8 vagas</strong> e restam apenas <strong className="font-bold text-yellow-400">5 vagas promocionais</strong>. Garanta seu valor especial de <strong className="font-bold text-emerald-400">R$ 11,99 mensal</strong> antes que esgote!
-              </p>
+              <div className="space-y-2 pt-0.5">
+                <div className="flex items-start gap-2 text-[10.5px] text-slate-200">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                  <span><strong className="text-white font-bold">Preço congelado para sempre:</strong> Seu valor de R$ 11,99/mês não aumenta nas próximas renovações.</span>
+                </div>
+                <div className="flex items-start gap-2 text-[10.5px] text-slate-200">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                  <span><strong className="text-white font-bold">Acesso imediato e completo:</strong> Liberado na hora no seu e-mail após a confirmação.</span>
+                </div>
+                <div className="flex items-start gap-2 text-[10.5px] text-slate-200">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                  <span><strong className="text-white font-bold">Sem fidelidade:</strong> Cancele a qualquer momento com apenas 1 clique.</span>
+                </div>
+                <div className="flex items-start gap-2 text-[10px] text-amber-300/90 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 mt-1 leading-tight">
+                  <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                  <span><strong>Atenção:</strong> Restam apenas 2 vagas deste lote. Após o preenchimento, o plano volta para R$ 28,99/mês.</span>
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-2.5 text-center text-xs">
@@ -4438,7 +4475,7 @@ function MainApp() {
                 type="button"
                 disabled={checkoutLoading}
                 onClick={handleDynamicMercadoPagoCheckout}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 px-4 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/15 transition-all flex items-center justify-center gap-1 cursor-pointer border-none text-[10px] disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black py-2.5 px-3 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none text-[10px] disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {checkoutLoading ? "Carregando..." : "Ir para o Pagamento"}
                 <ArrowRight className="w-3.5 h-3.5" />

@@ -306,9 +306,9 @@ app.post("/api/gemini/scan-receipt", async (req, res) => {
       return res.status(400).json({ error: "Imagem não fornecida." });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: "Servidor sem chave GEMINI_API_KEY configurada em .env." });
+    const apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY || process.env.GEMINI_KEY || process.env.VITE_GEMINI_API_KEY || "").trim();
+    if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+      return res.status(400).json({ error: "Chave GEMINI_API_KEY não configurada. Por favor adicione a chave 'GEMINI_API_KEY' nas configurações/segredos para habilitar o escaneamento inteligente de comprovantes." });
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -325,16 +325,16 @@ app.post("/api/gemini/scan-receipt", async (req, res) => {
     }
 
     const todayDate = new Date().toISOString().substring(0, 10);
-    const prompt = `Você é um leitor ultra-inteligente e flexível de comprovantes, notas fiscais, recibos, extratos bancários e telas de maquininhas de cartão.
-Sua prioridade máxima é identificar o VALOR TOTAL (amount) e o ESTABELECIMENTO / NOME DO GASTO (name/establishment).
+    const prompt = `Você é um leitor ultra-inteligente e flexível de comprovantes, notas fiscais, recibos, fotos de telas de maquininhas e extratos.
+Sua missão prioritária é identificar o VALOR TOTAL (amount) e o ESTABELECIMENTO / NOME DO LOCAL (name/establishment).
 
-Instruções específicas de extração:
-1. 'name': Nome da loja, empresa, pessoa ou descrição do gasto (ex: "Drogaria Raia", "Uber", "Padaria Central"). Se não identificar a loja, coloque uma breve descrição do item ou "Gasto com Comprovante".
-2. 'amount': Valor numérico total pago (ex: 45.90). Se houver vários números, pegue o valor final pago.
-3. 'establishment': Nome do local ou comerciante. Se não tiver certeza, use o mesmo valor de 'name'.
-4. 'type': Se for fatura/aluguel/luz use 'fixos', se for parcelado use 'parcelas'. Para todo o resto, use 'variaveis'.
-5. 'cat': Categoria estimada dentre: 'alimentacao', 'mercado', 'moradia', 'transporte', 'lazer', 'saude', 'educacao', 'servicos', 'salario', 'freelance', 'investimentos', 'outros'. Se não houver clareza da categoria, coloque 'outros'.
-6. 'due': Data do comprovante (YYYY-MM-DD). Se não encontrar, retorne a data atual: ${todayDate}.
+Regras de leitura:
+1. 'name': Nome da loja, empresa, prestador ou local (ex: "Drogaria Raia", "Padaria Real", "Uber", "Posto Ipiranga"). Se não houver nome da loja visível, descreva resumidamente o gasto.
+2. 'amount': Valor total da compra/pagamento em formato numérico decimal (ex: 45.90, 12.50).
+3. 'establishment': Nome do estabelecimento comercial (igual ou similar a 'name').
+4. 'type': Use 'fixos' para contas de consumo/mensalidades, 'parcelas' se houver parcelamento explícito, e 'variaveis' para compras normais e do dia a dia.
+5. 'cat': Categoria estimada: 'alimentacao', 'mercado', 'moradia', 'transporte', 'lazer', 'saude', 'educacao', 'servicos', 'salario', 'freelance', 'investimentos', 'outros'. Se a categoria não estiver 100% clara, retorne 'outros'.
+6. 'due': Data da compra em formato YYYY-MM-DD. Se a data estiver ausente ou ilegível, retorne '${todayDate}'.
 7. 'summary': Frase de confirmação curta em português (ex: "R$ 45,90 em Drogaria Raia").`;
 
     const response = await ai.models.generateContent({
@@ -365,7 +365,7 @@ Instruções específicas de extração:
             establishment: { type: Type.STRING },
             summary: { type: Type.STRING }
           },
-          required: ["name", "amount", "type", "cat", "due"]
+          required: ["name", "amount"]
         }
       }
     });

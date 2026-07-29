@@ -287,7 +287,12 @@ export default function TransactionFormModal({
       setScanSuccessNote(data.summary || `Preenchido: R$ ${data.amount || ''} em ${extractedName}`);
     } catch (err: any) {
       console.error('Falha ao escanear comprovante:', err);
-      setError('Erro ao ler a foto do comprovante: ' + (err.message || 'Tente tirar outra foto mais nítida.'));
+      const errMsg = err.message || '';
+      if (errMsg.includes('GEMINI_API_KEY')) {
+        setError(errMsg);
+      } else {
+        setError('Erro ao ler a foto do comprovante: ' + (errMsg || 'Tente tirar outra foto mais nítida.'));
+      }
     } finally {
       setIsScanning(false);
       if (cameraInputRef.current) cameraInputRef.current.value = '';

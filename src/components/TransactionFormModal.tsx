@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Transaction, Category } from '../types';
 import { useLanguage } from '../utils/i18n';
-import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2 } from 'lucide-react';
+import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2, ArrowLeft, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const EMOJI_OPTIONS = [
@@ -77,6 +77,7 @@ export default function TransactionFormModal({
   const [showAddCustomCat, setShowAddCustomCat] = useState<boolean>(false);
   const [customCatIcon, setCustomCatIcon] = useState<string>('🏷️');
   const [customCatName, setCustomCatName] = useState<string>('');
+  const [catSearch, setCatSearch] = useState<string>('');
 
   // Long-press deletion state
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
@@ -239,6 +240,9 @@ export default function TransactionFormModal({
   };
 
   const activeCategoryObject = categoriesList.find(c => c.value === cat) || categoriesList[0];
+  const filteredCategories = categoriesList.filter(item =>
+    !catSearch.trim() || item.label.toLowerCase().includes(catSearch.toLowerCase().trim())
+  );
 
   if (!isOpen) return null;
 
@@ -385,180 +389,30 @@ export default function TransactionFormModal({
               </motion.div>
             )}
 
-            {/* Custom Interactive Category Selector */}
+            {/* Custom Interactive Category Selector Trigger */}
             <div className="relative">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                📁 {t('categoria', 'Categoria')}
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">📁 {t('categoria', 'Categoria')}</span>
+                <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Clique p/ abrir tela cheia</span>
               </label>
               
               <div
                 id="modal-cat-trigger"
-                onClick={() => setShowCatDropdown(!showCatDropdown)}
-                className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 text-slate-200 text-sm px-4 py-3 rounded-xl flex items-center justify-between cursor-pointer hover:bg-slate-900/40 transition-colors"
+                onClick={() => setShowCatDropdown(true)}
+                className="w-full bg-slate-950/50 border border-indigo-500/30 hover:border-indigo-400 text-slate-200 text-sm px-4 py-3 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-slate-900/60 transition-all shadow-inner group"
               >
-                <span className="font-semibold flex items-center gap-2">
-                  <span className="text-lg">{activeCategoryObject?.icon || '📦'}</span> 
-                  {activeCategoryObject?.label || 'Outros'}
+                <span className="font-semibold flex items-center gap-3">
+                  <span className="text-2xl p-1.5 rounded-xl bg-slate-900 border border-white/10 shadow-sm">{activeCategoryObject?.icon || '📦'}</span> 
+                  <div>
+                    <span className="text-white font-extrabold block text-sm">{activeCategoryObject?.label || 'Outros'}</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Toque para selecionar ou ver todas em tela cheia</span>
+                  </div>
                 </span>
-                <span className="text-xs text-slate-500 select-none">▼</span>
+                <div className="flex items-center gap-1.5 bg-indigo-600/20 group-hover:bg-indigo-600 px-3 py-1.5 rounded-xl text-indigo-300 group-hover:text-white text-xs font-bold transition-all border border-indigo-500/30">
+                  <span>Ver Categorias</span>
+                  <span className="text-xs">→</span>
+                </div>
               </div>
-
-              {/* Expandable Category Selection Grid */}
-              {showCatDropdown && (
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="absolute left-0 right-0 mt-2 p-4 rounded-2xl bg-slate-900/95 border border-white/10 shadow-xl z-20"
-                >
-                  <div className="flex items-center justify-between mb-2 px-1 text-[9px] font-semibold text-slate-400">
-                    <span>💡 Clique p/ escolher</span>
-                    <span className="text-slate-500">Pressione & segure p/ apagar</span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 max-h-[170px] overflow-y-auto pr-1">
-                    {categoriesList.map((item) => (
-                      <div
-                        key={item.value}
-                        onMouseDown={() => handlePressStart(item)}
-                        onMouseUp={() => handlePressEnd(item)}
-                        onMouseLeave={handlePressCancel}
-                        onTouchStart={() => handlePressStart(item)}
-                        onTouchEnd={() => handlePressEnd(item)}
-                        onTouchMove={handlePressCancel}
-                        className={`group relative p-2.5 rounded-xl text-center cursor-pointer transition-all border select-none ${
-                          cat === item.value 
-                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400 font-bold' 
-                            : 'bg-slate-950/40 border-transparent text-slate-300 hover:bg-slate-950/80 hover:border-white/10'
-                        }`}
-                      >
-                        {onDeleteCategory && (
-                          <button
-                            type="button"
-                            title="Excluir Categoria"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              handlePressCancel();
-                              setCategoryToDelete(item);
-                            }}
-                            className="absolute top-1 right-1 p-1 rounded-md bg-slate-900/90 hover:bg-rose-600 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
-                        <span className="block text-xl mb-1">{item.icon}</span>
-                        <span className="text-[10px] uppercase font-bold tracking-wider truncate block">
-                          {item.label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Button to show Create Custom Category form */}
-                  {!showAddCustomCat ? (
-                    <button
-                      onClick={() => setShowAddCustomCat(true)}
-                      className="w-full mt-3 p-2 border border-dashed border-white/10 hover:border-indigo-500 rounded-xl text-[11px] font-bold text-slate-400 hover:text-white flex items-center justify-center gap-2 cursor-pointer transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5 text-indigo-400" /> {t('criarCategoriaPersonalizada', 'Criar Categoria Personalizada')}
-                    </button>
-                  ) : (
-                    <div className="mt-3 p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-3 shadow-inner">
-                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                        <span className="text-[10px] font-extrabold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5" /> {t('criarCategoriaPersonalizada', 'Nova Categoria Personalizada')}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setShowAddCustomCat(false)}
-                          className="text-slate-500 hover:text-slate-300 p-0.5"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      {/* Quick Idea Chips */}
-                      <div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                          💡 Sugestões Rápidas:
-                        </span>
-                        <div className="flex flex-wrap gap-1.5 max-h-[85px] overflow-y-auto pr-1">
-                          {PRESET_SUGGESTIONS.map((preset, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => {
-                                setCustomCatIcon(preset.icon);
-                                setCustomCatName(preset.label);
-                              }}
-                              className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-indigo-600/20 hover:border-indigo-500 border border-white/10 text-[10px] font-medium text-slate-300 flex items-center gap-1 transition-all cursor-pointer"
-                            >
-                              <span>{preset.icon}</span>
-                              <span>{preset.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Icon selector grid */}
-                      <div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                          🎨 Galeria de Ícones:
-                        </span>
-                        <div className="grid grid-cols-7 sm:grid-cols-9 gap-1 max-h-[100px] overflow-y-auto p-1.5 rounded-xl bg-slate-900 border border-white/10 mb-2.5">
-                          {EMOJI_OPTIONS.map((emoji, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => setCustomCatIcon(emoji)}
-                              className={`h-7 w-7 flex items-center justify-center rounded-lg text-sm transition-all cursor-pointer ${
-                                customCatIcon === emoji
-                                  ? 'bg-indigo-600 text-white scale-110 shadow-md ring-2 ring-indigo-400'
-                                  : 'hover:bg-white/10 text-slate-200'
-                              }`}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Selected Icon Preview & Name Input */}
-                        <div className="flex gap-2 items-center">
-                          <div className="w-10 h-10 rounded-xl bg-slate-900 border border-indigo-500/40 flex items-center justify-center text-xl shrink-0 shadow-inner">
-                            {customCatIcon}
-                          </div>
-                          <input
-                            type="text"
-                            placeholder={t('nomeCategoria', 'Nome da categoria (ex: Futebol, Academia...)')}
-                            value={customCatName}
-                            onChange={(e) => setCustomCatName(e.target.value)}
-                            className="flex-1 bg-slate-900 border border-white/10 text-xs px-3 py-2.5 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex justify-end gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => setShowAddCustomCat(false)}
-                          className="px-3 py-1.5 rounded-xl text-[10px] font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                        >
-                          {t('cancelar', 'Cancelar')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCreateCategory}
-                          className="px-4 py-1.5 rounded-xl text-[10px] font-bold bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          {t('salvar', 'Salvar Categoria')}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              )}
             </div>
 
             {/* Split row: Amount and Due date */}
@@ -613,14 +467,262 @@ export default function TransactionFormModal({
         </motion.div>
       </div>
 
+      {/* Full Screen Category Selection View Overlay */}
+      {showCatDropdown && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.97, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.97, y: 15 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[120] bg-[#0b0f19] flex flex-col p-4 sm:p-6 text-white overflow-hidden select-none"
+        >
+          {/* Header with prominent Voltar button */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-3 gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setShowCatDropdown(false);
+                setCatSearch('');
+                setShowAddCustomCat(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-white font-bold text-xs shadow-lg transition-all cursor-pointer group"
+            >
+              <ArrowLeft className="w-4 h-4 text-indigo-400 group-hover:-translate-x-1 transition-transform" />
+              <span>Voltar ao Formulário</span>
+            </button>
+
+            <div className="text-right">
+              <h3 className="text-base sm:text-lg font-black uppercase tracking-wider text-white flex items-center justify-end gap-2">
+                <span>📁 Central de Categorias</span>
+              </h3>
+              <p className="text-[11px] text-slate-400 hidden sm:block">
+                Escolha uma categoria para sua movimentação ou crie uma nova
+              </p>
+            </div>
+          </div>
+
+          {/* Main Container */}
+          <div className="flex-1 min-h-0 flex flex-col max-w-5xl w-full mx-auto space-y-4">
+            {/* Search Input & Action Button */}
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between shrink-0">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar categoria por nome (ex: futebol, mercado, academia...)"
+                  value={catSearch}
+                  onChange={(e) => setCatSearch(e.target.value)}
+                  className="w-full bg-slate-900/90 border border-white/10 text-xs pl-10 pr-4 py-3 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner"
+                />
+                {catSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setCatSearch('')}
+                    className="absolute right-3.5 top-3.5 text-slate-500 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAddCustomCat(!showAddCustomCat)}
+                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-bold transition-all border cursor-pointer ${
+                  showAddCustomCat
+                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 shadow-lg shadow-amber-500/10'
+                    : 'bg-indigo-600 hover:bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-600/30'
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                <span>{showAddCustomCat ? 'Fechar Criador' : 'Nova Categoria'}</span>
+              </button>
+            </div>
+
+            {/* Custom Category Creator inside full view */}
+            {showAddCustomCat && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 rounded-3xl bg-slate-900/95 border border-indigo-500/40 space-y-3.5 shadow-2xl shrink-0 max-h-[340px] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                  <span className="text-xs font-extrabold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4" /> {t('criarCategoriaPersonalizada', 'Nova Categoria Personalizada')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCustomCat(false)}
+                    className="text-slate-500 hover:text-slate-300 p-0.5"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Quick Idea Chips */}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    💡 Sugestões Rápidas:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 max-h-[85px] overflow-y-auto pr-1">
+                    {PRESET_SUGGESTIONS.map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setCustomCatIcon(preset.icon);
+                          setCustomCatName(preset.label);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-950 hover:bg-indigo-600/30 hover:border-indigo-500 border border-white/10 text-xs font-medium text-slate-300 flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <span>{preset.icon}</span>
+                        <span>{preset.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Icon selector grid */}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    🎨 Galeria de Ícones:
+                  </span>
+                  <div className="grid grid-cols-7 sm:grid-cols-12 gap-1.5 max-h-[110px] overflow-y-auto p-2 rounded-2xl bg-slate-950 border border-white/10 mb-2.5">
+                    {EMOJI_OPTIONS.map((emoji, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setCustomCatIcon(emoji)}
+                        className={`h-8 w-8 flex items-center justify-center rounded-xl text-base transition-all cursor-pointer ${
+                          customCatIcon === emoji
+                            ? 'bg-indigo-600 text-white scale-110 shadow-md ring-2 ring-indigo-400'
+                            : 'hover:bg-white/10 text-slate-200'
+                        }`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Selected Icon Preview & Name Input */}
+                  <div className="flex gap-2.5 items-center">
+                    <div className="w-11 h-11 rounded-2xl bg-slate-950 border border-indigo-500/40 flex items-center justify-center text-2xl shrink-0 shadow-inner">
+                      {customCatIcon}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder={t('nomeCategoria', 'Nome da categoria (ex: Futebol, Academia...)')}
+                      value={customCatName}
+                      onChange={(e) => setCustomCatName(e.target.value)}
+                      className="flex-1 bg-slate-950 border border-white/10 text-xs px-3.5 py-3 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCustomCat(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    {t('cancelar', 'Cancelar')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateCategory}
+                    className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    {t('salvar', 'Salvar Categoria')}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Categories Grid Area (Full Height Scrollable) */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <div className="flex items-center justify-between mb-3 text-[10px] uppercase font-extrabold tracking-wider text-slate-400 px-1">
+                <span>Todas as Categorias ({filteredCategories.length})</span>
+                <span>💡 Pressione & segure p/ apagar</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 pb-8">
+                {/* Quick Create Card */}
+                <div
+                  onClick={() => setShowAddCustomCat(true)}
+                  className="p-4 rounded-2xl bg-slate-900/40 border-2 border-dashed border-indigo-500/30 hover:border-indigo-400 hover:bg-indigo-600/10 text-indigo-300 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[110px] group shadow-sm"
+                >
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+                    <Plus className="w-5 h-5 text-indigo-400" />
+                  </div>
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-300">
+                    Criar Nova
+                  </span>
+                </div>
+
+                {filteredCategories.map((item) => {
+                  const isSelected = cat === item.value;
+                  return (
+                    <div
+                      key={item.value}
+                      onMouseDown={() => handlePressStart(item)}
+                      onMouseUp={() => handlePressEnd(item)}
+                      onMouseLeave={handlePressCancel}
+                      onTouchStart={() => handlePressStart(item)}
+                      onTouchEnd={() => handlePressEnd(item)}
+                      onTouchMove={handlePressCancel}
+                      className={`group relative p-4 rounded-2xl text-center cursor-pointer transition-all border select-none min-h-[110px] flex flex-col items-center justify-center ${
+                        isSelected
+                          ? 'bg-indigo-600/30 border-2 border-indigo-400 text-white shadow-xl shadow-indigo-600/25 scale-[1.02]'
+                          : 'bg-slate-900/60 border-white/10 text-slate-200 hover:bg-slate-800/80 hover:border-white/20'
+                      }`}
+                    >
+                      {isSelected && (
+                        <span className="absolute top-2 left-2 bg-indigo-500 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md">
+                          <Check className="w-3 h-3" /> Atual
+                        </span>
+                      )}
+
+                      {onDeleteCategory && (
+                        <button
+                          type="button"
+                          title="Excluir Categoria"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handlePressCancel();
+                            setCategoryToDelete(item);
+                          }}
+                          className="absolute top-2 right-2 p-1.5 rounded-xl bg-slate-950/80 hover:bg-rose-600 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer border border-white/10"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      <span className="text-3xl sm:text-4xl mb-2 transition-transform group-hover:scale-110 drop-shadow-md">
+                        {item.icon}
+                      </span>
+                      <span className="text-xs uppercase font-extrabold tracking-wider truncate max-w-full px-1">
+                        {item.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Confirmation Modal for Category Deletion */}
       {categoryToDelete && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs select-none">
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs select-none">
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-[#0f1524] border border-white/10 p-6 rounded-3xl max-w-xs w-full shadow-2xl space-y-4 text-center relative"
+            className="bg-[#0f1524] border border-white/10 p-6 rounded-3xl max-w-xs w-full shadow-2xl space-y-4 text-center relative z-[131]"
           >
             <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto text-3xl shadow-inner">
               {categoryToDelete.icon || '🗑️'}

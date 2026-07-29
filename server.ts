@@ -306,9 +306,15 @@ app.post("/api/gemini/scan-receipt", async (req, res) => {
       return res.status(400).json({ error: "Imagem não fornecida." });
     }
 
-    const apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY || process.env.GEMINI_KEY || process.env.VITE_GEMINI_API_KEY || "").trim();
+    const rawKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY || process.env.GEMINI_KEY || process.env.VITE_GEMINI_API_KEY || "";
+    console.log("[Scan-Receipt] Available env keys:", Object.keys(process.env).filter(k => k.includes("GEMINI") || k.includes("API") || k.includes("KEY") || k.includes("GOOGLE")));
+    console.log("[Scan-Receipt] rawKey length:", rawKey.length, "val:", rawKey === "MY_GEMINI_API_KEY" ? "MY_GEMINI_API_KEY" : rawKey ? "PRESENT" : "EMPTY");
+    
+    const apiKey = rawKey.trim();
     if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-      return res.status(400).json({ error: "Chave GEMINI_API_KEY não configurada. Por favor adicione a chave 'GEMINI_API_KEY' nas configurações/segredos para habilitar o escaneamento inteligente de comprovantes." });
+      return res.status(400).json({ 
+        error: "A chave da API Gemini (GEMINI_API_KEY) ainda não foi configurada. Para ativar a leitura automática por foto/galeria, configure a GEMINI_API_KEY no menu de Configurações / Segredos (Secrets) do projeto." 
+      });
     }
 
     const ai = new GoogleGenAI({ apiKey });

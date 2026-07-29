@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, MouseEvent, TouchEvent, ChangeEvent } from 'react';
 import { Transaction, Category } from '../types';
 import { useLanguage } from '../utils/i18n';
-import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2, ArrowLeft, Search, Camera, Loader2 } from 'lucide-react';
+import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2, ArrowLeft, Search, Camera, Image, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const EMOJI_OPTIONS = [
@@ -73,7 +73,8 @@ export default function TransactionFormModal({
   const [installmentAmountStr, setInstallmentAmountStr] = useState<string>('');
   
   // AI Receipt Camera Scanner state
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scanSuccessNote, setScanSuccessNote] = useState<string | null>(null);
 
@@ -252,9 +253,8 @@ export default function TransactionFormModal({
       setError('Erro ao ler a foto do comprovante: ' + (err.message || 'Tente tirar outra foto mais nítida.'));
     } finally {
       setIsScanning(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+      if (galleryInputRef.current) galleryInputRef.current.value = '';
     }
   };
 
@@ -422,51 +422,85 @@ export default function TransactionFormModal({
             </button>
           </div>
 
-          {/* Quick AI Camera Receipt Scanner */}
+          {/* Quick AI Camera / Gallery Receipt Scanner */}
           {!initialData && (
-            <div className="mb-5">
+            <div className="mb-5 space-y-2">
               <input
-                ref={fileInputRef}
+                ref={cameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
                 className="hidden"
                 onChange={handleReceiptScan}
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isScanning}
-                className="w-full relative group overflow-hidden rounded-2xl p-[1px] bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 hover:from-indigo-400 hover:to-emerald-400 transition-all shadow-lg shadow-indigo-500/10 active:scale-[0.99] disabled:opacity-60 cursor-pointer"
-              >
-                <div className="bg-[#0b0f19] hover:bg-[#121827] p-3.5 rounded-[15px] flex items-center justify-between transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform shrink-0">
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleReceiptScan}
+              />
+
+              <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">
+                <span className="flex items-center gap-1 text-indigo-400">
+                  <Sparkles className="w-3.5 h-3.5" /> Leitura Automática por IA (Gemini)
+                </span>
+                <span className="text-[9px] text-slate-500 font-medium">Preenche sem salvar foto</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                {/* Option 1: Direct Camera Snap */}
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={isScanning}
+                  className="relative group overflow-hidden rounded-2xl p-[1px] bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 hover:from-indigo-400 hover:to-indigo-500 transition-all shadow-md shadow-indigo-500/10 active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+                >
+                  <div className="bg-[#0b0f19] hover:bg-[#121827] p-3 rounded-[15px] flex items-center gap-2.5 transition-colors h-full">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform shrink-0">
                       {isScanning ? (
-                        <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+                        <Loader2 className="w-4.5 h-4.5 animate-spin text-indigo-400" />
                       ) : (
-                        <Camera className="w-5 h-5 text-indigo-400" />
+                        <Camera className="w-4.5 h-4.5 text-indigo-400" />
                       )}
                     </div>
-                    <div className="text-left">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white tracking-wide">
-                          {isScanning ? "IA Gemini Lendo Comprovante..." : "📷 Tirar Foto / Ler Comprovante"}
-                        </span>
-                        <span className="text-[9px] font-extrabold uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full">
-                          IA Automática
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        {isScanning
-                          ? "Transcrevendo valor, descrição e categoria em tempo real..."
-                          : "Fotografe a nota/tela da maquininha para preencher o formulário sem salvar a foto"}
-                      </p>
+                    <div className="text-left min-w-0 flex-1">
+                      <span className="text-xs font-extrabold text-white block truncate">
+                        {isScanning ? "Lendo..." : "📷 Tirar Foto"}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block truncate">
+                        Abrir câmera
+                      </span>
                     </div>
                   </div>
-                  <Sparkles className="w-4 h-4 text-indigo-400 opacity-80 shrink-0 ml-2" />
-                </div>
-              </button>
+                </button>
+
+                {/* Option 2: Gallery Picker */}
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  disabled={isScanning}
+                  className="relative group overflow-hidden rounded-2xl p-[1px] bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 hover:from-purple-400 hover:to-indigo-400 transition-all shadow-md shadow-purple-500/10 active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+                >
+                  <div className="bg-[#0b0f19] hover:bg-[#121827] p-3 rounded-[15px] flex items-center gap-2.5 transition-colors h-full">
+                    <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-transform shrink-0">
+                      {isScanning ? (
+                        <Loader2 className="w-4.5 h-4.5 animate-spin text-purple-400" />
+                      ) : (
+                        <Image className="w-4.5 h-4.5 text-purple-400" />
+                      )}
+                    </div>
+                    <div className="text-left min-w-0 flex-1">
+                      <span className="text-xs font-extrabold text-white block truncate">
+                        {isScanning ? "Lendo..." : "🖼️ Galeria"}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block truncate">
+                        Escolher da galeria
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              </div>
             </div>
           )}
 

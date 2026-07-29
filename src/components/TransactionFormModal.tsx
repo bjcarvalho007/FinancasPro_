@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, MouseEvent, TouchEvent } from 'react';
 import { Transaction, Category } from '../types';
 import { useLanguage } from '../utils/i18n';
 import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2, ArrowLeft, Search } from 'lucide-react';
@@ -79,21 +79,53 @@ export default function TransactionFormModal({
   const [customCatName, setCustomCatName] = useState<string>('');
   const [catSearch, setCatSearch] = useState<string>('');
 
-  // Long-press deletion state
+  // Long-press deletion state and drag/scroll detection
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isLongPressRef = useRef<boolean>(false);
+  const pressStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const hasDraggedRef = useRef<boolean>(false);
 
-  const handlePressStart = (item: Category) => {
+  const handlePressStart = (item: Category, e: MouseEvent | TouchEvent) => {
     isLongPressRef.current = false;
+    hasDraggedRef.current = false;
+
+    const clientX = 'touches' in e ? e.touches[0]?.clientX : (e as MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0]?.clientY : (e as MouseEvent).clientY;
+    if (clientX !== undefined && clientY !== undefined) {
+      pressStartPosRef.current = { x: clientX, y: clientY };
+    }
+
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     longPressTimerRef.current = setTimeout(() => {
-      isLongPressRef.current = true;
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try { navigator.vibrate(60); } catch (e) {}
+      if (!hasDraggedRef.current) {
+        isLongPressRef.current = true;
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate(60); } catch (err) {}
+        }
+        setCategoryToDelete(item);
       }
-      setCategoryToDelete(item);
     }, 500);
+  };
+
+  const handlePressMove = (e: TouchEvent | MouseEvent) => {
+    if (!pressStartPosRef.current) return;
+    const clientX = 'touches' in e ? e.touches[0]?.clientX : (e as MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0]?.clientY : (e as MouseEvent).clientY;
+
+    if (clientX !== undefined && clientY !== undefined) {
+      const dx = Math.abs(clientX - pressStartPosRef.current.x);
+      const dy = Math.abs(clientY - pressStartPosRef.current.y);
+
+      // Threshold of 8px movement indicates dragging/scrolling
+      if (dx > 8 || dy > 8) {
+        hasDraggedRef.current = true;
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+      }
+    }
   };
 
   const handlePressEnd = (item: Category) => {
@@ -101,12 +133,16 @@ export default function TransactionFormModal({
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
-    if (!isLongPressRef.current) {
+    if (!hasDraggedRef.current && !isLongPressRef.current) {
       setCat(item.value);
       setShowCatDropdown(false);
+      setCatSearch('');
+      setShowAddCustomCat(false);
     }
+    pressStartPosRef.current = null;
     setTimeout(() => {
       isLongPressRef.current = false;
+      hasDraggedRef.current = false;
     }, 120);
   };
 
@@ -115,6 +151,8 @@ export default function TransactionFormModal({
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    hasDraggedRef.current = true;
+    pressStartPosRef.current = null;
   };
 
   const justOpenedRef = useRef<boolean>(true);
@@ -666,12 +704,13 @@ export default function TransactionFormModal({
                   return (
                     <div
                       key={item.value}
-                      onMouseDown={() => handlePressStart(item)}
+                      onMouseDown={(e) => handlePressStart(item, e)}
+                      onMouseMove={(e) => handlePressMove(e)}
                       onMouseUp={() => handlePressEnd(item)}
                       onMouseLeave={handlePressCancel}
-                      onTouchStart={() => handlePressStart(item)}
+                      onTouchStart={(e) => handlePressStart(item, e)}
+                      onTouchMove={(e) => handlePressMove(e)}
                       onTouchEnd={() => handlePressEnd(item)}
-                      onTouchMove={handlePressCancel}
                       className={`group relative p-4 rounded-2xl text-center cursor-pointer transition-all border select-none min-h-[110px] flex flex-col items-center justify-center ${
                         isSelected
                           ? 'bg-indigo-600/30 border-2 border-indigo-400 text-white shadow-xl shadow-indigo-600/25 scale-[1.02]'

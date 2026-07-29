@@ -311,14 +311,7 @@ app.post("/api/gemini/scan-receipt", async (req, res) => {
       return res.status(500).json({ error: "Servidor sem chave GEMINI_API_KEY configurada em .env." });
     }
 
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
+    const ai = new GoogleGenAI({ apiKey });
 
     let cleanBase64 = imageBase64;
     let actualMime = mimeType || "image/jpeg";
@@ -332,20 +325,17 @@ app.post("/api/gemini/scan-receipt", async (req, res) => {
     }
 
     const todayDate = new Date().toISOString().substring(0, 10);
-    const prompt = `Você é um leitor inteligente de comprovantes, notas fiscais, recibos e telas de maquininhas de cartão.
-Analise a imagem enviada e extraia com precisão os dados para preenchimento de lançamento financeiro:
+    const prompt = `Você é um leitor ultra-inteligente e flexível de comprovantes, notas fiscais, recibos, extratos bancários e telas de maquininhas de cartão.
+Sua prioridade máxima é identificar o VALOR TOTAL (amount) e o ESTABELECIMENTO / NOME DO GASTO (name/establishment).
 
-1. 'name': Nome do estabelecimento ou descrição resumida do produto/serviço (ex: "Supermercado Carrefour", "Posto Ipiranga", "Restaurante Silva", "Farmácia Droga Raia"). Se não identificar o nome da loja, use uma descrição do item principal.
-2. 'amount': Valor total da transação/comprovante em formato numérico decimal (ex: 45.90, 120.00). Retorne apenas o número sem símbolo de moeda.
-3. 'type': Tipo do gasto/fluxo:
-   - 'variaveis' para compras comuns, mercado, restaurante, abastecimento, etc.
-   - 'fixos' para contas de luz, água, internet, aluguel, mensalidades.
-   - 'parcelas' se for um comprovante com indicação explícita de compra parcelada (ex: "3x de R$ 50").
-4. 'cat': Categoria estimada dentre as chaves standard:
-   'alimentacao', 'mercado', 'moradia', 'transporte', 'lazer', 'saude', 'educacao', 'servicos', 'salario', 'freelance', 'investimentos', 'outros'.
-5. 'due': Data da transação/emissão no formato YYYY-MM-DD. Se a imagem não contiver a data ou o ano, retorne a data de hoje (${todayDate}).
-6. 'establishment': Nome do estabelecimento comercial (ou vazio se não identificado).
-7. 'summary': Frase curta em português (ex: "Leitura concluída: Compra de R$ 45,90 no Supermercado Carrefour em 28/07").`;
+Instruções específicas de extração:
+1. 'name': Nome da loja, empresa, pessoa ou descrição do gasto (ex: "Drogaria Raia", "Uber", "Padaria Central"). Se não identificar a loja, coloque uma breve descrição do item ou "Gasto com Comprovante".
+2. 'amount': Valor numérico total pago (ex: 45.90). Se houver vários números, pegue o valor final pago.
+3. 'establishment': Nome do local ou comerciante. Se não tiver certeza, use o mesmo valor de 'name'.
+4. 'type': Se for fatura/aluguel/luz use 'fixos', se for parcelado use 'parcelas'. Para todo o resto, use 'variaveis'.
+5. 'cat': Categoria estimada dentre: 'alimentacao', 'mercado', 'moradia', 'transporte', 'lazer', 'saude', 'educacao', 'servicos', 'salario', 'freelance', 'investimentos', 'outros'. Se não houver clareza da categoria, coloque 'outros'.
+6. 'due': Data do comprovante (YYYY-MM-DD). Se não encontrar, retorne a data atual: ${todayDate}.
+7. 'summary': Frase de confirmação curta em português (ex: "R$ 45,90 em Drogaria Raia").`;
 
     const response = await ai.models.generateContent({
       model: "gemini-3.6-flash",

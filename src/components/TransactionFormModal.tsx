@@ -211,8 +211,22 @@ export default function TransactionFormModal({
     setScanSuccessNote(null);
 
     try {
-      // Compress full-res camera image to max 1200px to prevent mobile browser out-of-memory crashes
-      const { base64, mimeType } = await compressImageFile(file, 1200, 0.8);
+      let base64 = '';
+      let mimeType = file.type || 'image/jpeg';
+
+      try {
+        const compressed = await compressImageFile(file, 1200, 0.8);
+        base64 = compressed.base64;
+        mimeType = compressed.mimeType;
+      } catch (e) {
+        // Fallback: Read file directly if canvas compression fails
+        base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
 
       const res = await fetch('/api/gemini/scan-receipt', {
         method: 'POST',
@@ -225,29 +239,52 @@ export default function TransactionFormModal({
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Erro ao processar a imagem.');
+        throw new Error(json.error || 'Erro ao processar a imagem do comprovante.');
       }
 
-      const data = json.data;
-      if (data.name) setName(data.name);
-      if (data.amount && !isNaN(data.amount)) setAmountStr(formatMoney(Number(data.amount)));
+      const data = json.data || {};
+
+      // Smart extraction with fallback: priority on Establishment/Name and Amount
+      const extractedName = data.name || data.establishment || 'Gasto com Comprovante';
+      setName(extractedName);
+
+      if (data.establishment || data.name) {
+        setEstablishment(data.establishment || data.name || '');
+      }
+
+      if (data.amount !== undefined && data.amount !== null && !isNaN(Number(data.amount))) {
+        setAmountStr(formatMoney(Number(data.amount)));
+      }
+
+      // Type fallback
       if (data.type && ['fixos', 'variaveis', 'parcelas'].includes(data.type)) {
         setType(data.type as any);
       } else {
         setType('variaveis');
       }
-      if (data.due) setDue(data.due);
-      if (data.establishment) setEstablishment(data.establishment);
+
+      // Date fallback
+      if (data.due) {
+        setDue(data.due);
+      }
+
+      // Category matching or default to 'outros'
       if (data.cat) {
         const matched = categoriesList.find(c => 
           c.value === data.cat || 
-          c.value.toLowerCase().includes(data.cat.toLowerCase()) ||
+          c.value.toLowerCase() === data.cat.toLowerCase() ||
           c.label.toLowerCase().includes(data.cat.toLowerCase())
         );
-        if (matched) setCat(matched.value);
+        if (matched) {
+          setCat(matched.value);
+        } else {
+          setCat('outros');
+        }
+      } else {
+        setCat('outros');
       }
 
-      setScanSuccessNote(data.summary || 'Informações do comprovante extraídas com sucesso! Os campos do formulário foram preenchidos.');
+      setScanSuccessNote(data.summary || `Preenchido: R$ ${data.amount || ''} em ${extractedName}`);
     } catch (err: any) {
       console.error('Falha ao escanear comprovante:', err);
       setError('Erro ao ler a foto do comprovante: ' + (err.message || 'Tente tirar outra foto mais nítida.'));

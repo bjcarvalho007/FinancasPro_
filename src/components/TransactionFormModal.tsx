@@ -1,8 +1,35 @@
 import { useState, useEffect, useRef } from 'react';
 import { Transaction, Category } from '../types';
 import { useLanguage } from '../utils/i18n';
-import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle } from 'lucide-react';
+import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+const EMOJI_OPTIONS = [
+  '⚽', '🏀', '🎾', '🏐', '🏋️', '🥊', '🚴', '🏊', '🛹', '🏎️', '⛳', '🧘', '🏆',
+  '🍔', '🍕', '🍣', '🍦', '☕', '🍺', '🍿', '🍖', '🥑', '🍩', '🍹', '🥖', '🥩',
+  '🚗', '⛽', '🚌', '✈️', '🛵', '🔧', '🚕', '🚲', '⛵', '🚂', '🅿️',
+  '🎮', '🎬', '🎵', '🎧', '🎟️', '📷', '🎨', '🎲', '🎯', '📺', '🎪',
+  '🏠', '🔌', '📶', '🛋️', '🧹', '💧', '🪴', '🔑', '🛠️', '💡', '⚡', '🔥',
+  '🏥', '💊', '🩺', '💇', '💈', '🧴', '💄', '🧼', '🦷', '👓', '💅', '✨',
+  '🎓', '📚', '🖊️', '💻', '💼', '📊', '📝', '🔬', '🏫',
+  '🛍️', '👕', '👠', '💍', '🏷️', '⌚', '🎒', '💰', '💳', '📈', '🏦', '💎',
+  '🎁', '🐾', '👶', '🚀', '🎈', '🎂', '🐶', '🐱', '🌲', '🔮', '🌟', '📱'
+];
+
+const PRESET_SUGGESTIONS = [
+  { icon: '⚽', label: 'Futebol / Pelada' },
+  { icon: '🏋️', label: 'Academia / Fitness' },
+  { icon: '💈', label: 'Barbeiro / Salão' },
+  { icon: '🎮', label: 'Jogos / Steam' },
+  { icon: '🐾', label: 'Pet Shop / Vet' },
+  { icon: '🍿', label: 'Cinema / Lazer' },
+  { icon: '🚗', label: 'Uber / Táxi' },
+  { icon: '✈️', label: 'Viagem / Férias' },
+  { icon: '💊', label: 'Farmácia' },
+  { icon: '🍕', label: 'Restaurante / Pizza' },
+  { icon: '🎓', label: 'Cursos / Idiomas' },
+  { icon: '🧼', label: 'Limpeza & Casa' },
+];
 
 interface TransactionFormModalProps {
   isOpen: boolean;
@@ -374,38 +401,96 @@ export default function TransactionFormModal({
                       <Plus className="w-3.5 h-3.5 text-indigo-400" /> {t('criarCategoriaPersonalizada', 'Criar Categoria Personalizada')}
                     </button>
                   ) : (
-                    <div className="mt-3 p-3 rounded-xl bg-slate-950/60 border border-white/5 space-y-3">
-                      <div className="flex gap-2">
-                        {/* Simple emoji selector */}
-                        <select
-                          value={customCatIcon}
-                          onChange={(e) => setCustomCatIcon(e.target.value)}
-                          className="bg-slate-900 border border-white/10 text-lg p-1.5 rounded-lg text-center"
-                        >
-                          <option>🏷️</option><option>💰</option><option>🏠</option><option>🎮</option>
-                          <option>🎁</option><option>🚀</option><option>🥑</option><option>💈</option>
-                          <option>🛠️</option><option>💡</option><option>🍔</option><option>💊</option>
-                        </select>
-                        <input
-                          type="text"
-                          placeholder={t('nomeCategoria', 'Nome da categoria')}
-                          value={customCatName}
-                          onChange={(e) => setCustomCatName(e.target.value)}
-                          className="flex-1 bg-slate-900 border border-white/10 text-xs px-3 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2">
+                    <div className="mt-3 p-3.5 rounded-2xl bg-slate-950/80 border border-white/10 space-y-3 shadow-inner">
+                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-extrabold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5" /> {t('criarCategoriaPersonalizada', 'Nova Categoria Personalizada')}
+                        </span>
                         <button
+                          type="button"
                           onClick={() => setShowAddCustomCat(false)}
-                          className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-slate-400 hover:text-white"
+                          className="text-slate-500 hover:text-slate-300 p-0.5"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Quick Idea Chips */}
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                          💡 Sugestões Rápidas:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 max-h-[85px] overflow-y-auto pr-1">
+                          {PRESET_SUGGESTIONS.map((preset, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setCustomCatIcon(preset.icon);
+                                setCustomCatName(preset.label);
+                              }}
+                              className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-indigo-600/20 hover:border-indigo-500 border border-white/10 text-[10px] font-medium text-slate-300 flex items-center gap-1 transition-all cursor-pointer"
+                            >
+                              <span>{preset.icon}</span>
+                              <span>{preset.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Icon selector grid */}
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                          🎨 Galeria de Ícones:
+                        </span>
+                        <div className="grid grid-cols-7 sm:grid-cols-9 gap-1 max-h-[100px] overflow-y-auto p-1.5 rounded-xl bg-slate-900 border border-white/10 mb-2.5">
+                          {EMOJI_OPTIONS.map((emoji, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setCustomCatIcon(emoji)}
+                              className={`h-7 w-7 flex items-center justify-center rounded-lg text-sm transition-all cursor-pointer ${
+                                customCatIcon === emoji
+                                  ? 'bg-indigo-600 text-white scale-110 shadow-md ring-2 ring-indigo-400'
+                                  : 'hover:bg-white/10 text-slate-200'
+                              }`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Selected Icon Preview & Name Input */}
+                        <div className="flex gap-2 items-center">
+                          <div className="w-10 h-10 rounded-xl bg-slate-900 border border-indigo-500/40 flex items-center justify-center text-xl shrink-0 shadow-inner">
+                            {customCatIcon}
+                          </div>
+                          <input
+                            type="text"
+                            placeholder={t('nomeCategoria', 'Nome da categoria (ex: Futebol, Academia...)')}
+                            value={customCatName}
+                            onChange={(e) => setCustomCatName(e.target.value)}
+                            className="flex-1 bg-slate-900 border border-white/10 text-xs px-3 py-2.5 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowAddCustomCat(false)}
+                          className="px-3 py-1.5 rounded-xl text-[10px] font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
                         >
                           {t('cancelar', 'Cancelar')}
                         </button>
                         <button
+                          type="button"
                           onClick={handleCreateCategory}
-                          className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-indigo-600 text-white hover:bg-indigo-700 font-display"
+                          className="px-4 py-1.5 rounded-xl text-[10px] font-bold bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-1"
                         >
-                          {t('salvar', 'Salvar')}
+                          <Check className="w-3.5 h-3.5" />
+                          {t('salvar', 'Salvar Categoria')}
                         </button>
                       </div>
                     </div>

@@ -6,6 +6,7 @@ import Stripe from "stripe";
 import admin from "firebase-admin";
 import fs from "fs";
 import crypto from "crypto";
+import { GoogleGenAI, Type } from "@google/genai";
 
 // Load environment variables in Node
 import dotenv from "dotenv";
@@ -293,6 +294,101 @@ if (!process.env.VERCEL) {
 // API route 1: Healthcheck
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Gemini Vision Receipt Scanning endpoint (does NOT persist image, returns parsed fields)
+app.post("/api/gemini/scan-receipt", async (req, res) => {
+  try {
+    const { imageBase64, mimeType } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ error: "Imagem não fornecida." });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "Servidor sem chave GEMINI_API_KEY configurada em .env." });
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
+    let cleanBase64 = imageBase64;
+    let actualMime = mimeType || "image/jpeg";
+    if (imageBase64.includes(";base64,")) {
+      const parts = imageBase64.split(";base64,");
+      const mimeMatch = parts[0].match(/data:(.*?);/);
+      if (mimeMatch) {
+        actualMime = mimeMatch[1];
+      }
+      cleanBase64 = parts[1];
+    }
+
+    const todayDate = new Date().toISOString().substring(0, 10);
+    const prompt = `Você é um leitor inteligente de comprovantes, notas fiscais, recibos e telas de maquininhas de cartão.
+Analise a imagem enviada e extraia com precisão os dados para preenchimento de lançamento financeiro:
+
+1. 'name': Nome do estabelecimento ou descrição resumida do produto/serviço (ex: "Supermercado Carrefour", "Posto Ipiranga", "Restaurante Silva", "Farmácia Droga Raia"). Se não identificar o nome da loja, use uma descrição do item principal.
+2. 'amount': Valor total da transação/comprovante em formato numérico decimal (ex: 45.90, 120.00). Retorne apenas o número sem símbolo de moeda.
+3. 'type': Tipo do gasto/fluxo:
+   - 'variaveis' para compras comuns, mercado, restaurante, abastecimento, etc.
+   - 'fixos' para contas de luz, água, internet, aluguel, mensalidades.
+   - 'parcelas' se for um comprovante com indicação explícita de compra parcelada (ex: "3x de R$ 50").
+4. 'cat': Categoria estimada dentre as chaves standard:
+   'alimentacao', 'mercado', 'moradia', 'transporte', 'lazer', 'saude', 'educacao', 'servicos', 'salario', 'freelance', 'investimentos', 'outros'.
+5. 'due': Data da transação/emissão no formato YYYY-MM-DD. Se a imagem não contiver a data ou o ano, retorne a data de hoje (${todayDate}).
+6. 'establishment': Nome do estabelecimento comercial (ou vazio se não identificado).
+7. 'summary': Frase curta em português (ex: "Leitura concluída: Compra de R$ 45,90 no Supermercado Carrefour em 28/07").`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: actualMime,
+              data: cleanBase64
+            }
+          },
+          {
+            text: prompt
+          }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            amount: { type: Type.NUMBER },
+            type: { type: Type.STRING },
+            cat: { type: Type.STRING },
+            due: { type: Type.STRING },
+            establishment: { type: Type.STRING },
+            summary: { type: Type.STRING }
+          },
+          required: ["name", "amount", "type", "cat", "due"]
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) {
+      throw new Error("Não foi possível ler o texto da imagem.");
+    }
+
+    const data = JSON.parse(text);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    console.error("❌ Erro ao escanear recibo no Gemini:", err);
+    res.status(500).json({ error: err.message || "Falha ao processar a imagem do comprovante." });
+  }
 });
 
 // Temporary debug-users endpoint to inspect Firestore state

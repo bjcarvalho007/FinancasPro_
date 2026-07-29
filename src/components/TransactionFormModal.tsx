@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, MouseEvent, TouchEvent } from 'react';
+import { useState, useEffect, useRef, MouseEvent, TouchEvent, ChangeEvent } from 'react';
 import { Transaction, Category } from '../types';
 import { useLanguage } from '../utils/i18n';
-import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2, ArrowLeft, Search } from 'lucide-react';
+import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2, ArrowLeft, Search, Camera, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const EMOJI_OPTIONS = [
@@ -72,6 +72,11 @@ export default function TransactionFormModal({
   const [installmentsCount, setInstallmentsCount] = useState<string>('');
   const [installmentAmountStr, setInstallmentAmountStr] = useState<string>('');
   
+  // AI Receipt Camera Scanner state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [scanSuccessNote, setScanSuccessNote] = useState<string | null>(null);
+
   // Custom interactive sub-state for creating categories on the flow
   const [showCatDropdown, setShowCatDropdown] = useState<boolean>(false);
   const [showAddCustomCat, setShowAddCustomCat] = useState<boolean>(false);
@@ -155,11 +160,72 @@ export default function TransactionFormModal({
     pressStartPosRef.current = null;
   };
 
+  const handleReceiptScan = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    setError(null);
+    setScanSuccessNote(null);
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Data = reader.result as string;
+      try {
+        const res = await fetch('/api/gemini/scan-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: base64Data,
+            mimeType: file.type || 'image/jpeg'
+          })
+        });
+
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || 'Erro ao processar a imagem.');
+        }
+
+        const data = json.data;
+        if (data.name) setName(data.name);
+        if (data.amount && !isNaN(data.amount)) setAmountStr(formatMoney(Number(data.amount)));
+        if (data.type && ['fixos', 'variaveis', 'parcelas'].includes(data.type)) {
+          setType(data.type as any);
+        } else {
+          setType('variaveis');
+        }
+        if (data.due) setDue(data.due);
+        if (data.establishment) setEstablishment(data.establishment);
+        if (data.cat) {
+          const matched = categoriesList.find(c => 
+            c.value === data.cat || 
+            c.value.toLowerCase().includes(data.cat.toLowerCase()) ||
+            c.label.toLowerCase().includes(data.cat.toLowerCase())
+          );
+          if (matched) setCat(matched.value);
+        }
+
+        setScanSuccessNote(data.summary || 'Informações do comprovante extraídas com sucesso! Os campos do formulário foram preenchidos.');
+      } catch (err: any) {
+        console.error('Falha ao escanear comprovante:', err);
+        setError('Erro ao ler a foto do comprovante: ' + (err.message || 'Tente tirar outra foto mais nítida.'));
+      } finally {
+        setIsScanning(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const justOpenedRef = useRef<boolean>(true);
 
   useEffect(() => {
     if (isOpen) {
       setError(null);
+      setScanSuccessNote(null);
+      setIsScanning(false);
       justOpenedRef.current = true;
       if (initialData) {
         setName(initialData.name);
@@ -305,7 +371,7 @@ export default function TransactionFormModal({
           className="bg-[#0f1524] border border-white/10 w-full max-w-lg rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-visible max-h-[90vh] overflow-y-auto z-10"
         >
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-5">
             <h3 className="font-display font-extrabold text-lg text-white">
               {initialData ? `✏️ ${t('editarTransacao', 'Editar Lançamento')}` : `💸 ${t('novaTransacao', 'Novo Lançamento')}`}
             </h3>
@@ -316,6 +382,77 @@ export default function TransactionFormModal({
               <X className="w-4 h-4" />
             </button>
           </div>
+
+          {/* Quick AI Camera Receipt Scanner */}
+          {!initialData && (
+            <div className="mb-5">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleReceiptScan}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isScanning}
+                className="w-full relative group overflow-hidden rounded-2xl p-[1px] bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 hover:from-indigo-400 hover:to-emerald-400 transition-all shadow-lg shadow-indigo-500/10 active:scale-[0.99] disabled:opacity-60 cursor-pointer"
+              >
+                <div className="bg-[#0b0f19] hover:bg-[#121827] p-3.5 rounded-[15px] flex items-center justify-between transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform shrink-0">
+                      {isScanning ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+                      ) : (
+                        <Camera className="w-5 h-5 text-indigo-400" />
+                      )}
+                    </div>
+                    <div className="text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white tracking-wide">
+                          {isScanning ? "IA Gemini Lendo Comprovante..." : "📷 Tirar Foto / Ler Comprovante"}
+                        </span>
+                        <span className="text-[9px] font-extrabold uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full">
+                          IA Automática
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {isScanning
+                          ? "Transcrevendo valor, descrição e categoria em tempo real..."
+                          : "Fotografe a nota/tela da maquininha para preencher o formulário sem salvar a foto"}
+                      </p>
+                    </div>
+                  </div>
+                  <Sparkles className="w-4 h-4 text-indigo-400 opacity-80 shrink-0 ml-2" />
+                </div>
+              </button>
+            </div>
+          )}
+
+          {scanSuccessNote && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3.5 mb-5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 text-xs flex items-start justify-between gap-2.5"
+            >
+              <div className="flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block text-emerald-250 mb-0.5">✨ Dados extraídos com sucesso!</span>
+                  <span className="opacity-90">{scanSuccessNote}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScanSuccessNote(null)}
+                className="text-emerald-400/60 hover:text-emerald-300 text-xs font-bold p-1"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </motion.div>
+          )}
 
           {error && (
             <motion.div

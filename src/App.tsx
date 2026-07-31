@@ -124,11 +124,11 @@ function MainApp() {
   const [isFirebaseOffline, setIsFirebaseOffline] = useState<boolean>(false);
   const [minSplashLoading, setMinSplashLoading] = useState<boolean>(true);
   
-  // Enforce a minimum display duration of 3.0s for a beautifully balanced splash introduction experience
+  // Quick dynamic splash introduction experience (450ms)
   useEffect(() => {
     const timer = setTimeout(() => {
       setMinSplashLoading(false);
-    }, 3000);
+    }, 450);
     return () => clearTimeout(timer);
   }, []);
   

@@ -55,7 +55,10 @@ import {
   ArrowRight,
   ArrowUp,
   MessageCircle,
-  Clock
+  Clock,
+  Lightbulb,
+  TrendingUp,
+  PieChart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LANGUAGES, Language, useLanguage, LanguageProvider } from './utils/i18n';
@@ -1753,7 +1756,84 @@ function MainApp() {
       return a.diffInDays - b.diffInDays;
     });
 
-    // Sync computed bills/alerts with Service Worker cache
+    // Calculate Smart Insights (Category Alerts, Monthly Performance, Financial Tips)
+    const smartInsights: Array<{ id: string; title: string; desc: string; type: 'categoria' | 'balanco' | 'dica' }> = [];
+
+    // A. Top Category Spend Alert
+    const monthExpenses = activeMonthTransactions.filter(t => t.type === 'fixos' || t.type === 'variaveis');
+    let monthTotalExpense = 0;
+    const catTotals: Record<string, number> = {};
+    
+    monthExpenses.forEach(t => {
+      const amt = Number(t.amount) || Number(t.total_parcelado) || 0;
+      monthTotalExpense += amt;
+      const cName = t.category || 'Outros';
+      catTotals[cName] = (catTotals[cName] || 0) + amt;
+    });
+
+    if (monthTotalExpense > 100) {
+      let topCategory = '';
+      let topAmount = 0;
+      Object.entries(catTotals).forEach(([cat, amt]) => {
+        if (amt > topAmount) {
+          topAmount = amt;
+          topCategory = cat;
+        }
+      });
+
+      const catPercent = Math.round((topAmount / monthTotalExpense) * 100);
+      if (catPercent >= 35 && topCategory && !dismissedAlerts[`insight_cat_${topCategory}`]) {
+        smartInsights.push({
+          id: `insight_cat_${topCategory}`,
+          title: `💡 MAIOR GASTO: ${topCategory.toUpperCase()}`,
+          desc: `A categoria "${topCategory}" representa ${catPercent}% das suas despesas este mês (R$ ${topAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`,
+          type: 'categoria'
+        });
+      }
+    }
+
+    // B. Monthly Balance Performance
+    const monthIncomes = activeMonthTransactions.filter(t => t.type === 'entradas');
+    const monthTotalIncome = monthIncomes.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const monthNetBalance = monthTotalIncome - monthTotalExpense;
+
+    if ((monthTotalIncome > 0 || monthTotalExpense > 0) && !dismissedAlerts['insight_balance']) {
+      if (monthNetBalance >= 0) {
+        smartInsights.push({
+          id: 'insight_balance',
+          title: '🎉 PARABÉNS! MÊS NO VERDE',
+          desc: `Você mantém um saldo positivo de R$ ${monthNetBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} este mês! Excelente gestão financeira!`,
+          type: 'balanco'
+        });
+      } else {
+        smartInsights.push({
+          id: 'insight_balance',
+          title: '📊 BALANÇO MENSAL: ATENÇÃO',
+          desc: `Suas despesas superaram suas receitas em R$ ${Math.abs(monthNetBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Que tal revisar seus custos variáveis?`,
+          type: 'balanco'
+        });
+      }
+    }
+
+    // C. Financial Tip
+    const tipsList = [
+      "Cancelar 1 assinatura pouco usada pode economizar mais de R$ 400 por ano!",
+      "Anote os gastos no mesmo dia para evitar esquecimentos e manter o saldo exato.",
+      "Construir uma reserva de emergência traz tranquilidade para eventuais imprevistos.",
+      "Siga a regra 50/30/20: 50% para essenciais, 30% para desejos e 20% para guardar."
+    ];
+    const tipIdx = (new Date().getDate()) % tipsList.length;
+    const tipId = `insight_tip_${tipIdx}`;
+    if (!dismissedAlerts[tipId]) {
+      smartInsights.push({
+        id: tipId,
+        title: '💡 DICA FINANÇASPRO',
+        desc: tipsList[tipIdx],
+        type: 'dica'
+      });
+    }
+
+    // Sync computed bills and smart insights with Service Worker cache
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then((reg) => {
         if (reg.active) {
@@ -1764,6 +1844,11 @@ function MainApp() {
               name: e.item.name,
               due: e.item.due,
               amount: e.item.amount || e.item.total_parcelado || 0
+            })),
+            insights: smartInsights.map(s => ({
+              id: s.id,
+              title: s.title,
+              body: s.desc
             }))
           });
         }
@@ -1818,6 +1903,15 @@ function MainApp() {
           }
         }
       }
+    } else if (smartInsights.length > 0) {
+      // Pick the highest priority non-dismissed smart insight
+      const insight = smartInsights[0];
+      setFloatingAlert({
+        id: insight.id,
+        title: insight.title,
+        desc: insight.desc,
+        type: insight.type
+      });
     } else {
       setFloatingAlert(null);
     }
@@ -2574,32 +2668,52 @@ function MainApp() {
         </motion.div>
       )}
 
-      {/* Dynamic Floating Due alert matching user logic - Remastered Premium Visual Design */}
+      {/* Dynamic Floating Due alert & Smart Insights */}
       {floatingAlert && (
         <motion.div
           initial={{ y: 80, opacity: 0, scale: 0.9 }}
           animate={{ y: 0, opacity: 1, scale: 1 }}
           exit={{ y: 40, opacity: 0, scale: 0.95 }}
           transition={{ type: 'spring', damping: 20, stiffness: 100 }}
-          className={`fixed bottom-24 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[55] p-5 rounded-3xl shadow-[0_20px_50px_rgba(239,68,68,0.15)] flex flex-col gap-4 transition-all border backdrop-blur-xl ${
-            theme === 'light'
-              ? 'bg-white/95 border-rose-200/80 text-slate-900 shadow-slate-200/50'
-              : 'bg-slate-950/95 border-rose-550/30 text-slate-100'
+          className={`fixed bottom-24 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[55] p-5 rounded-3xl flex flex-col gap-4 transition-all border backdrop-blur-xl ${
+            floatingAlert.type === 'vencimento'
+              ? theme === 'light' ? 'bg-white/95 border-rose-200/80 text-slate-900 shadow-xl shadow-rose-500/10' : 'bg-slate-950/95 border-rose-500/30 text-slate-100'
+              : floatingAlert.type === 'categoria'
+              ? theme === 'light' ? 'bg-white/95 border-amber-200/80 text-slate-900 shadow-xl shadow-amber-500/10' : 'bg-slate-950/95 border-amber-500/30 text-slate-100'
+              : floatingAlert.type === 'balanco'
+              ? theme === 'light' ? 'bg-white/95 border-emerald-200/80 text-slate-900 shadow-xl shadow-emerald-500/10' : 'bg-slate-950/95 border-emerald-500/30 text-slate-100'
+              : theme === 'light' ? 'bg-white/95 border-teal-200/80 text-slate-900 shadow-xl shadow-teal-500/10' : 'bg-slate-950/95 border-teal-500/30 text-slate-100'
           }`}
         >
           {/* Accent colored indicator line at the top */}
-          <div className="absolute top-0 left-6 right-6 h-0.5 bg-gradient-to-r from-rose-500 via-amber-400 to-rose-600 rounded-full" />
+          <div className={`absolute top-0 left-6 right-6 h-0.5 rounded-full ${
+            floatingAlert.type === 'vencimento' ? 'bg-gradient-to-r from-rose-500 via-amber-400 to-rose-600' :
+            floatingAlert.type === 'categoria' ? 'bg-gradient-to-r from-amber-500 via-orange-400 to-amber-600' :
+            floatingAlert.type === 'balanco' ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600' :
+            'bg-gradient-to-r from-teal-500 via-cyan-400 to-indigo-500'
+          }`} />
 
           <div className="flex items-start justify-between w-full gap-3 mt-1">
             <div className="flex gap-3.5 items-start">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500/10 to-amber-500/10 border border-rose-500/15 flex items-center justify-center text-rose-500 shrink-0 relative shadow-inner">
-                <span className="absolute inset-0 rounded-2xl bg-rose-500/5 animate-ping opacity-75" />
-                <Bell className="w-5 h-5 text-rose-500 relative z-10 animate-swing" />
+              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 relative shadow-inner border ${
+                floatingAlert.type === 'vencimento' ? 'bg-gradient-to-br from-rose-500/10 to-amber-500/10 border-rose-500/15 text-rose-500' :
+                floatingAlert.type === 'categoria' ? 'bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/15 text-amber-500' :
+                floatingAlert.type === 'balanco' ? 'bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/15 text-emerald-500' :
+                'bg-gradient-to-br from-teal-500/10 to-cyan-500/10 border-teal-500/15 text-teal-400'
+              }`}>
+                {floatingAlert.type === 'vencimento' && <Bell className="w-5 h-5 animate-swing" />}
+                {floatingAlert.type === 'categoria' && <PieChart className="w-5 h-5" />}
+                {floatingAlert.type === 'balanco' && <TrendingUp className="w-5 h-5" />}
+                {floatingAlert.type === 'dica' && <Lightbulb className="w-5 h-5" />}
               </div>
               <div className="space-y-1.5">
-                <h5 className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${theme === 'light' ? 'text-rose-600' : 'text-rose-400 font-display'}`}>
+                <h5 className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${
+                  floatingAlert.type === 'vencimento' ? (theme === 'light' ? 'text-rose-600' : 'text-rose-400') :
+                  floatingAlert.type === 'categoria' ? (theme === 'light' ? 'text-amber-600' : 'text-amber-400') :
+                  floatingAlert.type === 'balanco' ? (theme === 'light' ? 'text-emerald-600' : 'text-emerald-400') :
+                  (theme === 'light' ? 'text-teal-600' : 'text-teal-400')
+                }`}>
                   <span>{floatingAlert.title}</span>
-                  <span className="inline-flex items-center rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-500 ring-1 ring-inset ring-rose-500/20">Urgente</span>
                 </h5>
                 <p className={`text-xs font-bold leading-relaxed pr-1 ${theme === 'light' ? 'text-slate-800' : 'text-slate-300'}`}>
                   {floatingAlert.desc}
@@ -2636,18 +2750,30 @@ function MainApp() {
                   : 'bg-slate-900/60 hover:bg-slate-800 text-slate-400 hover:text-slate-300 border-white/5'
               }`}
             >
-              AGENDAR DEPOIS
+              ENTENDI
             </button>
-            <button
-              onClick={() => {
-                setActiveTab('fixos');
-                handleOpenPay(floatingAlert.id);
-                setFloatingAlert(null);
-              }}
-              className="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-450 text-white py-3 rounded-2xl text-[10px] font-black tracking-widest cursor-pointer font-display transition-all text-center uppercase shadow-lg shadow-rose-600/20"
-            >
-              EFETUAR PAGAMENTO
-            </button>
+            {floatingAlert.type === 'vencimento' ? (
+              <button
+                onClick={() => {
+                  setActiveTab('fixos');
+                  handleOpenPay(floatingAlert.id);
+                  setFloatingAlert(null);
+                }}
+                className="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-450 text-white py-3 rounded-2xl text-[10px] font-black tracking-widest cursor-pointer font-display transition-all text-center uppercase shadow-lg shadow-rose-600/20"
+              >
+                EFETUAR PAGAMENTO
+              </button>
+            ) : floatingAlert.type === 'categoria' ? (
+              <button
+                onClick={() => {
+                  setActiveTab('variaveis');
+                  setFloatingAlert(null);
+                }}
+                className="flex-1 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-450 text-white py-3 rounded-2xl text-[10px] font-black tracking-widest cursor-pointer font-display transition-all text-center uppercase shadow-lg shadow-amber-600/20"
+              >
+                VER GASTOS
+              </button>
+            ) : null}
           </div>
         </motion.div>
       )}

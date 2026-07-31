@@ -268,6 +268,115 @@ async function runBackgroundPushNotificationChecker() {
           }
         }
       }
+
+      // Smart Insights Background Check (Category Alerts, Monthly Performance, Financial Tips)
+      // Throttle: max 1 smart push every 3 days (72 hours) per user to keep it non-intrusive ("para não ficar chato")
+      try {
+        const smartAlertRef = db.collection("notified_smart_alerts").doc(`user_last_smart_${userId}`);
+        const smartAlertDoc = await smartAlertRef.get();
+        const lastSmartTime = smartAlertDoc.exists && smartAlertDoc.data()?.dispatchedAt 
+          ? new Date(smartAlertDoc.data()?.dispatchedAt).getTime() 
+          : 0;
+        const hoursSinceLastSmart = (now.getTime() - lastSmartTime) / (1000 * 60 * 60);
+
+        if (hoursSinceLastSmart >= 72) {
+          let smartPayload: { title: string; body: string } | null = null;
+          const userTxs = txSnapshot.docs.map(d => d.data());
+          const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+          
+          const monthExpenses = userTxs.filter(t => t.date && String(t.date).startsWith(currentMonthKey) && (t.type === 'variaveis' || t.type === 'fixos'));
+          let totalExpense = 0;
+          const categoryTotals: { [cat: string]: number } = {};
+
+          monthExpenses.forEach(t => {
+            const val = Number(t.amount) || Number(t.total_parcelado) || 0;
+            totalExpense += val;
+            const cat = t.category || 'Outros';
+            categoryTotals[cat] = (categoryTotals[cat] || 0) + val;
+          });
+
+          // Check 1: Top Category spending ratio
+          if (totalExpense > 100) {
+            let topCat = '';
+            let topVal = 0;
+            Object.keys(categoryTotals).forEach(cat => {
+              if (categoryTotals[cat] > topVal) {
+                topVal = categoryTotals[cat];
+                topCat = cat;
+              }
+            });
+
+            const catPercent = Math.round((topVal / totalExpense) * 100);
+            if (catPercent >= 35 && topCat) {
+              smartPayload = {
+                title: "💡 Alerta de Maior Gasto - FinançasPro",
+                body: `Atenção: A categoria "${topCat}" representa ${catPercent}% das suas despesas este mês (R$ ${topVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}).`
+              };
+            }
+          }
+
+          // Check 2: Monthly balance performance (near month end day >= 25 or start day <= 5)
+          if (!smartPayload && (currentDay >= 25 || currentDay <= 5)) {
+            const monthIncomes = userTxs.filter(t => t.date && String(t.date).startsWith(currentMonthKey) && t.type === 'entradas');
+            const totalIncome = monthIncomes.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+            const netBalance = totalIncome - totalExpense;
+
+            if (netBalance > 0 && totalIncome > 0) {
+              smartPayload = {
+                title: "🎉 Parabéns pelo Controle Mensal!",
+                body: `Você está fechando o mês no verde com uma sobra estimada de R$ ${netBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}! Excelente gestão!`
+              };
+            } else if (netBalance < 0 && totalExpense > 0) {
+              smartPayload = {
+                title: "📊 Dica FinançasPro: Balanço Mensal",
+                body: `Suas despesas superaram suas receitas em R$ ${Math.abs(netBalance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}. Que tal revisar pequenos gastos variáveis?`
+              };
+            }
+          }
+
+          // Check 3: Practical Financial Tip fallback
+          if (!smartPayload) {
+            const tips = [
+              "💡 Dica de Economia: Cancelar 1 assinatura pouco usada economiza até R$ 400,00 por ano!",
+              "💡 Dica Prática: Registrar lançamentos no mesmo dia reduz em 80% o esquecimento de despesas cotidianas.",
+              "💡 Regra de Ouro: Construir uma reserva de emergência traz paz de espírito para imprevistos.",
+              "💡 Regra 50/30/20: Mantenha 50% para necessidades básicas, 30% para estilo de vida e 20% para guardar."
+            ];
+            const randomTip = tips[Math.floor(Math.random() * tips.length)];
+            smartPayload = {
+              title: "💡 Dica de Finanças - FinançasPro",
+              body: randomTip
+            };
+          }
+
+          if (smartPayload) {
+            console.log(`🚀 [SMART PUSH] Despachando notificação de conselho/insight para usuário: ${userId}`);
+            const messagePayload = JSON.stringify({
+              title: smartPayload.title,
+              body: smartPayload.body,
+              icon: "/app_icon.png",
+              badge: "/app_icon.png",
+              data: { url: "/" }
+            });
+
+            for (const sub of subs) {
+              try {
+                await webpush.sendNotification(sub, messagePayload);
+              } catch (subErr) {
+                console.warn(`⚠️ Falha ao despachar smart push:`, subErr);
+              }
+            }
+
+            await smartAlertRef.set({
+              userId,
+              dispatchedAt: new Date().toISOString(),
+              title: smartPayload.title
+            });
+          }
+        }
+      } catch (smartErr) {
+        console.warn("⚠️ [SMART PUSH] Erro ao analisar insights de fundo:", smartErr);
+      }
     }
   } catch (err: any) {
     const isPermissionError = err?.code === 7 || (err?.message && (err.message.includes("PERMISSION_DENIED") || err.message.includes("Missing or insufficient permissions")));

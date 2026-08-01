@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, MouseEvent, TouchEvent } from 'react';
+import { useState, useEffect, useRef, MouseEvent, TouchEvent, SyntheticEvent } from 'react';
 import { Transaction, Category } from '../types';
 import { useLanguage } from '../utils/i18n';
 import { X, Check, Landmark, Calendar, DollarSign, Layers, Plus, AlertCircle, Sparkles, Trash2, ArrowLeft, Search } from 'lucide-react';
@@ -117,8 +117,8 @@ export default function TransactionFormModal({
       const dx = Math.abs(clientX - pressStartPosRef.current.x);
       const dy = Math.abs(clientY - pressStartPosRef.current.y);
 
-      // Threshold of 8px movement indicates dragging/scrolling
-      if (dx > 8 || dy > 8) {
+      // Threshold of 25px movement indicates intentional dragging/scrolling
+      if (dx > 25 || dy > 25) {
         hasDraggedRef.current = true;
         if (longPressTimerRef.current) {
           clearTimeout(longPressTimerRef.current);
@@ -128,16 +128,21 @@ export default function TransactionFormModal({
     }
   };
 
-  const handlePressEnd = (item: Category) => {
+  const selectCategory = (item: Category) => {
+    setCat(item.value);
+    setShowCatDropdown(false);
+    setCatSearch('');
+    setShowAddCustomCat(false);
+  };
+
+  const handlePressEnd = (item: Category, e?: SyntheticEvent) => {
+    if (e) e.stopPropagation();
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
     if (!hasDraggedRef.current && !isLongPressRef.current) {
-      setCat(item.value);
-      setShowCatDropdown(false);
-      setCatSearch('');
-      setShowAddCustomCat(false);
+      selectCategory(item);
     }
     pressStartPosRef.current = null;
     setTimeout(() => {
@@ -151,7 +156,6 @@ export default function TransactionFormModal({
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
-    hasDraggedRef.current = true;
     pressStartPosRef.current = null;
   };
 
@@ -302,6 +306,7 @@ export default function TransactionFormModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: "spring", duration: 0.4 }}
+          onClick={(e) => e.stopPropagation()}
           className="bg-[#0f1524] border border-white/10 w-full max-w-lg rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-visible max-h-[90vh] overflow-y-auto z-10"
         >
           {/* Header */}
@@ -512,13 +517,15 @@ export default function TransactionFormModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.97, y: 15 }}
           transition={{ duration: 0.2 }}
+          onClick={(e) => e.stopPropagation()}
           className="fixed inset-0 z-[120] bg-[#0b0f19] flex flex-col p-4 sm:p-6 text-white overflow-hidden select-none"
         >
           {/* Header with prominent Voltar button */}
           <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-3 gap-3 shrink-0">
             <button
               type="button"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 setShowCatDropdown(false);
                 setCatSearch('');
                 setShowAddCustomCat(false);
@@ -688,7 +695,10 @@ export default function TransactionFormModal({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 pb-8">
                 {/* Quick Create Card */}
                 <div
-                  onClick={() => setShowAddCustomCat(true)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAddCustomCat(true);
+                  }}
                   className="p-4 rounded-2xl bg-slate-900/40 border-2 border-dashed border-indigo-500/30 hover:border-indigo-400 hover:bg-indigo-600/10 text-indigo-300 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[110px] group shadow-sm"
                 >
                   <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
@@ -704,13 +714,19 @@ export default function TransactionFormModal({
                   return (
                     <div
                       key={item.value}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!hasDraggedRef.current && !isLongPressRef.current) {
+                          selectCategory(item);
+                        }
+                      }}
                       onMouseDown={(e) => handlePressStart(item, e)}
                       onMouseMove={(e) => handlePressMove(e)}
-                      onMouseUp={() => handlePressEnd(item)}
+                      onMouseUp={(e) => handlePressEnd(item, e)}
                       onMouseLeave={handlePressCancel}
                       onTouchStart={(e) => handlePressStart(item, e)}
                       onTouchMove={(e) => handlePressMove(e)}
-                      onTouchEnd={() => handlePressEnd(item)}
+                      onTouchEnd={(e) => handlePressEnd(item, e)}
                       className={`group relative p-4 rounded-2xl text-center cursor-pointer transition-all border select-none min-h-[110px] flex flex-col items-center justify-center ${
                         isSelected
                           ? 'bg-indigo-600/30 border-2 border-indigo-400 text-white shadow-xl shadow-indigo-600/25 scale-[1.02]'

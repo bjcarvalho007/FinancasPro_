@@ -90,7 +90,7 @@ const defaultCategories = [
   { icon: '🔥', label: 'Gás', value: 'gas' },
   { icon: '🎁', label: 'Presentes / Mimo', value: 'presentes' },
   { icon: '✈️', label: 'Viagem', value: 'viagem' },
-  { icon: '💳', label: 'Cartão', value: 'cartao font-display' },
+  { icon: '💳', label: 'Cartão', value: 'cartao' },
   { icon: '📦', label: 'Outros', value: 'outros' }
 ];
 

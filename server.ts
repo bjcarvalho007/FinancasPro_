@@ -206,7 +206,6 @@ async function runBackgroundPushNotificationChecker() {
         if (paid_amount >= amount) continue;
 
         let isNearDue = false;
-        let isOverdue = false;
         let daysRemainingText = "";
 
         const dueStr = String(tx.due).trim();
@@ -216,10 +215,7 @@ async function runBackgroundPushNotificationChecker() {
           const dueDate = new Date(Number(dueParts[0]), Number(dueParts[1]) - 1, Number(dueParts[2]), 12, 0, 0);
           const diffTime = dueDate.getTime() - now.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          if (diffDays < 0) {
-            isOverdue = true;
-            daysRemainingText = Math.abs(diffDays) === 1 ? "ontem" : `há ${Math.abs(diffDays)} dias`;
-          } else if (diffDays <= 3) {
+          if (diffDays >= 0 && diffDays <= 3) {
             isNearDue = true;
             daysRemainingText = diffDays === 0 ? "hoje" : `em ${diffDays} dias`;
           }
@@ -228,37 +224,27 @@ async function runBackgroundPushNotificationChecker() {
           const dueDay = parseInt(dueStr, 10);
           if (!isNaN(dueDay)) {
             const diffDays = dueDay - currentDay;
-            if (diffDays < 0) {
-              isOverdue = true;
-              daysRemainingText = Math.abs(diffDays) === 1 ? "ontem" : `há ${Math.abs(diffDays)} dias`;
-            } else if (diffDays <= 3) {
+            if (diffDays >= 0 && diffDays <= 3) {
               isNearDue = true;
               daysRemainingText = diffDays === 0 ? "hoje" : `em ${diffDays} dias`;
             }
           }
         }
 
-        if (isNearDue || isOverdue) {
+        if (isNearDue) {
           const alertDateKey = `push_alert_${userId}_${tx.id}_${todayStr}`;
           
-          // Use tracking schema inside Firestore to avoid spamming multiple notifications on the same calendar day
+          // Use isNearDue tracking schema inside Firestore to avoid spamming multiple notifications on the same calendar day
           const alertRef = db.collection("notified_alerts").doc(alertDateKey);
           const alertDoc = await alertRef.get();
           
           if (!alertDoc.exists) {
-            console.log(`🚀 [BACKGROUND ALERT] Despachando push por ${isOverdue ? 'atraso' : 'vencimento iminente'} de "${tx.name}" para usuário: ${userId}`);
+            console.log(`🚀 [BACKGROUND ALERT] Despachando pushes por vencimento iminente de "${tx.name}" para usuário: ${userId}`);
             
             const remaining = amount - paid_amount;
-            const notificationTitle = isOverdue
-              ? "🚨 Conta Vencida / Atrasada - FinançasPro"
-              : "⚠️ Conta Próxima do Vencimento - FinançasPro";
-            const notificationBody = isOverdue
-              ? `Atenção: A conta "${tx.name}" está em ATRASO (${daysRemainingText}). Resta pagar R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`
-              : `O lançamento "${tx.name}" vence ${daysRemainingText}. Resta pagar R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`;
-
             const messagePayload = JSON.stringify({
-              title: notificationTitle,
-              body: notificationBody,
+              title: "🚨 Conta Próxima do Vencimento - FinançasPro",
+              body: `O lançamento "${tx.name}" vence ${daysRemainingText}. Resta pagar R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`,
               icon: "/app_icon.png",
               badge: "/app_icon.png",
               data: { url: "/" }

@@ -55,9 +55,7 @@ import {
   ArrowRight,
   ArrowUp,
   MessageCircle,
-  Clock,
-  Lightbulb,
-  PieChart
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LANGUAGES, Language, useLanguage, LanguageProvider } from './utils/i18n';
@@ -177,7 +175,6 @@ function MainApp() {
   const [showUpdateAlert, setShowUpdateAlert] = useState<boolean>(false);
   const [isPremiumAlertDismissed, setIsPremiumAlertDismissed] = useState<boolean>(false);
   const [showUsernamePromptModal, setShowUsernamePromptModal] = useState<boolean>(false);
-  const [showNotificationPromptModal, setShowNotificationPromptModal] = useState<boolean>(false);
   const [newUsernameInput, setNewUsernameInput] = useState<string>('');
   const [usernameSaving, setUsernameSaving] = useState<boolean>(false);
   const [sessionClosedAlert, setSessionClosedAlert] = useState<boolean>(false);
@@ -348,38 +345,23 @@ function MainApp() {
     if (Notification.permission !== 'granted') return;
 
     try {
-      let reg = await navigator.serviceWorker.getRegistration();
-      if (!reg) {
-        reg = await navigator.serviceWorker.register('/sw.js');
-      }
-      await navigator.serviceWorker.ready;
-
+      const reg = await navigator.serviceWorker.ready;
       let sub = await reg.pushManager.getSubscription();
 
-      const keyResponse = await fetch('/api/push/vapid-public-key');
-      if (!keyResponse.ok) return;
-      const { publicKey } = await keyResponse.json();
-      if (!publicKey) return;
-
       if (!sub) {
+        const keyResponse = await fetch('/api/push/vapid-public-key');
+        if (!keyResponse.ok) return;
+        const { publicKey } = await keyResponse.json();
+        
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicKey)
         });
       }
 
-      // Send VAPID key and subscription info to active service worker
-      if (reg.active) {
-        reg.active.postMessage({
-          type: 'SET_VAPID_KEY',
-          publicKey,
-          subscription: sub
-        });
-      }
-
       const cleanEndpoint = sub.endpoint
         .replace(/[^a-zA-Z0-9]/g, '_')
-        .substring(Math.max(0, sub.endpoint.length - 60));
+        .substring(sub.endpoint.length - 60);
       const subId = `sub_${currentUser.uid}_${cleanEndpoint}`;
 
       await setDoc(doc(db, 'push_subscriptions', subId), {
@@ -389,41 +371,10 @@ function MainApp() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
-      console.log('👷 Auto-inscrição VAPID de push do usuário ativa com sucesso no Firestore.');
+      console.log('👷 Auto-inscrição de push do usuário ativa no Firestore.');
     } catch (e) {
       console.warn('Falha silenciosa ao atualizar inscrição de push:', e);
     }
-  };
-
-  const handleRequestNotificationPermission = async () => {
-    if (!('Notification' in window)) {
-      triggerToast('Notificações não são suportadas neste navegador.', 'warning');
-      setShowNotificationPromptModal(false);
-      return;
-    }
-
-    try {
-      const perm = await Notification.requestPermission();
-      if (perm === 'granted') {
-        triggerToast('Notificações ativadas com sucesso!', 'success');
-        if (user) {
-          await silentAutoSubscribe(user);
-        }
-      } else if (perm === 'denied') {
-        triggerToast('Permissão de notificações negada no navegador.', 'warning');
-      }
-    } catch (e) {
-      console.error('Erro ao solicitar permissão de notificações:', e);
-    } finally {
-      setShowNotificationPromptModal(false);
-    }
-  };
-
-  const handleDismissNotificationPrompt = () => {
-    if (user) {
-      sessionStorage.setItem(`dismiss_notif_prompt_${user.uid}`, 'true');
-    }
-    setShowNotificationPromptModal(false);
   };
 
   // Listen to Auth State
@@ -433,9 +384,16 @@ function MainApp() {
       setLoadingUser(false);
 
       if (currentUser) {
-        if ('Notification' in window && 'serviceWorker' in navigator) {
+        if ('Notification' in window) {
           if (Notification.permission === 'granted') {
             silentAutoSubscribe(currentUser);
+          } else if (Notification.permission === 'default') {
+            Notification.requestPermission().then((perm) => {
+              if (perm === 'granted') {
+                console.log('Notificações ativadas pelo usuário!');
+                silentAutoSubscribe(currentUser);
+              }
+            });
           }
         }
       }
@@ -1795,100 +1753,7 @@ function MainApp() {
       return a.diffInDays - b.diffInDays;
     });
 
-    // Calculate Smart Insights (Category Alerts, Monthly Performance, Financial Tips)
-    const smartInsights: Array<{ id: string; title: string; desc: string; type: 'categoria' | 'balanco' | 'dica' }> = [];
-
-    // A. Top Category Spend Alert (accurately reading t.cat and activeMonthCategoryList)
-    const monthDebits = activeMonthTransactions.filter(t => (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas') && !t.is_skipped);
-    let monthTotalExpense = 0;
-    const catTotals: Record<string, { value: string; label: string; icon: string; amount: number }> = {};
-    
-    monthDebits.forEach(t => {
-      const amt = Number(t.amount) || 0;
-      if (amt <= 0) return;
-      monthTotalExpense += amt;
-
-      const catKey = t.cat || (t as any).category || 'outros';
-      if (!catTotals[catKey]) {
-        const catObj = activeMonthCategoryList.find(c => c.value === catKey);
-        const label = catObj ? catObj.label : (catKey ? (catKey.charAt(0).toUpperCase() + catKey.slice(1)) : 'Outros');
-        const icon = catObj ? catObj.icon : '📦';
-        catTotals[catKey] = { value: catKey, label, icon, amount: 0 };
-      }
-      catTotals[catKey].amount += amt;
-    });
-
-    if (monthTotalExpense > 0) {
-      const sortedCats = Object.values(catTotals).sort((a, b) => b.amount - a.amount);
-      const topCat = sortedCats[0];
-
-      if (topCat && topCat.amount > 0) {
-        const catPercent = Math.round((topCat.amount / monthTotalExpense) * 100);
-        if (!dismissedAlerts[`insight_cat_${topCat.value}`]) {
-          smartInsights.push({
-            id: `insight_cat_${topCat.value}`,
-            title: `💡 MAIOR GASTO: ${topCat.icon} ${topCat.label.toUpperCase()}`,
-            desc: `Sua maior despesa este mês é na categoria "${topCat.label}", totalizando R$ ${topCat.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${catPercent}% do total gasto de R$ ${monthTotalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`,
-            type: 'categoria'
-          });
-        }
-      }
-    }
-
-    // B. Monthly Balance Performance
-    const userIncome = (settings?.monthlyIncome?.[currentMonthKey] !== undefined)
-      ? Number(settings.monthlyIncome[currentMonthKey])
-      : Number(settings?.income || 0);
-    const extraEarningsSum = (settings?.extraEarnings || [])
-      .filter(e => e.monthKey === currentMonthKey)
-      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-    const totalMonthIncome = userIncome + extraEarningsSum;
-    const monthNetBalance = totalMonthIncome - monthTotalExpense;
-
-    if (!dismissedAlerts['insight_balance']) {
-      if (totalMonthIncome > 0 && monthNetBalance >= 0) {
-        smartInsights.push({
-          id: 'insight_balance',
-          title: '🎉 PARABÉNS! MÊS NO VERDE',
-          desc: `Sua receita mensal é de R$ ${totalMonthIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para R$ ${monthTotalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em despesas. Saldo positivo: R$ ${monthNetBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!`,
-          type: 'balanco'
-        });
-      } else if (totalMonthIncome > 0 && monthNetBalance < 0) {
-        smartInsights.push({
-          id: 'insight_balance',
-          title: '📊 BALANÇO MENSAL: ATENÇÃO',
-          desc: `Suas despesas do mês (R$ ${monthTotalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) superaram a receita (R$ ${totalMonthIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Déficit de R$ ${Math.abs(monthNetBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
-          type: 'balanco'
-        });
-      } else if (totalMonthIncome === 0 && monthTotalExpense > 0) {
-        smartInsights.push({
-          id: 'insight_balance',
-          title: '📊 DESPESAS DO MÊS',
-          desc: `Você possui R$ ${monthTotalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em despesas este mês. Defina sua renda mensal em Ajustes para acompanhar o balanço.`,
-          type: 'balanco'
-        });
-      }
-    }
-
-    // C. Financial Tip
-    const tipsList = [
-      "Cancelar 1 assinatura pouco usada pode economizar mais de R$ 400 por ano!",
-      "Anote os gastos no mesmo dia para evitar esquecimentos e manter o saldo exato.",
-      "Construir uma reserva de emergência traz tranquilidade para eventuais imprevistos.",
-      "Siga a regra 50/30/20: 50% para essenciais, 30% para desejos e 20% para guardar."
-    ];
-    const tipIdx = (new Date().getDate()) % tipsList.length;
-    const tipId = `insight_tip_${tipIdx}`;
-    if (!dismissedAlerts[tipId]) {
-      smartInsights.push({
-        id: tipId,
-        title: '💡 DICA FINANÇASPRO',
-        desc: tipsList[tipIdx],
-        type: 'dica'
-      });
-    }
-
-    // Sync computed bills and smart insights with Service Worker cache
+    // Sync computed bills/alerts with Service Worker cache
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then((reg) => {
         if (reg.active) {
@@ -1899,11 +1764,6 @@ function MainApp() {
               name: e.item.name,
               due: e.item.due,
               amount: e.item.amount || e.item.total_parcelado || 0
-            })),
-            insights: smartInsights.map(s => ({
-              id: s.id,
-              title: s.title,
-              body: s.desc
             }))
           });
         }
@@ -2714,52 +2574,32 @@ function MainApp() {
         </motion.div>
       )}
 
-      {/* Dynamic Floating Due alert & Smart Insights */}
+      {/* Dynamic Floating Due alert matching user logic - Remastered Premium Visual Design */}
       {floatingAlert && (
         <motion.div
           initial={{ y: 80, opacity: 0, scale: 0.9 }}
           animate={{ y: 0, opacity: 1, scale: 1 }}
           exit={{ y: 40, opacity: 0, scale: 0.95 }}
           transition={{ type: 'spring', damping: 20, stiffness: 100 }}
-          className={`fixed bottom-24 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[55] p-5 rounded-3xl flex flex-col gap-4 transition-all border backdrop-blur-xl ${
-            floatingAlert.type === 'vencimento'
-              ? theme === 'light' ? 'bg-white/95 border-rose-200/80 text-slate-900 shadow-xl shadow-rose-500/10' : 'bg-slate-950/95 border-rose-500/30 text-slate-100'
-              : floatingAlert.type === 'categoria'
-              ? theme === 'light' ? 'bg-white/95 border-amber-200/80 text-slate-900 shadow-xl shadow-amber-500/10' : 'bg-slate-950/95 border-amber-500/30 text-slate-100'
-              : floatingAlert.type === 'balanco'
-              ? theme === 'light' ? 'bg-white/95 border-emerald-200/80 text-slate-900 shadow-xl shadow-emerald-500/10' : 'bg-slate-950/95 border-emerald-500/30 text-slate-100'
-              : theme === 'light' ? 'bg-white/95 border-teal-200/80 text-slate-900 shadow-xl shadow-teal-500/10' : 'bg-slate-950/95 border-teal-500/30 text-slate-100'
+          className={`fixed bottom-24 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[55] p-5 rounded-3xl shadow-[0_20px_50px_rgba(239,68,68,0.15)] flex flex-col gap-4 transition-all border backdrop-blur-xl ${
+            theme === 'light'
+              ? 'bg-white/95 border-rose-200/80 text-slate-900 shadow-slate-200/50'
+              : 'bg-slate-950/95 border-rose-550/30 text-slate-100'
           }`}
         >
           {/* Accent colored indicator line at the top */}
-          <div className={`absolute top-0 left-6 right-6 h-0.5 rounded-full ${
-            floatingAlert.type === 'vencimento' ? 'bg-gradient-to-r from-rose-500 via-amber-400 to-rose-600' :
-            floatingAlert.type === 'categoria' ? 'bg-gradient-to-r from-amber-500 via-orange-400 to-amber-600' :
-            floatingAlert.type === 'balanco' ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600' :
-            'bg-gradient-to-r from-teal-500 via-cyan-400 to-indigo-500'
-          }`} />
+          <div className="absolute top-0 left-6 right-6 h-0.5 bg-gradient-to-r from-rose-500 via-amber-400 to-rose-600 rounded-full" />
 
           <div className="flex items-start justify-between w-full gap-3 mt-1">
             <div className="flex gap-3.5 items-start">
-              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 relative shadow-inner border ${
-                floatingAlert.type === 'vencimento' ? 'bg-gradient-to-br from-rose-500/10 to-amber-500/10 border-rose-500/15 text-rose-500' :
-                floatingAlert.type === 'categoria' ? 'bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/15 text-amber-500' :
-                floatingAlert.type === 'balanco' ? 'bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/15 text-emerald-500' :
-                'bg-gradient-to-br from-teal-500/10 to-cyan-500/10 border-teal-500/15 text-teal-400'
-              }`}>
-                {floatingAlert.type === 'vencimento' && <Bell className="w-5 h-5 animate-swing" />}
-                {floatingAlert.type === 'categoria' && <PieChart className="w-5 h-5" />}
-                {floatingAlert.type === 'balanco' && <TrendingUp className="w-5 h-5" />}
-                {floatingAlert.type === 'dica' && <Lightbulb className="w-5 h-5" />}
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500/10 to-amber-500/10 border border-rose-500/15 flex items-center justify-center text-rose-500 shrink-0 relative shadow-inner">
+                <span className="absolute inset-0 rounded-2xl bg-rose-500/5 animate-ping opacity-75" />
+                <Bell className="w-5 h-5 text-rose-500 relative z-10 animate-swing" />
               </div>
               <div className="space-y-1.5">
-                <h5 className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${
-                  floatingAlert.type === 'vencimento' ? (theme === 'light' ? 'text-rose-600' : 'text-rose-400') :
-                  floatingAlert.type === 'categoria' ? (theme === 'light' ? 'text-amber-600' : 'text-amber-400') :
-                  floatingAlert.type === 'balanco' ? (theme === 'light' ? 'text-emerald-600' : 'text-emerald-400') :
-                  (theme === 'light' ? 'text-teal-600' : 'text-teal-400')
-                }`}>
+                <h5 className={`text-xs font-black uppercase tracking-widest flex items-center gap-1.5 ${theme === 'light' ? 'text-rose-600' : 'text-rose-400 font-display'}`}>
                   <span>{floatingAlert.title}</span>
+                  <span className="inline-flex items-center rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-500 ring-1 ring-inset ring-rose-500/20">Urgente</span>
                 </h5>
                 <p className={`text-xs font-bold leading-relaxed pr-1 ${theme === 'light' ? 'text-slate-800' : 'text-slate-300'}`}>
                   {floatingAlert.desc}
@@ -2796,30 +2636,18 @@ function MainApp() {
                   : 'bg-slate-900/60 hover:bg-slate-800 text-slate-400 hover:text-slate-300 border-white/5'
               }`}
             >
-              ENTENDI
+              AGENDAR DEPOIS
             </button>
-            {floatingAlert.type === 'vencimento' ? (
-              <button
-                onClick={() => {
-                  setActiveTab('fixos');
-                  handleOpenPay(floatingAlert.id);
-                  setFloatingAlert(null);
-                }}
-                className="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-450 text-white py-3 rounded-2xl text-[10px] font-black tracking-widest cursor-pointer font-display transition-all text-center uppercase shadow-lg shadow-rose-600/20"
-              >
-                EFETUAR PAGAMENTO
-              </button>
-            ) : floatingAlert.type === 'categoria' ? (
-              <button
-                onClick={() => {
-                  setActiveTab('variaveis');
-                  setFloatingAlert(null);
-                }}
-                className="flex-1 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-450 text-white py-3 rounded-2xl text-[10px] font-black tracking-widest cursor-pointer font-display transition-all text-center uppercase shadow-lg shadow-amber-600/20"
-              >
-                VER GASTOS
-              </button>
-            ) : null}
+            <button
+              onClick={() => {
+                setActiveTab('fixos');
+                handleOpenPay(floatingAlert.id);
+                setFloatingAlert(null);
+              }}
+              className="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-450 text-white py-3 rounded-2xl text-[10px] font-black tracking-widest cursor-pointer font-display transition-all text-center uppercase shadow-lg shadow-rose-600/20"
+            >
+              EFETUAR PAGAMENTO
+            </button>
           </div>
         </motion.div>
       )}
@@ -5281,74 +5109,6 @@ function MainApp() {
                     {!usernameSaving && <ArrowRight className="w-4 h-4" />}
                   </button>
                 </form>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal de Permissão de Notificações Mobile (Fluxo Claro de Inicialização) */}
-      <AnimatePresence>
-        {showNotificationPromptModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={handleDismissNotificationPrompt}
-              className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-45"
-            />
-            
-            <motion.div
-              initial={{ scale: 0.95, y: 20, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.95, y: 20, opacity: 0 }}
-              className={`w-full max-w-md rounded-3xl p-6 md:p-8 shadow-2xl relative z-50 border transition-all overflow-hidden ${
-                theme === 'light'
-                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
-                  : 'bg-[#0b0f1a] border-white/10 text-white shadow-black/80'
-              }`}
-            >
-              <div className="absolute -top-16 -right-16 w-32 h-32 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
-              
-              <div className="text-center space-y-4 relative z-10">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 mx-auto animate-pulse shrink-0 border border-indigo-500/20">
-                  <Bell className="w-7 h-7 text-indigo-500 dark:text-indigo-400" />
-                </div>
-                
-                <div className="space-y-2">
-                  <h3 className="font-display font-black text-xl tracking-tight">
-                    Ativar Notificações no Celular? 🔔
-                  </h3>
-                  <p className={`text-xs leading-relaxed font-light ${
-                    theme === 'light' ? 'text-slate-600' : 'text-slate-400'
-                  }`}>
-                    Receba avisos automáticos de <strong className="font-semibold text-indigo-500">contas a vencer</strong>, <strong className="font-semibold text-indigo-500">balanço mensal</strong> e alertas de <strong className="font-semibold text-indigo-500">maior gasto</strong> diretamente no seu celular como em um app instalado.
-                  </p>
-                </div>
-
-                <div className="pt-2 flex flex-col gap-2.5">
-                  <button
-                    type="button"
-                    onClick={handleRequestNotificationPermission}
-                    className="w-full py-3.5 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Bell className="w-4 h-4" />
-                    Ativar Notificações Agora
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleDismissNotificationPrompt}
-                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-                      theme === 'light'
-                        ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
-                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                    }`}
-                  >
-                    Agora Não
-                  </button>
-                </div>
               </div>
             </motion.div>
           </div>

@@ -4,7 +4,7 @@ import { auth, db } from '../firebase';
 import { useLanguage } from '../utils/i18n';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
-import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle, Zap } from 'lucide-react';
+import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportPremiumPDF, exportPremiumSpreadsheet } from '../utils/reportGenerator';
 
@@ -144,9 +144,9 @@ export default function SettingsPanel({
     }
   };
 
-  const triggerTestPush = async (testType: 'vencimento' | 'smart' = 'vencimento') => {
+  const triggerTestPush = async () => {
     if (!isPushSubscribed) {
-      showToast('Por favor, ative os alertas em segundo plano primeiro.', 'warning');
+      showToast('Por favor, ative a notificação Web Push primeiro.', 'warning');
       return;
     }
     setPushLoading(true);
@@ -158,28 +158,20 @@ export default function SettingsPanel({
         return;
       }
 
-      const payload = testType === 'smart' ? {
-        title: '💡 Dica Inteligente - FinançasPro',
-        body: 'Alerta de teste: Acompanhar seus maiores gastos por categoria ajuda você a economizar até 20% do seu orçamento mensal!'
-      } : {
-        title: '🚨 Teste de Vencimento - FinançasPro',
-        body: 'As notificações em segundo plano estão ativas no seu dispositivo! Você receberá alertas de contas prestes a vencer mesmo com o aplicativo fechado.'
-      };
-
       const res = await fetch('/api/notify/email-and-push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: auth.currentUser?.email || '',
-          title: payload.title,
-          body: payload.body,
+          title: '🚨 Teste de Notificação - FinançasPro',
+          body: 'As notificações em tempo real estão configuradas e prontas no servidor! Você receberá alertas mesmo com o app fechado.',
           pushSubscriptions: [sub],
           detailedTransactions: []
         })
       });
 
       if (res.ok) {
-        showToast('Notificação de teste enviada para o dispositivo!', 'success');
+        showToast('Alerta de teste enviado com sucesso!', 'success');
       } else {
         showToast('Falha ao acionar despacho da notificação.', 'error');
       }
@@ -639,30 +631,18 @@ export default function SettingsPanel({
             </div>
 
             {isPushSupported && isPushSubscribed && (
-              <div className="flex flex-wrap gap-2 pt-1">
+              <div className="flex gap-2">
                 <button
-                  onClick={() => triggerTestPush('vencimento')}
+                  onClick={triggerTestPush}
                   disabled={pushLoading}
-                  className="bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 font-bold py-2 px-3 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                  className="bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 font-bold py-2 px-4 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
                 >
                   {pushLoading ? (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Smartphone className="w-3.5 h-3.5" />
                   )}
-                  {t('testarAlertaVencimento', 'Testar Alerta de Vencimento')}
-                </button>
-                <button
-                  onClick={() => triggerTestPush('smart')}
-                  disabled={pushLoading}
-                  className="bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 font-bold py-2 px-3 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  {pushLoading ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Zap className="w-3.5 h-3.5" />
-                  )}
-                  {t('testarDicaInteligente', 'Testar Dica / Alerta Inteligente')}
+                  {t('dispararNotificacaoTeste', 'Disparar Notificação de Teste')}
                 </button>
               </div>
             )}

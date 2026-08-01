@@ -177,6 +177,7 @@ function MainApp() {
   const [showUpdateAlert, setShowUpdateAlert] = useState<boolean>(false);
   const [isPremiumAlertDismissed, setIsPremiumAlertDismissed] = useState<boolean>(false);
   const [showUsernamePromptModal, setShowUsernamePromptModal] = useState<boolean>(false);
+  const [showNotificationPromptModal, setShowNotificationPromptModal] = useState<boolean>(false);
   const [newUsernameInput, setNewUsernameInput] = useState<string>('');
   const [usernameSaving, setUsernameSaving] = useState<boolean>(false);
   const [sessionClosedAlert, setSessionClosedAlert] = useState<boolean>(false);
@@ -347,23 +348,38 @@ function MainApp() {
     if (Notification.permission !== 'granted') return;
 
     try {
-      const reg = await navigator.serviceWorker.ready;
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register('/sw.js');
+      }
+      await navigator.serviceWorker.ready;
+
       let sub = await reg.pushManager.getSubscription();
 
+      const keyResponse = await fetch('/api/push/vapid-public-key');
+      if (!keyResponse.ok) return;
+      const { publicKey } = await keyResponse.json();
+      if (!publicKey) return;
+
       if (!sub) {
-        const keyResponse = await fetch('/api/push/vapid-public-key');
-        if (!keyResponse.ok) return;
-        const { publicKey } = await keyResponse.json();
-        
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicKey)
         });
       }
 
+      // Send VAPID key and subscription info to active service worker
+      if (reg.active) {
+        reg.active.postMessage({
+          type: 'SET_VAPID_KEY',
+          publicKey,
+          subscription: sub
+        });
+      }
+
       const cleanEndpoint = sub.endpoint
         .replace(/[^a-zA-Z0-9]/g, '_')
-        .substring(sub.endpoint.length - 60);
+        .substring(Math.max(0, sub.endpoint.length - 60));
       const subId = `sub_${currentUser.uid}_${cleanEndpoint}`;
 
       await setDoc(doc(db, 'push_subscriptions', subId), {
@@ -373,10 +389,41 @@ function MainApp() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
-      console.log('👷 Auto-inscrição de push do usuário ativa no Firestore.');
+      console.log('👷 Auto-inscrição VAPID de push do usuário ativa com sucesso no Firestore.');
     } catch (e) {
       console.warn('Falha silenciosa ao atualizar inscrição de push:', e);
     }
+  };
+
+  const handleRequestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      triggerToast('Notificações não são suportadas neste navegador.', 'warning');
+      setShowNotificationPromptModal(false);
+      return;
+    }
+
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm === 'granted') {
+        triggerToast('Notificações ativadas com sucesso!', 'success');
+        if (user) {
+          await silentAutoSubscribe(user);
+        }
+      } else if (perm === 'denied') {
+        triggerToast('Permissão de notificações negada no navegador.', 'warning');
+      }
+    } catch (e) {
+      console.error('Erro ao solicitar permissão de notificações:', e);
+    } finally {
+      setShowNotificationPromptModal(false);
+    }
+  };
+
+  const handleDismissNotificationPrompt = () => {
+    if (user) {
+      sessionStorage.setItem(`dismiss_notif_prompt_${user.uid}`, 'true');
+    }
+    setShowNotificationPromptModal(false);
   };
 
   // Listen to Auth State
@@ -386,16 +433,16 @@ function MainApp() {
       setLoadingUser(false);
 
       if (currentUser) {
-        if ('Notification' in window) {
+        if ('Notification' in window && 'serviceWorker' in navigator) {
           if (Notification.permission === 'granted') {
             silentAutoSubscribe(currentUser);
           } else if (Notification.permission === 'default') {
-            Notification.requestPermission().then((perm) => {
-              if (perm === 'granted') {
-                console.log('Notificações ativadas pelo usuário!');
-                silentAutoSubscribe(currentUser);
-              }
-            });
+            const isDismissed = sessionStorage.getItem(`dismiss_notif_prompt_${currentUser.uid}`) === 'true';
+            if (!isDismissed) {
+              setTimeout(() => {
+                setShowNotificationPromptModal(true);
+              }, 1200);
+            }
           }
         }
       }
@@ -5250,6 +5297,74 @@ function MainApp() {
                     {!usernameSaving && <ArrowRight className="w-4 h-4" />}
                   </button>
                 </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Permissão de Notificações Mobile (Fluxo Claro de Inicialização) */}
+      <AnimatePresence>
+        {showNotificationPromptModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleDismissNotificationPrompt}
+              className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-45"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 20, opacity: 0 }}
+              className={`w-full max-w-md rounded-3xl p-6 md:p-8 shadow-2xl relative z-50 border transition-all overflow-hidden ${
+                theme === 'light'
+                  ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+                  : 'bg-[#0b0f1a] border-white/10 text-white shadow-black/80'
+              }`}
+            >
+              <div className="absolute -top-16 -right-16 w-32 h-32 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
+              
+              <div className="text-center space-y-4 relative z-10">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 mx-auto animate-pulse shrink-0 border border-indigo-500/20">
+                  <Bell className="w-7 h-7 text-indigo-500 dark:text-indigo-400" />
+                </div>
+                
+                <div className="space-y-2">
+                  <h3 className="font-display font-black text-xl tracking-tight">
+                    Ativar Notificações no Celular? 🔔
+                  </h3>
+                  <p className={`text-xs leading-relaxed font-light ${
+                    theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                  }`}>
+                    Receba avisos automáticos de <strong className="font-semibold text-indigo-500">contas a vencer</strong>, <strong className="font-semibold text-indigo-500">balanço mensal</strong> e alertas de <strong className="font-semibold text-indigo-500">maior gasto</strong> diretamente no seu celular como em um app instalado.
+                  </p>
+                </div>
+
+                <div className="pt-2 flex flex-col gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleRequestNotificationPermission}
+                    className="w-full py-3.5 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Bell className="w-4 h-4" />
+                    Ativar Notificações Agora
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDismissNotificationPrompt}
+                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
+                      theme === 'light'
+                        ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    Agora Não
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

@@ -284,33 +284,40 @@ async function runBackgroundPushNotificationChecker() {
           const userTxs = txSnapshot.docs.map(d => d.data());
           const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
           
-          const monthExpenses = userTxs.filter(t => t.date && String(t.date).startsWith(currentMonthKey) && (t.type === 'variaveis' || t.type === 'fixos'));
+          const monthExpenses = userTxs.filter(t => 
+            (t.monthKey === currentMonthKey || (t.due && String(t.due).includes(currentMonthKey))) && 
+            (t.type === 'variaveis' || t.type === 'fixos' || t.type === 'parcelas') &&
+            !t.is_skipped
+          );
           let totalExpense = 0;
           const categoryTotals: { [cat: string]: number } = {};
 
           monthExpenses.forEach(t => {
-            const val = Number(t.amount) || Number(t.total_parcelado) || 0;
-            totalExpense += val;
-            const cat = t.category || 'Outros';
-            categoryTotals[cat] = (categoryTotals[cat] || 0) + val;
+            const val = Number(t.amount) || 0;
+            if (val > 0) {
+              totalExpense += val;
+              const catKey = t.cat || 'outros';
+              categoryTotals[catKey] = (categoryTotals[catKey] || 0) + val;
+            }
           });
 
           // Check 1: Top Category spending ratio
-          if (totalExpense > 100) {
-            let topCat = '';
+          if (totalExpense > 20) {
+            let topCatKey = '';
             let topVal = 0;
             Object.keys(categoryTotals).forEach(cat => {
               if (categoryTotals[cat] > topVal) {
                 topVal = categoryTotals[cat];
-                topCat = cat;
+                topCatKey = cat;
               }
             });
 
             const catPercent = Math.round((topVal / totalExpense) * 100);
-            if (catPercent >= 35 && topCat) {
+            if (catPercent >= 20 && topCatKey) {
+              const formattedCatName = topCatKey.charAt(0).toUpperCase() + topCatKey.slice(1);
               smartPayload = {
-                title: "💡 Alerta de Maior Gasto - FinançasPro",
-                body: `Atenção: A categoria "${topCat}" representa ${catPercent}% das suas despesas este mês (R$ ${topVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}).`
+                title: `💡 Maior Gasto: ${formattedCatName} - FinançasPro`,
+                body: `A categoria "${formattedCatName}" representa ${catPercent}% das suas despesas este mês (R$ ${topVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}).`
               };
             }
           }

@@ -1759,57 +1759,66 @@ function MainApp() {
     // Calculate Smart Insights (Category Alerts, Monthly Performance, Financial Tips)
     const smartInsights: Array<{ id: string; title: string; desc: string; type: 'categoria' | 'balanco' | 'dica' }> = [];
 
-    // A. Top Category Spend Alert
-    const monthExpenses = activeMonthTransactions.filter(t => t.type === 'fixos' || t.type === 'variaveis');
+    // A. Top Category Spend Alert (accurately reading t.cat and activeMonthCategoryList)
+    const monthDebits = activeMonthTransactions.filter(t => (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas') && !t.is_skipped);
     let monthTotalExpense = 0;
-    const catTotals: Record<string, number> = {};
+    const catTotals: Record<string, { value: string; label: string; icon: string; amount: number }> = {};
     
-    monthExpenses.forEach(t => {
-      const amt = Number(t.amount) || Number(t.total_parcelado) || 0;
+    monthDebits.forEach(t => {
+      const amt = Number(t.amount) || 0;
+      if (amt <= 0) return;
       monthTotalExpense += amt;
-      const cName = t.category || 'Outros';
-      catTotals[cName] = (catTotals[cName] || 0) + amt;
+
+      const catKey = t.cat || 'outros';
+      if (!catTotals[catKey]) {
+        const catObj = activeMonthCategoryList.find(c => c.value === catKey);
+        const label = catObj ? catObj.label : (catKey ? (catKey.charAt(0).toUpperCase() + catKey.slice(1)) : 'Outros');
+        const icon = catObj ? catObj.icon : '📦';
+        catTotals[catKey] = { value: catKey, label, icon, amount: 0 };
+      }
+      catTotals[catKey].amount += amt;
     });
 
-    if (monthTotalExpense > 100) {
-      let topCategory = '';
-      let topAmount = 0;
-      Object.entries(catTotals).forEach(([cat, amt]) => {
-        if (amt > topAmount) {
-          topAmount = amt;
-          topCategory = cat;
-        }
-      });
+    if (monthTotalExpense > 20) {
+      const sortedCats = Object.values(catTotals).sort((a, b) => b.amount - a.amount);
+      const topCat = sortedCats[0];
 
-      const catPercent = Math.round((topAmount / monthTotalExpense) * 100);
-      if (catPercent >= 35 && topCategory && !dismissedAlerts[`insight_cat_${topCategory}`]) {
-        smartInsights.push({
-          id: `insight_cat_${topCategory}`,
-          title: `💡 MAIOR GASTO: ${topCategory.toUpperCase()}`,
-          desc: `A categoria "${topCategory}" representa ${catPercent}% das suas despesas este mês (R$ ${topAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`,
-          type: 'categoria'
-        });
+      if (topCat && topCat.amount > 0) {
+        const catPercent = Math.round((topCat.amount / monthTotalExpense) * 100);
+        if (catPercent >= 20 && !dismissedAlerts[`insight_cat_${topCat.value}`]) {
+          smartInsights.push({
+            id: `insight_cat_${topCat.value}`,
+            title: `💡 MAIOR GASTO: ${topCat.icon} ${topCat.label.toUpperCase()}`,
+            desc: `A categoria "${topCat.label}" é o seu maior gasto deste mês, representando ${catPercent}% das suas despesas (R$ ${topCat.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`,
+            type: 'categoria'
+          });
+        }
       }
     }
 
     // B. Monthly Balance Performance
-    const monthIncomes = activeMonthTransactions.filter(t => t.type === 'entradas');
-    const monthTotalIncome = monthIncomes.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-    const monthNetBalance = monthTotalIncome - monthTotalExpense;
+    const userIncome = (settings?.monthlyIncome?.[currentMonthKey] !== undefined)
+      ? Number(settings.monthlyIncome[currentMonthKey])
+      : Number(settings?.income || 0);
+    const extraEarningsSum = (settings?.extraEarnings || [])
+      .filter(e => e.monthKey === currentMonthKey)
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    const totalMonthIncome = userIncome + extraEarningsSum;
+    const monthNetBalance = totalMonthIncome - monthTotalExpense;
 
-    if ((monthTotalIncome > 0 || monthTotalExpense > 0) && !dismissedAlerts['insight_balance']) {
-      if (monthNetBalance >= 0) {
+    if ((totalMonthIncome > 0 || monthTotalExpense > 0) && !dismissedAlerts['insight_balance']) {
+      if (totalMonthIncome > 0 && monthNetBalance >= 0) {
         smartInsights.push({
           id: 'insight_balance',
           title: '🎉 PARABÉNS! MÊS NO VERDE',
-          desc: `Você mantém um saldo positivo de R$ ${monthNetBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} este mês! Excelente gestão financeira!`,
+          desc: `Sua receita mensal é de R$ ${totalMonthIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} e você mantém um saldo positivo de R$ ${monthNetBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!`,
           type: 'balanco'
         });
-      } else {
+      } else if (monthNetBalance < 0) {
         smartInsights.push({
           id: 'insight_balance',
           title: '📊 BALANÇO MENSAL: ATENÇÃO',
-          desc: `Suas despesas superaram suas receitas em R$ ${Math.abs(monthNetBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Que tal revisar seus custos variáveis?`,
+          desc: `Suas despesas do mês (R$ ${monthTotalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) superaram a receita (R$ ${totalMonthIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`,
           type: 'balanco'
         });
       }

@@ -57,7 +57,6 @@ import {
   MessageCircle,
   Clock,
   Lightbulb,
-  TrendingUp,
   PieChart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1769,7 +1768,7 @@ function MainApp() {
       if (amt <= 0) return;
       monthTotalExpense += amt;
 
-      const catKey = t.cat || 'outros';
+      const catKey = t.cat || (t as any).category || 'outros';
       if (!catTotals[catKey]) {
         const catObj = activeMonthCategoryList.find(c => c.value === catKey);
         const label = catObj ? catObj.label : (catKey ? (catKey.charAt(0).toUpperCase() + catKey.slice(1)) : 'Outros');
@@ -1779,17 +1778,17 @@ function MainApp() {
       catTotals[catKey].amount += amt;
     });
 
-    if (monthTotalExpense > 20) {
+    if (monthTotalExpense > 0) {
       const sortedCats = Object.values(catTotals).sort((a, b) => b.amount - a.amount);
       const topCat = sortedCats[0];
 
       if (topCat && topCat.amount > 0) {
         const catPercent = Math.round((topCat.amount / monthTotalExpense) * 100);
-        if (catPercent >= 20 && !dismissedAlerts[`insight_cat_${topCat.value}`]) {
+        if (!dismissedAlerts[`insight_cat_${topCat.value}`]) {
           smartInsights.push({
             id: `insight_cat_${topCat.value}`,
             title: `💡 MAIOR GASTO: ${topCat.icon} ${topCat.label.toUpperCase()}`,
-            desc: `A categoria "${topCat.label}" é o seu maior gasto deste mês, representando ${catPercent}% das suas despesas (R$ ${topCat.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`,
+            desc: `Sua maior despesa este mês é na categoria "${topCat.label}", totalizando R$ ${topCat.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${catPercent}% do total gasto de R$ ${monthTotalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`,
             type: 'categoria'
           });
         }
@@ -1806,19 +1805,26 @@ function MainApp() {
     const totalMonthIncome = userIncome + extraEarningsSum;
     const monthNetBalance = totalMonthIncome - monthTotalExpense;
 
-    if ((totalMonthIncome > 0 || monthTotalExpense > 0) && !dismissedAlerts['insight_balance']) {
+    if (!dismissedAlerts['insight_balance']) {
       if (totalMonthIncome > 0 && monthNetBalance >= 0) {
         smartInsights.push({
           id: 'insight_balance',
           title: '🎉 PARABÉNS! MÊS NO VERDE',
-          desc: `Sua receita mensal é de R$ ${totalMonthIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} e você mantém um saldo positivo de R$ ${monthNetBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!`,
+          desc: `Sua receita mensal é de R$ ${totalMonthIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para R$ ${monthTotalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em despesas. Saldo positivo: R$ ${monthNetBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}!`,
           type: 'balanco'
         });
-      } else if (monthNetBalance < 0) {
+      } else if (totalMonthIncome > 0 && monthNetBalance < 0) {
         smartInsights.push({
           id: 'insight_balance',
           title: '📊 BALANÇO MENSAL: ATENÇÃO',
-          desc: `Suas despesas do mês (R$ ${monthTotalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) superaram a receita (R$ ${totalMonthIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`,
+          desc: `Suas despesas do mês (R$ ${monthTotalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) superaram a receita (R$ ${totalMonthIncome.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Déficit de R$ ${Math.abs(monthNetBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
+          type: 'balanco'
+        });
+      } else if (totalMonthIncome === 0 && monthTotalExpense > 0) {
+        smartInsights.push({
+          id: 'insight_balance',
+          title: '📊 DESPESAS DO MÊS',
+          desc: `Você possui R$ ${monthTotalExpense.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em despesas este mês. Defina sua renda mensal em Ajustes para acompanhar o balanço.`,
           type: 'balanco'
         });
       }

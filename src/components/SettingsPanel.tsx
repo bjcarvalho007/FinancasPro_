@@ -4,7 +4,7 @@ import { auth, db } from '../firebase';
 import { useLanguage } from '../utils/i18n';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
-import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle } from 'lucide-react';
+import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportPremiumPDF, exportPremiumSpreadsheet } from '../utils/reportGenerator';
 

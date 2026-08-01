@@ -284,6 +284,62 @@ async function runBackgroundPushNotificationChecker() {
           const userTxs = txSnapshot.docs.map(d => d.data());
           const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
           
+          // Fetch user settings to get monthly income and extra earnings
+          let userIncome = 0;
+          let extraEarningsSum = 0;
+          try {
+            const settingsDoc = await db.collection("settings").doc(userId).get();
+            if (settingsDoc.exists) {
+              const sData = settingsDoc.data();
+              userIncome = (sData?.monthlyIncome?.[currentMonthKey] !== undefined)
+                ? Number(sData.monthlyIncome[currentMonthKey])
+                : Number(sData?.income || 0);
+              if (Array.isArray(sData?.extraEarnings)) {
+                extraEarningsSum = sData.extraEarnings
+                  .filter((e: any) => e.monthKey === currentMonthKey)
+                  .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
+              }
+            }
+          } catch (e) {
+            console.warn(`[SMART PUSH] Could not fetch settings for user ${userId}:`, e);
+          }
+
+          const totalIncome = userIncome + extraEarningsSum;
+
+          const CATEGORY_MAP: Record<string, string> = {
+            moradia: 'Moradia',
+            mercado: 'Mercado',
+            carne: 'Açougue / Carne',
+            padaria: 'Padaria',
+            transporte: 'Transporte',
+            combustivel: 'Combustível',
+            futebol: 'Futebol / Esportes',
+            academia: 'Academia / Fitness',
+            saude: 'Saúde',
+            farmacia: 'Farmácia',
+            educacao: 'Educação',
+            barbeiro: 'Barbeiro / Salão',
+            estetica: 'Estética / Beleza',
+            lazer: 'Lazer & Jogos',
+            restaurante: 'Restaurantes',
+            delivery: 'Delivery / iFood',
+            assinaturas: 'Stream / Assinaturas',
+            comunicacao: 'Internet & Celular',
+            pet: 'Pets',
+            vestuario: 'Roupas & Vestuário',
+            casa: 'Casa & Móveis',
+            investimento: 'Investimentos',
+            imposto: 'Taxas & Impostos',
+            agua: 'Água',
+            energia: 'Energia Elétrica',
+            gas: 'Gás',
+            presentes: 'Presentes & Mimos',
+            viagem: 'Viagem & Turismo',
+            'cartao font-display': 'Cartão de Crédito',
+            cartao: 'Cartão de Crédito',
+            outros: 'Outros'
+          };
+
           const monthExpenses = userTxs.filter(t => 
             (t.monthKey === currentMonthKey || (t.due && String(t.due).includes(currentMonthKey))) && 
             (t.type === 'variaveis' || t.type === 'fixos' || t.type === 'parcelas') &&
@@ -296,13 +352,13 @@ async function runBackgroundPushNotificationChecker() {
             const val = Number(t.amount) || 0;
             if (val > 0) {
               totalExpense += val;
-              const catKey = t.cat || 'outros';
+              const catKey = t.cat || t.category || 'outros';
               categoryTotals[catKey] = (categoryTotals[catKey] || 0) + val;
             }
           });
 
           // Check 1: Top Category spending ratio
-          if (totalExpense > 20) {
+          if (totalExpense > 0) {
             let topCatKey = '';
             let topVal = 0;
             Object.keys(categoryTotals).forEach(cat => {
@@ -312,31 +368,34 @@ async function runBackgroundPushNotificationChecker() {
               }
             });
 
-            const catPercent = Math.round((topVal / totalExpense) * 100);
-            if (catPercent >= 20 && topCatKey) {
-              const formattedCatName = topCatKey.charAt(0).toUpperCase() + topCatKey.slice(1);
+            if (topCatKey && topVal > 0) {
+              const catPercent = Math.round((topVal / totalExpense) * 100);
+              const formattedCatName = CATEGORY_MAP[topCatKey] || (topCatKey.charAt(0).toUpperCase() + topCatKey.slice(1));
               smartPayload = {
                 title: `💡 Maior Gasto: ${formattedCatName} - FinançasPro`,
-                body: `A categoria "${formattedCatName}" representa ${catPercent}% das suas despesas este mês (R$ ${topVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}).`
+                body: `Sua maior despesa este mês é na categoria "${formattedCatName}", totalizando R$ ${topVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (${catPercent}% do total gasto de R$ ${totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}).`
               };
             }
           }
 
-          // Check 2: Monthly balance performance (near month end day >= 25 or start day <= 5)
+          // Check 2: Monthly balance performance
           if (!smartPayload && (currentDay >= 25 || currentDay <= 5)) {
-            const monthIncomes = userTxs.filter(t => t.date && String(t.date).startsWith(currentMonthKey) && t.type === 'entradas');
-            const totalIncome = monthIncomes.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
             const netBalance = totalIncome - totalExpense;
 
-            if (netBalance > 0 && totalIncome > 0) {
+            if (totalIncome > 0 && netBalance >= 0) {
               smartPayload = {
                 title: "🎉 Parabéns pelo Controle Mensal!",
-                body: `Você está fechando o mês no verde com uma sobra estimada de R$ ${netBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}! Excelente gestão!`
+                body: `Sua receita mensal é de R$ ${totalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} para R$ ${totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em despesas. Saldo livre: R$ ${netBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}!`
               };
-            } else if (netBalance < 0 && totalExpense > 0) {
+            } else if (totalIncome > 0 && netBalance < 0) {
               smartPayload = {
-                title: "📊 Dica FinançasPro: Balanço Mensal",
-                body: `Suas despesas superaram suas receitas em R$ ${Math.abs(netBalance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}. Que tal revisar pequenos gastos variáveis?`
+                title: "📊 Balanço Mensal: Atenção ao Limite",
+                body: `Suas despesas (R$ ${totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}) superaram a receita (R$ ${totalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}) em R$ ${Math.abs(netBalance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`
+              };
+            } else if (totalIncome === 0 && totalExpense > 0) {
+              smartPayload = {
+                title: "📊 Despesas Registradas no Mês",
+                body: `Você possui R$ ${totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em despesas este mês. Configure sua renda mensal no app para acompanhar o balanço.`
               };
             }
           }

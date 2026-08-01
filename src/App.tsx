@@ -436,13 +436,6 @@ function MainApp() {
         if ('Notification' in window && 'serviceWorker' in navigator) {
           if (Notification.permission === 'granted') {
             silentAutoSubscribe(currentUser);
-          } else if (Notification.permission === 'default') {
-            const isDismissed = sessionStorage.getItem(`dismiss_notif_prompt_${currentUser.uid}`) === 'true';
-            if (!isDismissed) {
-              setTimeout(() => {
-                setShowNotificationPromptModal(true);
-              }, 1200);
-            }
           }
         }
       }
@@ -1965,15 +1958,6 @@ function MainApp() {
           }
         }
       }
-    } else if (smartInsights.length > 0) {
-      // Pick the highest priority non-dismissed smart insight
-      const insight = smartInsights[0];
-      setFloatingAlert({
-        id: insight.id,
-        title: insight.title,
-        desc: insight.desc,
-        type: insight.type
-      });
     } else {
       setFloatingAlert(null);
     }

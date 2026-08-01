@@ -206,6 +206,7 @@ async function runBackgroundPushNotificationChecker() {
         if (paid_amount >= amount) continue;
 
         let isNearDue = false;
+        let isOverdue = false;
         let daysRemainingText = "";
 
         const dueStr = String(tx.due).trim();
@@ -215,7 +216,10 @@ async function runBackgroundPushNotificationChecker() {
           const dueDate = new Date(Number(dueParts[0]), Number(dueParts[1]) - 1, Number(dueParts[2]), 12, 0, 0);
           const diffTime = dueDate.getTime() - now.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          if (diffDays >= 0 && diffDays <= 3) {
+          if (diffDays < 0) {
+            isOverdue = true;
+            daysRemainingText = Math.abs(diffDays) === 1 ? "ontem" : `há ${Math.abs(diffDays)} dias`;
+          } else if (diffDays <= 3) {
             isNearDue = true;
             daysRemainingText = diffDays === 0 ? "hoje" : `em ${diffDays} dias`;
           }
@@ -224,27 +228,37 @@ async function runBackgroundPushNotificationChecker() {
           const dueDay = parseInt(dueStr, 10);
           if (!isNaN(dueDay)) {
             const diffDays = dueDay - currentDay;
-            if (diffDays >= 0 && diffDays <= 3) {
+            if (diffDays < 0) {
+              isOverdue = true;
+              daysRemainingText = Math.abs(diffDays) === 1 ? "ontem" : `há ${Math.abs(diffDays)} dias`;
+            } else if (diffDays <= 3) {
               isNearDue = true;
               daysRemainingText = diffDays === 0 ? "hoje" : `em ${diffDays} dias`;
             }
           }
         }
 
-        if (isNearDue) {
+        if (isNearDue || isOverdue) {
           const alertDateKey = `push_alert_${userId}_${tx.id}_${todayStr}`;
           
-          // Use isNearDue tracking schema inside Firestore to avoid spamming multiple notifications on the same calendar day
+          // Use tracking schema inside Firestore to avoid spamming multiple notifications on the same calendar day
           const alertRef = db.collection("notified_alerts").doc(alertDateKey);
           const alertDoc = await alertRef.get();
           
           if (!alertDoc.exists) {
-            console.log(`🚀 [BACKGROUND ALERT] Despachando pushes por vencimento iminente de "${tx.name}" para usuário: ${userId}`);
+            console.log(`🚀 [BACKGROUND ALERT] Despachando push por ${isOverdue ? 'atraso' : 'vencimento iminente'} de "${tx.name}" para usuário: ${userId}`);
             
             const remaining = amount - paid_amount;
+            const notificationTitle = isOverdue
+              ? "🚨 Conta Vencida / Atrasada - FinançasPro"
+              : "⚠️ Conta Próxima do Vencimento - FinançasPro";
+            const notificationBody = isOverdue
+              ? `Atenção: A conta "${tx.name}" está em ATRASO (${daysRemainingText}). Resta pagar R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`
+              : `O lançamento "${tx.name}" vence ${daysRemainingText}. Resta pagar R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`;
+
             const messagePayload = JSON.stringify({
-              title: "🚨 Conta Próxima do Vencimento - FinançasPro",
-              body: `O lançamento "${tx.name}" vence ${daysRemainingText}. Resta pagar R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`,
+              title: notificationTitle,
+              body: notificationBody,
               icon: "/app_icon.png",
               badge: "/app_icon.png",
               data: { url: "/" }
@@ -267,181 +281,6 @@ async function runBackgroundPushNotificationChecker() {
             });
           }
         }
-      }
-
-      // Smart Insights Background Check (Category Alerts, Monthly Performance, Financial Tips)
-      // Throttle: max 1 smart push every 3 days (72 hours) per user to keep it non-intrusive ("para não ficar chato")
-      try {
-        const smartAlertRef = db.collection("notified_smart_alerts").doc(`user_last_smart_${userId}`);
-        const smartAlertDoc = await smartAlertRef.get();
-        const lastSmartTime = smartAlertDoc.exists && smartAlertDoc.data()?.dispatchedAt 
-          ? new Date(smartAlertDoc.data()?.dispatchedAt).getTime() 
-          : 0;
-        const hoursSinceLastSmart = (now.getTime() - lastSmartTime) / (1000 * 60 * 60);
-
-        if (hoursSinceLastSmart >= 72) {
-          let smartPayload: { title: string; body: string } | null = null;
-          const userTxs = txSnapshot.docs.map(d => d.data());
-          const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-          
-          // Fetch user settings to get monthly income and extra earnings
-          let userIncome = 0;
-          let extraEarningsSum = 0;
-          try {
-            const settingsDoc = await db.collection("settings").doc(userId).get();
-            if (settingsDoc.exists) {
-              const sData = settingsDoc.data();
-              userIncome = (sData?.monthlyIncome?.[currentMonthKey] !== undefined)
-                ? Number(sData.monthlyIncome[currentMonthKey])
-                : Number(sData?.income || 0);
-              if (Array.isArray(sData?.extraEarnings)) {
-                extraEarningsSum = sData.extraEarnings
-                  .filter((e: any) => e.monthKey === currentMonthKey)
-                  .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
-              }
-            }
-          } catch (e) {
-            console.warn(`[SMART PUSH] Could not fetch settings for user ${userId}:`, e);
-          }
-
-          const totalIncome = userIncome + extraEarningsSum;
-
-          const CATEGORY_MAP: Record<string, string> = {
-            moradia: 'Moradia',
-            mercado: 'Mercado',
-            carne: 'Açougue / Carne',
-            padaria: 'Padaria',
-            transporte: 'Transporte',
-            combustivel: 'Combustível',
-            futebol: 'Futebol / Esportes',
-            academia: 'Academia / Fitness',
-            saude: 'Saúde',
-            farmacia: 'Farmácia',
-            educacao: 'Educação',
-            barbeiro: 'Barbeiro / Salão',
-            estetica: 'Estética / Beleza',
-            lazer: 'Lazer & Jogos',
-            restaurante: 'Restaurantes',
-            delivery: 'Delivery / iFood',
-            assinaturas: 'Stream / Assinaturas',
-            comunicacao: 'Internet & Celular',
-            pet: 'Pets',
-            vestuario: 'Roupas & Vestuário',
-            casa: 'Casa & Móveis',
-            investimento: 'Investimentos',
-            imposto: 'Taxas & Impostos',
-            agua: 'Água',
-            energia: 'Energia Elétrica',
-            gas: 'Gás',
-            presentes: 'Presentes & Mimos',
-            viagem: 'Viagem & Turismo',
-            'cartao font-display': 'Cartão de Crédito',
-            cartao: 'Cartão de Crédito',
-            outros: 'Outros'
-          };
-
-          const monthExpenses = userTxs.filter(t => 
-            (t.monthKey === currentMonthKey || (t.due && String(t.due).includes(currentMonthKey))) && 
-            (t.type === 'variaveis' || t.type === 'fixos' || t.type === 'parcelas') &&
-            !t.is_skipped
-          );
-          let totalExpense = 0;
-          const categoryTotals: { [cat: string]: number } = {};
-
-          monthExpenses.forEach(t => {
-            const val = Number(t.amount) || 0;
-            if (val > 0) {
-              totalExpense += val;
-              const catKey = t.cat || t.category || 'outros';
-              categoryTotals[catKey] = (categoryTotals[catKey] || 0) + val;
-            }
-          });
-
-          // Check 1: Top Category spending ratio
-          if (totalExpense > 0) {
-            let topCatKey = '';
-            let topVal = 0;
-            Object.keys(categoryTotals).forEach(cat => {
-              if (categoryTotals[cat] > topVal) {
-                topVal = categoryTotals[cat];
-                topCatKey = cat;
-              }
-            });
-
-            if (topCatKey && topVal > 0) {
-              const catPercent = Math.round((topVal / totalExpense) * 100);
-              const formattedCatName = CATEGORY_MAP[topCatKey] || (topCatKey.charAt(0).toUpperCase() + topCatKey.slice(1));
-              smartPayload = {
-                title: `💡 Maior Gasto: ${formattedCatName} - FinançasPro`,
-                body: `Sua maior despesa este mês é na categoria "${formattedCatName}", totalizando R$ ${topVal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (${catPercent}% do total gasto de R$ ${totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}).`
-              };
-            }
-          }
-
-          // Check 2: Monthly balance performance
-          if (!smartPayload && (currentDay >= 25 || currentDay <= 5)) {
-            const netBalance = totalIncome - totalExpense;
-
-            if (totalIncome > 0 && netBalance >= 0) {
-              smartPayload = {
-                title: "🎉 Parabéns pelo Controle Mensal!",
-                body: `Sua receita mensal é de R$ ${totalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} para R$ ${totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em despesas. Saldo livre: R$ ${netBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}!`
-              };
-            } else if (totalIncome > 0 && netBalance < 0) {
-              smartPayload = {
-                title: "📊 Balanço Mensal: Atenção ao Limite",
-                body: `Suas despesas (R$ ${totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}) superaram a receita (R$ ${totalIncome.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}) em R$ ${Math.abs(netBalance).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`
-              };
-            } else if (totalIncome === 0 && totalExpense > 0) {
-              smartPayload = {
-                title: "📊 Despesas Registradas no Mês",
-                body: `Você possui R$ ${totalExpense.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} em despesas este mês. Configure sua renda mensal no app para acompanhar o balanço.`
-              };
-            }
-          }
-
-          // Check 3: Practical Financial Tip fallback
-          if (!smartPayload) {
-            const tips = [
-              "💡 Dica de Economia: Cancelar 1 assinatura pouco usada economiza até R$ 400,00 por ano!",
-              "💡 Dica Prática: Registrar lançamentos no mesmo dia reduz em 80% o esquecimento de despesas cotidianas.",
-              "💡 Regra de Ouro: Construir uma reserva de emergência traz paz de espírito para imprevistos.",
-              "💡 Regra 50/30/20: Mantenha 50% para necessidades básicas, 30% para estilo de vida e 20% para guardar."
-            ];
-            const randomTip = tips[Math.floor(Math.random() * tips.length)];
-            smartPayload = {
-              title: "💡 Dica de Finanças - FinançasPro",
-              body: randomTip
-            };
-          }
-
-          if (smartPayload) {
-            console.log(`🚀 [SMART PUSH] Despachando notificação de conselho/insight para usuário: ${userId}`);
-            const messagePayload = JSON.stringify({
-              title: smartPayload.title,
-              body: smartPayload.body,
-              icon: "/app_icon.png",
-              badge: "/app_icon.png",
-              data: { url: "/" }
-            });
-
-            for (const sub of subs) {
-              try {
-                await webpush.sendNotification(sub, messagePayload);
-              } catch (subErr) {
-                console.warn(`⚠️ Falha ao despachar smart push:`, subErr);
-              }
-            }
-
-            await smartAlertRef.set({
-              userId,
-              dispatchedAt: new Date().toISOString(),
-              title: smartPayload.title
-            });
-          }
-        }
-      } catch (smartErr) {
-        console.warn("⚠️ [SMART PUSH] Erro ao analisar insights de fundo:", smartErr);
       }
     }
   } catch (err: any) {

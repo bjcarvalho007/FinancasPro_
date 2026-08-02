@@ -413,11 +413,15 @@ export default function AdminPanel({
   // Pre-fill email client mailto link
   const handleSendMarketingEmail = (email: string, username?: string) => {
     const name = username || email.split('@')[0];
-    const subject = encodeURIComponent('FinançasPro Premium: Libere seu acesso completo');
+    const subject = encodeURIComponent('🚨 Restam apenas 2 vagas no valor promocional de R$ 11,99/mês | FinançasPro');
     const body = encodeURIComponent(
       `Olá, ${name}!\n\n` +
-      `Garanta seu Acesso Premium no FinançasPro e tenha controle financeiro completo com gráficos, relatórios e gestão de metas.\n\n` +
-      `Acesse o site e libere seu plano:\n` +
+      `Restam APENAS 2 VAGAS para você garantir o Acesso Premium ao FinançasPro pelo valor promocional de R$ 11,99/mês!\n\n` +
+      `Com o FinançasPro você conta com:\n` +
+      `• Controle de receitas, despesas fixas e parcelamentos\n` +
+      `• Gestão de metas financeiras e relatórios gráficos interativos\n` +
+      `• Exportação de relatórios detalhados em 1 clique\n\n` +
+      `Aproveite para liberar seu acesso antes que as vagas acabem:\n` +
       `https://www.financaspro.solutions/\n\n` +
       `Atenciosamente,\n` +
       `Equipe FinançasPro`

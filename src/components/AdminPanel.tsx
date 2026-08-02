@@ -287,12 +287,14 @@ export default function AdminPanel({
       `🔹 Metas Financeiras e Economia: Defina objetivos (reserva de emergência, viagens, compras) com acompanhamento em tempo real.\n` +
       `🔹 Relatórios e Análises Automáticas: Saiba exatamente seus maiores gastos com gráficos intuitivos e exportação em PDF e Excel em 1 clique.\n\n` +
       `💥 POR QUE GARANTIR SUA VAGA HOJE?\n` +
-      `Tenha total paz mental e previsibilidade financeira por menos de R$ 0,40 por dia!\n\n` +
+      `Tenha total paz mental e previsibilidade financeira!\n\n` +
       `🚨 Como resta apenas 2 vagas no valor promocional de R$ 11,99/mês, aproveite para ativar agora antes que encerre:\n` +
-      `👉 Acesse o aplicativo agora mesmo e libere seu Acesso Premium completo!\n\n` +
+      `👉 Acesse o site e libere seu Acesso Premium completo:\n` +
+      `https://www.financaspro.solutions/\n\n` +
       `Qualquer dúvida, estamos à disposição para te ajudar.\n\n` +
       `Abraços,\n` +
-      `Equipe FinançasPro • BJC Desenvolvimentos`
+      `Equipe FinançasPro • BJC Desenvolvimentos\n` +
+      `https://www.financaspro.solutions/`
     );
     window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
   };

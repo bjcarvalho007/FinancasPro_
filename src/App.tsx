@@ -3553,6 +3553,68 @@ function MainApp() {
                                     onConfirm: executePayment
                                   });
                                 };
+
+                                const handleTriggerAddExtraGasto = () => {
+                                  const valStr = extraGastoInputs[masterId];
+                                  if (!valStr || valStr === 'R$ 0,00') return;
+                                  const valueToAdd = handleParseMoney(valStr);
+                                  if (valueToAdd <= 0) return;
+
+                                  const executeAddExtraGasto = async (addToCurrentMonthParcela: boolean) => {
+                                    const path = `transactions/${masterId}`;
+                                    try {
+                                      const docRef = doc(db, 'transactions', masterId);
+                                      const newHistoryItem = {
+                                        id: `eg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                                        amount: valueToAdd,
+                                        createdAt: new Date().toISOString()
+                                      };
+                                      const updatedHistory = [
+                                        ...(masterTx.extra_gastos_history || []),
+                                        newHistoryItem
+                                      ];
+
+                                      // 1. Atualiza o saldo devedor no masterTx
+                                      await updateDoc(docRef, {
+                                        extra_gasto: totalExtraGasto + valueToAdd,
+                                        extra_gastos_history: updatedHistory,
+                                        updatedAt: new Date().toISOString()
+                                      });
+
+                                      // 2. Se o usuário escolheu somar também na parcela atual deste mês
+                                      if (addToCurrentMonthParcela) {
+                                        const currentTxDocRef = doc(db, 'transactions', tx.id);
+                                        const newParcelaAmount = (tx.amount || 0) + valueToAdd;
+                                        await updateDoc(currentTxDocRef, {
+                                          amount: newParcelaAmount,
+                                          updatedAt: new Date().toISOString()
+                                        });
+                                        triggerToast(`Gasto de ${formatCurrency(valueToAdd)} adicionado ao saldo devedor e somado à parcela deste mês (${formatCurrency(newParcelaAmount)})!`, 'success');
+                                      } else {
+                                        triggerToast(`Gasto de ${formatCurrency(valueToAdd)} adicionado apenas ao saldo devedor com sucesso!`, 'success');
+                                      }
+
+                                      setExtraGastoInputs(prev => ({ ...prev, [masterId]: '' }));
+                                    } catch (err) {
+                                      handleFirestoreError(err, OperationType.UPDATE, path);
+                                    }
+                                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                  };
+
+                                  setConfirmModal({
+                                    isOpen: true,
+                                    title: '➕ Adicionar Novo Gasto ao Parcelamento',
+                                    message: `Você está adicionando um novo gasto de ${formatCurrency(valueToAdd)} ao parcelamento "${tx.name}".\n\nDeseja somar este valor também no valor da parcela deste mês (${formatCurrency(tx.amount)} ➔ ${formatCurrency(tx.amount + valueToAdd)})?`,
+                                    showThreeButtons: true,
+                                    confirmText: '⚡ Sim, somar na parcela do mês',
+                                    classNameConfirm: 'bg-indigo-600 hover:bg-indigo-700 text-white font-bold',
+                                    onConfirm: () => executeAddExtraGasto(true),
+                                    confirmText2: '💳 Não, somar apenas no saldo devedor',
+                                    classNameConfirm2: 'bg-amber-600 hover:bg-amber-700 text-white font-bold',
+                                    onConfirm2: () => executeAddExtraGasto(false),
+                                    cancelText: 'Cancelar'
+                                  });
+                                };
                                 
                                 const standardEndMonthKey = masterTx.installmentsCount 
                                   ? addMonthsToKey(startMonthKey, masterTx.installmentsCount - 1)
@@ -3695,36 +3757,10 @@ function MainApp() {
                                                 const masked = handleMaskMoney(e.target.value);
                                                 setExtraGastoInputs(prev => ({ ...prev, [masterId]: masked }));
                                               }}
-                                              onKeyDown={async (e) => {
+                                              onKeyDown={(e) => {
                                                 if (e.key === 'Enter') {
                                                   e.preventDefault();
-                                                  const valStr = extraGastoInputs[masterId];
-                                                  if (!valStr || valStr === 'R$ 0,00') return;
-                                                  const valueToAdd = handleParseMoney(valStr);
-                                                  if (valueToAdd <= 0) return;
-
-                                                  const path = `transactions/${masterId}`;
-                                                  try {
-                                                    const docRef = doc(db, 'transactions', masterId);
-                                                    const newHistoryItem = {
-                                                      id: `eg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                                                      amount: valueToAdd,
-                                                      createdAt: new Date().toISOString()
-                                                    };
-                                                    const updatedHistory = [
-                                                      ...(masterTx.extra_gastos_history || []),
-                                                      newHistoryItem
-                                                    ];
-                                                    await updateDoc(docRef, {
-                                                      extra_gasto: totalExtraGasto + valueToAdd,
-                                                      extra_gastos_history: updatedHistory,
-                                                      updatedAt: new Date().toISOString()
-                                                    });
-                                                    setExtraGastoInputs(prev => ({ ...prev, [masterId]: '' }));
-                                                    triggerToast(`Gasto extra de ${formatCurrency(valueToAdd)} adicionado com sucesso!`, 'success');
-                                                  } catch (err) {
-                                                    handleFirestoreError(err, OperationType.UPDATE, path);
-                                                  }
+                                                  handleTriggerAddExtraGasto();
                                                 }
                                               }}
                                               className={`w-20 bg-transparent font-mono font-bold text-xs focus:outline-none p-0 leading-none ${
@@ -3733,35 +3769,7 @@ function MainApp() {
                                             />
                                           </div>
                                           <button
-                                            onClick={async () => {
-                                              const valStr = extraGastoInputs[masterId];
-                                              if (!valStr || valStr === 'R$ 0,00') return;
-                                              const valueToAdd = handleParseMoney(valStr);
-                                              if (valueToAdd <= 0) return;
-
-                                              const path = `transactions/${masterId}`;
-                                              try {
-                                                const docRef = doc(db, 'transactions', masterId);
-                                                const newHistoryItem = {
-                                                  id: `eg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                                                  amount: valueToAdd,
-                                                  createdAt: new Date().toISOString()
-                                                };
-                                                const updatedHistory = [
-                                                  ...(masterTx.extra_gastos_history || []),
-                                                  newHistoryItem
-                                                ];
-                                                await updateDoc(docRef, {
-                                                  extra_gasto: totalExtraGasto + valueToAdd,
-                                                  extra_gastos_history: updatedHistory,
-                                                  updatedAt: new Date().toISOString()
-                                                });
-                                                setExtraGastoInputs(prev => ({ ...prev, [masterId]: '' }));
-                                                triggerToast(`Gasto extra de ${formatCurrency(valueToAdd)} adicionado com sucesso!`, 'success');
-                                              } catch (err) {
-                                                handleFirestoreError(err, OperationType.UPDATE, path);
-                                              }
-                                            }}
+                                            onClick={handleTriggerAddExtraGasto}
                                             className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-md shadow-amber-500/10 active:scale-95 border-none shrink-0"
                                           >
                                             Somar

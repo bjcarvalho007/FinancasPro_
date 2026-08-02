@@ -85,6 +85,7 @@ export default function TransactionFormModal({
   const isLongPressRef = useRef<boolean>(false);
   const pressStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const hasDraggedRef = useRef<boolean>(false);
+  const lastCatSelectedTimeRef = useRef<number>(0);
 
   const handlePressStart = (item: Category, e: MouseEvent | TouchEvent) => {
     isLongPressRef.current = false;
@@ -129,20 +130,18 @@ export default function TransactionFormModal({
   };
 
   const selectCategory = (item: Category) => {
+    lastCatSelectedTimeRef.current = Date.now();
     setCat(item.value);
     setShowCatDropdown(false);
     setCatSearch('');
     setShowAddCustomCat(false);
   };
 
-  const handlePressEnd = (item: Category, e?: SyntheticEvent) => {
+  const handlePressEnd = (_item: Category, e?: SyntheticEvent) => {
     if (e) e.stopPropagation();
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
-    }
-    if (!hasDraggedRef.current && !isLongPressRef.current) {
-      selectCategory(item);
     }
     pressStartPosRef.current = null;
     setTimeout(() => {
@@ -275,13 +274,14 @@ export default function TransactionFormModal({
     if (!customCatName.trim()) return;
     const key = customCatName.toLowerCase().replace(/\s+/g, '-');
     onCreateCategory(customCatIcon, customCatName);
+    lastCatSelectedTimeRef.current = Date.now();
     setCat(key);
     setCustomCatName('');
     setShowAddCustomCat(false);
     setShowCatDropdown(false);
   };
 
-  const activeCategoryObject = categoriesList.find(c => c.value === cat) || categoriesList[0];
+  const activeCategoryObject = categoriesList.find(c => c.value === cat) || categoriesList.find(c => c.value === 'outros') || categoriesList[0];
   const filteredCategories = categoriesList.filter(item =>
     !catSearch.trim() || item.label.toLowerCase().includes(catSearch.toLowerCase().trim())
   );
@@ -296,7 +296,12 @@ export default function TransactionFormModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (showCatDropdown) return;
+            if (Date.now() - lastCatSelectedTimeRef.current < 400) return;
+            onClose();
+          }}
           className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
         />
 
@@ -716,6 +721,7 @@ export default function TransactionFormModal({
                       key={item.value}
                       onClick={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         if (!hasDraggedRef.current && !isLongPressRef.current) {
                           selectCategory(item);
                         }

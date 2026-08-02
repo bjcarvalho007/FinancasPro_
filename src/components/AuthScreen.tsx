@@ -284,9 +284,10 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
       }
 
       // 4. Vincula o token e inicializa os dados básicos do usuário no Firestore
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + 30);
+      const now = new Date();
+      const expiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       const dataVencimento = expiryDate.toISOString();
+      const nowIso = now.toISOString();
 
       const isPremiumUser = !isTrialSignUp;
 
@@ -297,7 +298,9 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         paymentSystem: isTrialSignUp ? 'Trial' : 'MercadoPago',
         assinante: isPremiumUser,
         dataVencimento: isPremiumUser ? dataVencimento : null,
-        createdAt: new Date().toISOString()
+        paymentApprovedAt: isPremiumUser ? nowIso : null,
+        dataAquisicao: isPremiumUser ? nowIso : null,
+        createdAt: nowIso
       }, { merge: true });
 
       // Clean URL params after successful registration

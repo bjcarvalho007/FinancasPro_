@@ -20,6 +20,8 @@ export interface UserProfileData {
   paymentStatus?: string;
   paymentSystem?: string;
   paymentId?: string;
+  paymentApprovedAt?: string;
+  dataAquisicao?: string;
 }
 
 interface AdminPanelProps {
@@ -66,7 +68,9 @@ export default function AdminPanel({
             dataVencimento: data.dataVencimento || '',
             paymentStatus: data.paymentStatus || '',
             paymentSystem: data.paymentSystem || '',
-            paymentId: data.paymentId || ''
+            paymentId: data.paymentId || '',
+            paymentApprovedAt: data.paymentApprovedAt || data.dataAquisicao || '',
+            dataAquisicao: data.dataAquisicao || data.paymentApprovedAt || ''
           });
         });
 
@@ -97,6 +101,60 @@ export default function AdminPanel({
     if (isNaN(expiryMs)) return null;
     const diffMs = expiryMs - Date.now();
     return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  };
+
+  // Helper to format ISO date to readable PT-BR string
+  const formatDateTime = (isoStr?: string) => {
+    if (!isoStr) return null;
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return null;
+    const dateFormatted = d.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    const timeFormatted = d.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    return `${dateFormatted} às ${timeFormatted}`;
+  };
+
+  // Helper to get acquisition date (for premium) or trial start date (for free)
+  const getUserDateInfo = (u: UserProfileData, isPremium: boolean) => {
+    if (isPremium) {
+      const rawApproved = u.paymentApprovedAt || u.dataAquisicao;
+      if (rawApproved) {
+        const formatted = formatDateTime(rawApproved);
+        if (formatted) return { type: 'premium', label: 'Adquirido em', value: formatted };
+      }
+      if (u.dataVencimento) {
+        const expTime = Date.parse(u.dataVencimento);
+        if (!isNaN(expTime)) {
+          const estimatedAcq = new Date(expTime - 30 * 24 * 60 * 60 * 1000);
+          return {
+            type: 'premium',
+            label: 'Adquirido em',
+            value: estimatedAcq.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          };
+        }
+      }
+      if (u.createdAt) {
+        const formatted = formatDateTime(u.createdAt);
+        if (formatted) return { type: 'premium', label: 'Adquirido em', value: formatted };
+      }
+      return { type: 'premium', label: 'Adquirido em', value: 'Data não informada' };
+    } else {
+      if (u.createdAt) {
+        const formatted = formatDateTime(u.createdAt);
+        if (formatted) return { type: 'free', label: 'Teste iniciado em', value: formatted };
+      }
+      if (u.lastLoginAt) {
+        const formatted = formatDateTime(u.lastLoginAt);
+        if (formatted) return { type: 'free', label: 'Teste iniciado em', value: formatted };
+      }
+      return { type: 'free', label: 'Teste iniciado em', value: 'Data não informada' };
+    }
   };
 
   // Metrics summary
@@ -201,12 +259,15 @@ export default function AdminPanel({
       baseDate.setDate(baseDate.getDate() + daysToAdd);
       const newExpiryStr = baseDate.toISOString();
 
+      const nowIso = new Date().toISOString();
       await setDoc(userRef, {
         assinante: true,
         dataVencimento: newExpiryStr,
         paymentStatus: 'approved_admin',
         paymentSystem: 'AdminManual',
-        updatedAt: new Date().toISOString()
+        paymentApprovedAt: userDoc.paymentApprovedAt || userDoc.dataAquisicao || nowIso,
+        dataAquisicao: userDoc.dataAquisicao || userDoc.paymentApprovedAt || nowIso,
+        updatedAt: nowIso
       }, { merge: true });
 
       showToast(`Acesso Premium concedido por +${daysToAdd} dias para ${userDoc.email}!`, 'success');
@@ -544,31 +605,46 @@ export default function AdminPanel({
                       </button>
                     </div>
 
-                    {/* Expiration Details */}
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400 pt-0.5">
-                      {u.dataVencimento ? (
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                    {/* Expiration and Acquisition / Trial Details */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] pt-1">
+                      {/* 1. Acquisition Date for Premium or Trial Start Date for Free */}
+                      {(() => {
+                        const dateInfo = getUserDateInfo(u, isPremiumActive);
+                        return (
+                          <span className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg font-medium ${
+                            dateInfo.type === 'premium'
+                              ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+                              : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
+                          }`}>
+                            <Calendar className="w-3 h-3 shrink-0" />
+                            <span>{dateInfo.label}: <strong className="font-bold">{dateInfo.value}</strong></span>
+                          </span>
+                        );
+                      })()}
+
+                      {/* 2. Vencimento Date */}
+                      {isPremiumActive && u.dataVencimento && (
+                        <span className="flex items-center gap-1 text-slate-300">
+                          <Clock className="w-3 h-3 text-amber-400 shrink-0" />
                           Vencimento:{' '}
-                          <strong className="text-slate-200">
+                          <strong className="text-white">
                             {new Date(u.dataVencimento).toLocaleDateString('pt-BR')}
                           </strong>
                         </span>
-                      ) : (
-                        <span className="text-slate-500">Sem data de vencimento</span>
                       )}
 
-                      {daysRemaining !== null && (
-                        <span className={`font-bold ${
-                          daysRemaining <= 0
-                            ? 'text-rose-400'
-                            : daysRemaining <= 5
-                            ? 'text-amber-400 font-black'
-                            : 'text-emerald-400'
+                      {/* 3. Days Remaining */}
+                      {daysRemaining !== null && isPremiumActive && (
+                        <span className={`font-extrabold ${
+                          daysRemaining <= 5 ? 'text-amber-400 animate-pulse' : 'text-emerald-400'
                         }`}>
-                          {daysRemaining > 0
-                            ? `⏳ Restam ${daysRemaining} dia${daysRemaining > 1 ? 's' : ''}`
-                            : `❌ Expirou há ${Math.abs(daysRemaining)} dia${Math.abs(daysRemaining) > 1 ? 's' : ''}`}
+                          ⏳ Restam {daysRemaining} dia{daysRemaining > 1 ? 's' : ''}
+                        </span>
+                      )}
+
+                      {!isPremiumActive && u.dataVencimento && (
+                        <span className="text-rose-400 font-bold">
+                          ❌ Expirou
                         </span>
                       )}
 

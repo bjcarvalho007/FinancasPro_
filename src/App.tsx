@@ -462,49 +462,6 @@ function MainApp() {
         }
       }
 
-      // Auto-ativação imediata para o usuário teste@gmail.com que já pagou
-      if (user && user.email && user.email.toLowerCase().trim() === 'teste@gmail.com') {
-        const currentExpiryStr = profileData?.dataVencimento;
-        const targetExpiry = new Date();
-        targetExpiry.setFullYear(targetExpiry.getFullYear() + 1); // 1 ano de assinatura garantida
-        const hasValidSub = profileData?.assinante === true && currentExpiryStr && Date.parse(currentExpiryStr) >= (targetExpiry.getTime() - 1000 * 60 * 60 * 24 * 30);
-
-        if (!hasValidSub) {
-          const userRef = doc(db, 'users', user.uid);
-          setDoc(userRef, {
-            assinante: true,
-            dataVencimento: targetExpiry.toISOString(),
-            paymentStatus: 'approved',
-            paymentSystem: 'MercadoPago',
-            updatedAt: new Date().toISOString()
-          }, { merge: true }).catch(err => {
-            console.error("Erro ao auto-ativar acesso para teste@gmail.com:", err);
-          });
-        }
-      }
-
-      // Auto-ativação imediata para os usuários de administração/testes (bjcarvalho07@gmail.com e bjcarvalho007@gmail.com)
-      const currentEmail = user?.email?.toLowerCase().trim();
-      if (user && currentEmail && (currentEmail === 'bjcarvalho007@gmail.com' || currentEmail === 'bjcarvalho07@gmail.com')) {
-        const currentExpiryStr = profileData?.dataVencimento;
-        const targetExpiry = new Date();
-        targetExpiry.setFullYear(targetExpiry.getFullYear() + 1); // 1 ano de assinatura garantida
-        const hasValidSub = profileData?.assinante === true && currentExpiryStr && Date.parse(currentExpiryStr) >= (targetExpiry.getTime() - 1000 * 60 * 60 * 24 * 30);
-
-        if (!hasValidSub) {
-          const userRef = doc(db, 'users', user.uid);
-          setDoc(userRef, {
-            assinante: true,
-            dataVencimento: targetExpiry.toISOString(),
-            paymentStatus: 'approved',
-            paymentSystem: 'MercadoPago',
-            updatedAt: new Date().toISOString()
-          }, { merge: true }).catch(err => {
-            console.error(`Erro ao auto-ativar acesso para ${currentEmail}:`, err);
-          });
-        }
-      }
-
       setUserProfile(profileData);
       setLoadingProfile(false);
     }, (error) => {
@@ -542,16 +499,19 @@ function MainApp() {
         try {
           const userRef = doc(db, 'users', user.uid);
           
-          const expiryDate = new Date();
-          expiryDate.setDate(expiryDate.getDate() + 30);
+          const now = new Date();
+          const expiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // Exatamente 30 dias a contar do pagamento
           const dataVencimento = expiryDate.toISOString();
+          const nowIso = now.toISOString();
 
           await setDoc(userRef, {
             assinante: true,
             dataVencimento: dataVencimento,
+            paymentApprovedAt: nowIso,
+            dataAquisicao: nowIso,
             paymentId: paymentId,
             paymentStatus: status,
-            updatedAt: new Date().toISOString()
+            updatedAt: nowIso
           }, { merge: true });
 
           triggerToast("Assinatura Ativada! Seu acesso premium foi liberado por 30 dias.", "success");

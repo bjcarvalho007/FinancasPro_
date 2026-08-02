@@ -476,9 +476,10 @@ app.post("/api/mercadopago/webhook", async (req, res) => {
       try {
         const adminDb = admin.firestore();
         
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 30);
+        const now = new Date();
+        const expiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // Exatamente 30 dias a partir do pagamento
         const dataVencimento = expiryDate.toISOString();
+        const paymentApprovedAt = now.toISOString();
 
         // 1. Grava ou atualiza na coleção 'tokens_pagos' para novos usuários poderem registrar
         const tokenRef = adminDb.collection("tokens_pagos").doc(String(paymentId));
@@ -501,27 +502,15 @@ app.post("/api/mercadopago/webhook", async (req, res) => {
           const userRef = adminDb.collection("users").doc(externalReference);
           const userSnap = await userRef.get();
           if (userSnap.exists) {
-            const userData = userSnap.data();
-            let currentVencimento = userData?.dataVencimento;
-            let newVencimento = dataVencimento;
-            
-            if (currentVencimento) {
-              const currentExpiryTime = Date.parse(currentVencimento);
-              if (!isNaN(currentExpiryTime) && currentExpiryTime > Date.now()) {
-                const renewalDate = new Date(currentExpiryTime);
-                renewalDate.setDate(renewalDate.getDate() + 30);
-                newVencimento = renewalDate.toISOString();
-                console.log(`🔄 [RENOVAÇÃO] Prorrogando validade de ${currentVencimento} para ${newVencimento}`);
-              }
-            }
-
             await userRef.set({
               assinante: true,
-              dataVencimento: newVencimento,
+              dataVencimento: dataVencimento,
+              paymentApprovedAt: paymentApprovedAt,
+              dataAquisicao: paymentApprovedAt,
               paymentId: String(paymentId),
               paymentStatus: "approved",
               paymentSystem: "MercadoPago",
-              updatedAt: new Date().toISOString()
+              updatedAt: paymentApprovedAt
             }, { merge: true });
 
             await tokenRef.update({ used: true, userId: externalReference });
@@ -541,28 +530,16 @@ app.post("/api/mercadopago/webhook", async (req, res) => {
             const usersQuery = await adminDb.collection("users").where("email", "==", searchEmail).get();
             if (!usersQuery.empty) {
               for (const userDoc of usersQuery.docs) {
-                const userData = userDoc.data();
-                let currentVencimento = userData?.dataVencimento;
-                let newVencimento = dataVencimento;
-
-                if (currentVencimento) {
-                  const currentExpiryTime = Date.parse(currentVencimento);
-                  if (!isNaN(currentExpiryTime) && currentExpiryTime > Date.now()) {
-                    const renewalDate = new Date(currentExpiryTime);
-                    renewalDate.setDate(renewalDate.getDate() + 30);
-                    newVencimento = renewalDate.toISOString();
-                    console.log(`🔄 [RENOVAÇÃO POR EMAIL] Prorrogando de ${currentVencimento} para ${newVencimento}`);
-                  }
-                }
-
                 console.log(`🎯 [MERCADO PAGO WEBHOOK] Ativando conta do usuário ${userDoc.id} via e-mail match: ${searchEmail}`);
                 await userDoc.ref.set({
                   assinante: true,
-                  dataVencimento: newVencimento,
+                  dataVencimento: dataVencimento,
+                  paymentApprovedAt: paymentApprovedAt,
+                  dataAquisicao: paymentApprovedAt,
                   paymentId: String(paymentId),
                   paymentStatus: "approved",
                   paymentSystem: "MercadoPago",
-                  updatedAt: new Date().toISOString()
+                  updatedAt: paymentApprovedAt
                 }, { merge: true });
 
                 await tokenRef.update({ used: true, userId: userDoc.id });
@@ -702,14 +679,17 @@ app.post("/api/mercadopago/verify-payment", async (req, res) => {
         console.warn("⚠️ [VERIFY PAYMENT] Erro ao validar duplicidade ou salvar token no Firestore:", dbErr.message);
       }
 
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + 30);
+      const now = new Date();
+      const expiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       const dataVencimento = expiryDate.toISOString();
+      const paymentApprovedAt = now.toISOString();
 
       return res.json({
         success: true,
         status: "approved",
         dataVencimento,
+        paymentApprovedAt,
+        dataAquisicao: paymentApprovedAt,
         email,
         externalReference,
         paymentId: String(paymentId)

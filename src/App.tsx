@@ -25,6 +25,7 @@ import GoalsPanel from './components/GoalsPanel';
 import SettingsPanel from './components/SettingsPanel';
 import OnboardingTutorial from './components/OnboardingTutorial';
 import ExtraEarningsManager from './components/ExtraEarningsManager';
+import AdminPanel from './components/AdminPanel';
 import { 
   TrendingUp, 
   Plus, 
@@ -55,7 +56,8 @@ import {
   ArrowRight,
   ArrowUp,
   MessageCircle,
-  Clock
+  Clock,
+  Crown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LANGUAGES, Language, useLanguage, LanguageProvider } from './utils/i18n';
@@ -247,6 +249,12 @@ function MainApp() {
   const isVIP = useMemo(() => {
     return !!(user && user.email && VIP_EMAILS.includes(user.email.toLowerCase().trim()));
   }, [user, VIP_EMAILS]);
+
+  const ADMIN_EMAILS = useMemo(() => ['bjcarvalho07@gmail.com', 'bjcarvalho007@gmail.com'], []);
+
+  const isAdmin = useMemo(() => {
+    return !!(user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim()));
+  }, [user, ADMIN_EMAILS]);
 
   const timeGreeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -2453,7 +2461,8 @@ function MainApp() {
                 { id: 'variaveis', label: t('gastoVariavel'), icon: Coins },
                 { id: 'parcelas', label: t('parcelados'), icon: CreditCard },
                 { id: 'goals', label: t('metas'), icon: Target },
-                { id: 'settings', label: t('configuracoes'), icon: Settings }
+                { id: 'settings', label: t('configuracoes'), icon: Settings },
+                ...(isAdmin ? [{ id: 'admin', label: '👑 Admin', icon: Crown }] : [])
               ];
               return menuItems;
             })().map((item) => {
@@ -3852,6 +3861,12 @@ function MainApp() {
                     onUpdateGoalProgress={handleUpdateGoalProgress}
                     onDeleteGoal={handleDeleteGoal}
                   />
+                ) : activeTab === 'admin' ? (
+                  <AdminPanel
+                    currentTheme={theme}
+                    showToast={triggerToast}
+                    adminEmail={user?.email || 'bjcarvalho07@gmail.com'}
+                  />
                 ) : (
                   <SettingsPanel
                     currentTheme={theme}
@@ -4350,7 +4365,8 @@ function MainApp() {
               { id: 'variaveis', val: t('variados'), icon: Coins },
               { id: 'parcelas', val: t('parcelados'), icon: CreditCard },
               { id: 'goals', val: t('metas'), icon: Target },
-              { id: 'settings', val: t('ajustes'), icon: Settings }
+              { id: 'settings', val: t('ajustes'), icon: Settings },
+              ...(isAdmin ? [{ id: 'admin', val: 'Admin', icon: Crown }] : [])
             ];
             return tabs;
           })().map((tab) => {

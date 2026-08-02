@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export interface UserProfileData {
   uid: string;
+  allUids?: string[];
   email: string;
   username?: string;
   displayName?: string;
@@ -54,12 +55,17 @@ export default function AdminPanel({
     const unsubscribe = onSnapshot(
       usersRef,
       (snapshot) => {
-        const users: UserProfileData[] = [];
+        const emailMap = new Map<string, UserProfileData & { allUids: string[] }>();
+
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          users.push({
+          const rawEmail = data.email || 'Sem e-mail';
+          const emailKey = rawEmail.toLowerCase().trim();
+
+          const currentItem: UserProfileData & { allUids: string[] } = {
             uid: docSnap.id,
-            email: data.email || 'Sem e-mail',
+            allUids: [docSnap.id],
+            email: rawEmail,
             username: data.username || data.displayName || '',
             displayName: data.displayName || '',
             createdAt: data.createdAt || '',
@@ -71,8 +77,53 @@ export default function AdminPanel({
             paymentId: data.paymentId || '',
             paymentApprovedAt: data.paymentApprovedAt || data.dataAquisicao || '',
             dataAquisicao: data.dataAquisicao || data.paymentApprovedAt || ''
-          });
+          };
+
+          if (emailKey === 'sem e-mail' || !emailKey) {
+            emailMap.set(`nouid_${docSnap.id}`, currentItem);
+          } else if (!emailMap.has(emailKey)) {
+            emailMap.set(emailKey, currentItem);
+          } else {
+            const existing = emailMap.get(emailKey)!;
+            if (!existing.allUids.includes(docSnap.id)) {
+              existing.allUids.push(docSnap.id);
+            }
+
+            const existingExp = existing.dataVencimento ? Date.parse(existing.dataVencimento) : 0;
+            const currentExp = currentItem.dataVencimento ? Date.parse(currentItem.dataVencimento) : 0;
+            const existingIsPrem = existing.assinante && existingExp > Date.now();
+            const currentIsPrem = currentItem.assinante && currentExp > Date.now();
+
+            let replace = false;
+            if (currentIsPrem && !existingIsPrem) {
+              replace = true;
+            } else if (currentIsPrem === existingIsPrem) {
+              const existingTime = Math.max(
+                existing.createdAt ? Date.parse(existing.createdAt) || 0 : 0,
+                existing.lastLoginAt ? Date.parse(existing.lastLoginAt) || 0 : 0
+              );
+              const currentTime = Math.max(
+                currentItem.createdAt ? Date.parse(currentItem.createdAt) || 0 : 0,
+                currentItem.lastLoginAt ? Date.parse(currentItem.lastLoginAt) || 0 : 0
+              );
+              if (currentTime > existingTime) {
+                replace = true;
+              }
+            }
+
+            if (replace) {
+              const uids = existing.allUids;
+              emailMap.set(emailKey, { ...currentItem, allUids: uids });
+            } else {
+              if (!existing.username && currentItem.username) existing.username = currentItem.username;
+              if (!existing.dataVencimento && currentItem.dataVencimento) existing.dataVencimento = currentItem.dataVencimento;
+              if (!existing.paymentApprovedAt && currentItem.paymentApprovedAt) existing.paymentApprovedAt = currentItem.paymentApprovedAt;
+              if (!existing.dataAquisicao && currentItem.dataAquisicao) existing.dataAquisicao = currentItem.dataAquisicao;
+            }
+          }
         });
+
+        const users = Array.from(emailMap.values());
 
         // Ordenar por data de criação / login mais recente
         users.sort((a, b) => {
@@ -225,19 +276,23 @@ export default function AdminPanel({
   // Pre-fill email client mailto link
   const handleSendMarketingEmail = (email: string, username?: string) => {
     const name = username || email.split('@')[0];
-    const subject = encodeURIComponent('✨ Convite Especial FinançasPro - Oferta Exclusiva de Acesso Premium');
+    const subject = encodeURIComponent('🚨 URGENTE: Restam apenas 2 VAGAS na promoção R$ 11,99/mês | FinançasPro');
     const body = encodeURIComponent(
-      `Olá, ${name}!\n\n` +
-      `Notei que você está utilizando o FinançasPro para gerenciar seu planejamento financeiro. Gostaria de te dar um presente exclusivo!\n\n` +
-      `Com o Plano Premium do FinançasPro, você garante:\n` +
-      `✅ Sincronização em tempo real de todas as suas contas\n` +
-      `✅ Lançamentos e parcelamentos ilimitados\n` +
-      `✅ Exportação em PDF e Excel para prestação de contas\n` +
-      `✅ Relatórios e análises gráficas avançadas por categoria\n\n` +
-      `Aproveite o valor promocional de apenas R$ 11,99/mês (desconto congelado para sempre).\n\n` +
-      `Acesse o aplicativo agora mesmo para ativar o seu acesso completo!\n\n` +
-      `Atenciosamente,\n` +
-      `BJC Desenvolvimentos • FinançasPro`
+      `Olá, ${name}! Tudo bem?\n\n` +
+      `Estou passando para te avisar que restam APENAS 2 VAGAS para garantir o acesso Premium ao FinançasPro pelo valor promocional exclusivo de R$ 11,99/mês (com o preço congelado para sempre)!\n\n` +
+      `📌 O QUE O FINANÇASPRO FAZ POR VOCÊ:\n` +
+      `O FinançasPro é o seu organizador financeiro pessoal inteligente. Ele foi desenvolvido para eliminar a complicação do seu dinheiro e te dar clareza total sobre os seus gastos e investimentos:\n\n` +
+      `🔹 Controle Total de Contas: Organize despesas fixas, variáveis, receitas e rendas extras em segundos.\n` +
+      `🔹 Gestão de Cartão e Parcelamentos: Acompanhe faturas e parcelas mês a mês sem surpresas.\n` +
+      `🔹 Metas Financeiras e Economia: Defina objetivos (reserva de emergência, viagens, compras) com acompanhamento em tempo real.\n` +
+      `🔹 Relatórios e Análises Automáticas: Saiba exatamente seus maiores gastos com gráficos intuitivos e exportação em PDF e Excel em 1 clique.\n\n` +
+      `💥 POR QUE GARANTIR SUA VAGA HOJE?\n` +
+      `Tenha total paz mental e previsibilidade financeira por menos de R$ 0,40 por dia!\n\n` +
+      `🚨 Como resta apenas 2 vagas no valor promocional de R$ 11,99/mês, aproveite para ativar agora antes que encerre:\n` +
+      `👉 Acesse o aplicativo agora mesmo e libere seu Acesso Premium completo!\n\n` +
+      `Qualquer dúvida, estamos à disposição para te ajudar.\n\n` +
+      `Abraços,\n` +
+      `Equipe FinançasPro • BJC Desenvolvimentos`
     );
     window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
   };
@@ -245,8 +300,6 @@ export default function AdminPanel({
   // Quick grant premium (+30 days or +365 days)
   const handleQuickGrant = async (userDoc: UserProfileData, daysToAdd: number) => {
     try {
-      const userRef = doc(db, 'users', userDoc.uid);
-      
       // Se já tem data de vencimento válida no futuro, soma aos dias existentes, senão soma a partir de hoje
       let baseDate = new Date();
       if (userDoc.dataVencimento) {
@@ -260,15 +313,21 @@ export default function AdminPanel({
       const newExpiryStr = baseDate.toISOString();
 
       const nowIso = new Date().toISOString();
-      await setDoc(userRef, {
-        assinante: true,
-        dataVencimento: newExpiryStr,
-        paymentStatus: 'approved_admin',
-        paymentSystem: 'AdminManual',
-        paymentApprovedAt: userDoc.paymentApprovedAt || userDoc.dataAquisicao || nowIso,
-        dataAquisicao: userDoc.dataAquisicao || userDoc.paymentApprovedAt || nowIso,
-        updatedAt: nowIso
-      }, { merge: true });
+      const targetUids = userDoc.allUids && userDoc.allUids.length > 0 ? userDoc.allUids : [userDoc.uid];
+
+      await Promise.all(
+        targetUids.map((uid) =>
+          setDoc(doc(db, 'users', uid), {
+            assinante: true,
+            dataVencimento: newExpiryStr,
+            paymentStatus: 'approved_admin',
+            paymentSystem: 'AdminManual',
+            paymentApprovedAt: userDoc.paymentApprovedAt || userDoc.dataAquisicao || nowIso,
+            dataAquisicao: userDoc.dataAquisicao || userDoc.paymentApprovedAt || nowIso,
+            updatedAt: nowIso
+          }, { merge: true })
+        )
+      );
 
       showToast(`Acesso Premium concedido por +${daysToAdd} dias para ${userDoc.email}!`, 'success');
     } catch (err) {
@@ -280,12 +339,16 @@ export default function AdminPanel({
   // Revoke premium
   const handleRevokePremium = async (userDoc: UserProfileData) => {
     try {
-      const userRef = doc(db, 'users', userDoc.uid);
-      await updateDoc(userRef, {
-        assinante: false,
-        paymentStatus: 'revoked_admin',
-        updatedAt: new Date().toISOString()
-      });
+      const targetUids = userDoc.allUids && userDoc.allUids.length > 0 ? userDoc.allUids : [userDoc.uid];
+      await Promise.all(
+        targetUids.map((uid) =>
+          updateDoc(doc(db, 'users', uid), {
+            assinante: false,
+            paymentStatus: 'revoked_admin',
+            updatedAt: new Date().toISOString()
+          })
+        )
+      );
       showToast(`Acesso Premium revogado para ${userDoc.email}.`, 'warning');
     } catch (err) {
       console.error('Erro ao revogar acesso:', err);
@@ -298,8 +361,6 @@ export default function AdminPanel({
     if (!editingUser) return;
     setIsUpdating(true);
     try {
-      const userRef = doc(db, 'users', editingUser.uid);
-      
       let targetIsoDate = customExpiryDate;
       if (customDays > 0 && !customExpiryDate) {
         const d = new Date();
@@ -313,12 +374,19 @@ export default function AdminPanel({
         return;
       }
 
-      await setDoc(userRef, {
-        assinante: true,
-        dataVencimento: new Date(targetIsoDate).toISOString(),
-        paymentStatus: 'approved_admin',
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      const nowIso = new Date().toISOString();
+      const targetUids = editingUser.allUids && editingUser.allUids.length > 0 ? editingUser.allUids : [editingUser.uid];
+
+      await Promise.all(
+        targetUids.map((uid) =>
+          setDoc(doc(db, 'users', uid), {
+            assinante: true,
+            dataVencimento: new Date(targetIsoDate).toISOString(),
+            paymentStatus: 'approved_admin',
+            updatedAt: nowIso
+          }, { merge: true })
+        )
+      );
 
       showToast(`Data de vencimento atualizada para ${editingUser.email}!`, 'success');
       setEditingUser(null);

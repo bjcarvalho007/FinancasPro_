@@ -419,22 +419,20 @@ function MainApp() {
     }
   }, [user]);
 
-  // Monitor if user needs to configure a username (only for users without any existing name)
+  // Monitor if user needs to configure a username (only for brand new users without any existing name)
   useEffect(() => {
     if (user && !loadingProfile && !usernameSaving) {
-      const hasUsername = Boolean(userProfile?.username && userProfile.username.trim().length > 0);
-      const hasProfileName = Boolean(userProfile?.name && userProfile.name.trim().length > 0) || Boolean(userProfile?.nome && userProfile.nome.trim().length > 0);
+      const uProfile = userProfile || {};
       
-      const emailPrefix = user.email ? user.email.split('@')[0].toLowerCase().trim() : '';
-      const profileDisplayName = userProfile?.displayName ? userProfile.displayName.trim() : '';
-      const authDisplayName = user.displayName ? user.displayName.trim() : '';
-
-      const hasCustomProfileDisplayName = Boolean(profileDisplayName && profileDisplayName.toLowerCase() !== emailPrefix);
-      const hasCustomAuthDisplayName = Boolean(authDisplayName && authDisplayName.toLowerCase() !== emailPrefix);
+      const hasUsername = Boolean(uProfile.username && String(uProfile.username).trim().length > 0);
+      const hasProfileName = Boolean(uProfile.name && String(uProfile.name).trim().length > 0) || Boolean(uProfile.nome && String(uProfile.nome).trim().length > 0);
+      const hasDisplayName = Boolean(uProfile.displayName && String(uProfile.displayName).trim().length > 0);
+      const hasAuthDisplayName = Boolean(user.displayName && user.displayName.trim().length > 0);
+      const isConfiguredFlag = Boolean(uProfile.username_configured === true);
 
       const promptDoneLocal = localStorage.getItem(`financas_username_prompt_done_${user.uid}`) === 'true';
 
-      const userAlreadyHasName = hasUsername || hasProfileName || hasCustomProfileDisplayName || hasCustomAuthDisplayName || promptDoneLocal;
+      const userAlreadyHasName = hasUsername || hasProfileName || hasDisplayName || hasAuthDisplayName || isConfiguredFlag || promptDoneLocal;
 
       if (!userAlreadyHasName) {
         setShowUsernamePromptModal(true);
@@ -458,15 +456,17 @@ function MainApp() {
     const userRef = doc(db, 'users', user.uid);
     const userEmail = user.email || '';
     const nowIso = new Date().toISOString();
-    const creationTimeIso = user.metadata.creationTime ? new Date(user.metadata.creationTime).toISOString() : nowIso;
 
     const syncData: any = {
       uid: user.uid,
       email: userEmail,
-      displayName: user.displayName || (userEmail ? userEmail.split('@')[0] : ''),
       lastLoginAt: nowIso,
       updatedAt: nowIso
     };
+
+    if (user.displayName && user.displayName.trim() !== '') {
+      syncData.displayName = user.displayName.trim();
+    }
 
     if (userEmail && VIP_EMAILS.includes(userEmail.toLowerCase().trim())) {
       syncData.assinante = true;
@@ -5124,6 +5124,7 @@ function MainApp() {
                         email: user!.email || '',
                         username: trimmed,
                         displayName: trimmed,
+                        username_configured: true,
                         updatedAt: new Date().toISOString()
                       }, { merge: true });
                       
@@ -5137,7 +5138,8 @@ function MainApp() {
                         uid: user!.uid,
                         email: user!.email || '',
                         username: trimmed,
-                        displayName: trimmed
+                        displayName: trimmed,
+                        username_configured: true
                       }));
                       
                       triggerToast(`Bem-vindo, ${trimmed}! Seu nome foi configurado com sucesso.`, 'success');
@@ -5174,14 +5176,45 @@ function MainApp() {
                     />
                   </div>
 
-                  <button 
-                    type="submit"
-                    disabled={usernameSaving}
-                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 border-none animate-pulse"
-                  >
-                    {usernameSaving ? 'Salvando...' : 'Confirmar & Começar'}
-                    {!usernameSaving && <ArrowRight className="w-4 h-4" />}
-                  </button>
+                  <div className="space-y-2 pt-1">
+                    <button 
+                      type="submit"
+                      disabled={usernameSaving}
+                      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold py-3.5 px-4 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/15 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 border-none"
+                    >
+                      {usernameSaving ? 'Salvando...' : 'Confirmar & Começar'}
+                      {!usernameSaving && <ArrowRight className="w-4 h-4" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={usernameSaving}
+                      onClick={async () => {
+                        if (user?.uid) {
+                          localStorage.setItem(`financas_username_prompt_done_${user.uid}`, 'true');
+                          try {
+                            const userRef = doc(db, 'users', user.uid);
+                            await setDoc(userRef, { 
+                              username_configured: true,
+                              updatedAt: new Date().toISOString()
+                            }, { merge: true });
+                          } catch (e) {
+                            // ignore
+                          }
+                          setUserProfile((prev: any) => ({
+                            ...(prev || {}),
+                            username_configured: true
+                          }));
+                        }
+                        setShowUsernamePromptModal(false);
+                      }}
+                      className={`w-full py-2 px-3 text-[11px] font-semibold text-center transition-all cursor-pointer bg-transparent border-none ${
+                        theme === 'light' ? 'text-slate-400 hover:text-slate-600' : 'text-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      Manter padrão / Definir depois
+                    </button>
+                  </div>
                 </form>
               </div>
             </motion.div>

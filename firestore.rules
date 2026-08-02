@@ -110,13 +110,23 @@ service cloud.firestore {
         && (!data.keys().hasAny(['createdAt']) || (data.createdAt is string && data.createdAt.size() <= 100));
     }
 
+    function isAdminUser() {
+      return isSignedIn() 
+        && request.auth.token.email_verified == true 
+        && (request.auth.token.email == 'bjcarvalho07@gmail.com' || request.auth.token.email == 'bjcarvalho007@gmail.com');
+    }
+
     // Rules for Collections
     match /users/{userId} {
-      allow get: if isOwner(userId) || (request.auth.token.email == 'bjcarvalho07@gmail.com' && request.auth.token.email_verified == true);
-      allow list: if request.auth.token.email == 'bjcarvalho07@gmail.com' && request.auth.token.email_verified == true;
+      allow get: if isOwner(userId) || isAdminUser();
+      allow list: if isAdminUser();
       allow create: if isOwner(userId) && isValidUser(incoming());
-      allow update: if isOwner(userId) && isValidUser(incoming()) || (request.auth.token.email == 'bjcarvalho07@gmail.com' && request.auth.token.email_verified == true);
-      allow delete: if request.auth.token.email == 'bjcarvalho07@gmail.com' && request.auth.token.email_verified == true;
+      allow update: if isOwner(userId) && isValidUser(incoming()) || isAdminUser();
+      allow delete: if isAdminUser();
+
+      match /login_history/{logId} {
+        allow read, list, create, update: if isOwner(userId) || isAdminUser();
+      }
     }
 
     match /transactions/{transactionId} {

@@ -439,8 +439,65 @@ function MainApp() {
       setLoadingProfile(false);
       return;
     }
+
+    // Ensure user document exists in Firestore upon authentication
+    const userRef = doc(db, 'users', user.uid);
+    const userEmail = user.email || '';
+    const nowIso = new Date().toISOString();
+    const creationTimeIso = user.metadata.creationTime ? new Date(user.metadata.creationTime).toISOString() : nowIso;
+
+    const syncData: any = {
+      uid: user.uid,
+      email: userEmail,
+      displayName: user.displayName || (userEmail ? userEmail.split('@')[0] : ''),
+      lastLoginAt: nowIso,
+      updatedAt: nowIso
+    };
+
+    if (userEmail && VIP_EMAILS.includes(userEmail.toLowerCase().trim())) {
+      syncData.assinante = true;
+      syncData.dataVencimento = new Date('2030-12-31T23:59:59Z').toISOString();
+      syncData.paymentStatus = 'vip_access';
+    }
+
+    setDoc(userRef, syncData, { merge: true }).catch((err) => {
+      console.warn("Erro ao sincronizar documento do usuário no Firestore:", err);
+    });
+
+    // Registrar histórico de login/acesso no Firestore
+    try {
+      const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const platform = typeof navigator !== 'undefined' ? navigator.platform : '';
+      let device = 'Navegador Web';
+      if (/iphone/i.test(userAgent)) device = 'iPhone (iOS)';
+      else if (/ipad/i.test(userAgent)) device = 'iPad (iOS)';
+      else if (/android/i.test(userAgent)) device = 'Android (Mobile)';
+      else if (/windows/i.test(userAgent)) device = 'Windows (PC)';
+      else if (/macintosh|mac os x/i.test(userAgent)) device = 'Macintosh (Mac)';
+      else if (/linux/i.test(userAgent)) device = 'Linux (PC)';
+
+      const lastLoggedKey = `financas_last_login_log_${user.uid}`;
+      const lastLoggedTs = localStorage.getItem(lastLoggedKey);
+      const fiveMinsMs = 5 * 60 * 1000;
+
+      if (!lastLoggedTs || (Date.now() - parseInt(lastLoggedTs, 10)) > fiveMinsMs) {
+        localStorage.setItem(lastLoggedKey, Date.now().toString());
+        const logRef = doc(collection(db, 'users', user.uid, 'login_history'));
+        setDoc(logRef, {
+          timestamp: nowIso,
+          userAgent,
+          platform,
+          device,
+          screen: typeof window !== 'undefined' ? `${window.screen.width}x${window.screen.height}` : '',
+          type: 'Acesso / Login'
+        }).catch(() => {});
+      }
+    } catch (e) {
+      // Ignorar erros de log de login
+    }
+
     setLoadingProfile(true);
-    const unsubUserProfile = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+    const unsubUserProfile = onSnapshot(userRef, (docSnap) => {
       let profileData = docSnap.exists() ? docSnap.data() : null;
 
       // Auto-liberação de 30 dias adicionais para o usuário irakellygaby1@icloud.com (renovado até 08/08/2026, após o vencimento em 09/07/2026)
@@ -450,7 +507,6 @@ function MainApp() {
         const hasValidSub = profileData?.assinante === true && currentExpiryStr && Date.parse(currentExpiryStr) >= targetExpiry.getTime();
 
         if (!hasValidSub) {
-          const userRef = doc(db, 'users', user.uid);
           setDoc(userRef, {
             assinante: true,
             dataVencimento: targetExpiry.toISOString(),
@@ -469,7 +525,7 @@ function MainApp() {
       setLoadingProfile(false);
     });
     return unsubUserProfile;
-  }, [user]);
+  }, [user, VIP_EMAILS]);
 
   // Handle subscriber monthly check or update database accordingly
   useEffect(() => {
@@ -3822,11 +3878,25 @@ function MainApp() {
                     onDeleteGoal={handleDeleteGoal}
                   />
                 ) : activeTab === 'admin' ? (
-                  <AdminPanel
-                    currentTheme={theme}
-                    showToast={triggerToast}
-                    adminEmail={user?.email || 'bjcarvalho07@gmail.com'}
-                  />
+                  isAdmin ? (
+                    <AdminPanel
+                      currentTheme={theme}
+                      showToast={triggerToast}
+                      adminEmail={user?.email || 'bjcarvalho07@gmail.com'}
+                    />
+                  ) : (
+                    <div className={`p-8 sm:p-12 rounded-3xl border text-center space-y-4 my-8 max-w-xl mx-auto shadow-2xl ${
+                      theme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-950 border-white/10 text-white'
+                    }`}>
+                      <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center mx-auto shadow-inner">
+                        <ShieldCheck className="w-7 h-7 text-rose-500" />
+                      </div>
+                      <h3 className="font-display font-black text-xl tracking-tight">Acesso Restrito ao Administrador</h3>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed font-light">
+                        Este painel é protegido por regras de segurança no servidor e exclusivo para o administrador. Seu usuário não possui autorização.
+                      </p>
+                    </div>
+                  )
                 ) : (
                   <SettingsPanel
                     currentTheme={theme}

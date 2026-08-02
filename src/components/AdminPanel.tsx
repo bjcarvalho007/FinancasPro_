@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, updateDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
   ShieldCheck, Crown, Users, UserCheck, UserX, Search, Mail, Copy, Check, 
   Calendar, Sparkles, Clock, TrendingUp, Edit3, Zap, RefreshCw, Send,
-  AlertTriangle, Filter
+  AlertTriangle, Filter, History, Laptop, Smartphone, Monitor, Globe, Activity, ChevronRight, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -31,11 +31,17 @@ interface AdminPanelProps {
   adminEmail: string;
 }
 
+const ALLOWED_ADMIN_EMAILS = ['bjcarvalho07@gmail.com', 'bjcarvalho007@gmail.com'];
+
 export default function AdminPanel({
   currentTheme,
   showToast,
   adminEmail
 }: AdminPanelProps) {
+  const isAuthorized = useMemo(() => {
+    return !!(adminEmail && ALLOWED_ADMIN_EMAILS.includes(adminEmail.toLowerCase().trim()));
+  }, [adminEmail]);
+
   const [usersList, setUsersList] = useState<UserProfileData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -48,8 +54,118 @@ export default function AdminPanel({
   const [customExpiryDate, setCustomExpiryDate] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
+  // Login History Modal State
+  const [selectedUserForLogs, setSelectedUserForLogs] = useState<UserProfileData | null>(null);
+  const [selectedUserLogs, setSelectedUserLogs] = useState<Array<{
+    id: string;
+    timestamp: string;
+    device?: string;
+    userAgent?: string;
+    platform?: string;
+    screen?: string;
+    type?: string;
+  }>>([]);
+  const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
+
+  // Stream login history when a user is selected
+  useEffect(() => {
+    if (!selectedUserForLogs) {
+      setSelectedUserLogs([]);
+      return;
+    }
+
+    setLoadingLogs(true);
+    const u = selectedUserForLogs;
+
+    // Se for um usuário real do Firestore (não sintético vip_)
+    if (u.uid && !u.uid.startsWith('vip_')) {
+      const logsRef = collection(db, 'users', u.uid, 'login_history');
+      const q = query(logsRef, orderBy('timestamp', 'desc'), limit(50));
+
+      getDocs(q)
+        .then((snapshot) => {
+          const list: any[] = [];
+          snapshot.forEach((docSnap) => {
+            list.push({ id: docSnap.id, ...docSnap.data() });
+          });
+
+          // Se não houver logs salvos na subcoleção ainda, adicionar log derivado do lastLoginAt/createdAt
+          if (list.length === 0) {
+            if (u.lastLoginAt) {
+              list.push({
+                id: 'last_login',
+                timestamp: u.lastLoginAt,
+                device: 'Navegador / App',
+                type: 'Último Acesso Registrado'
+              });
+            }
+            if (u.createdAt && u.createdAt !== u.lastLoginAt) {
+              list.push({
+                id: 'created_at',
+                timestamp: u.createdAt,
+                device: 'Registro Inicial',
+                type: 'Criação de Conta'
+              });
+            }
+          }
+
+          setSelectedUserLogs(list);
+        })
+        .catch((err) => {
+          console.warn("Erro ao carregar histórico de logins do usuário:", err);
+          const fallbackList: any[] = [];
+          if (u.lastLoginAt) {
+            fallbackList.push({
+              id: 'last_login',
+              timestamp: u.lastLoginAt,
+              device: 'Navegador Web',
+              type: 'Último Acesso'
+            });
+          }
+          if (u.createdAt) {
+            fallbackList.push({
+              id: 'created_at',
+              timestamp: u.createdAt,
+              device: 'Registro Inicial',
+              type: 'Criação da Conta'
+            });
+          }
+          setSelectedUserLogs(fallbackList);
+        })
+        .finally(() => {
+          setLoadingLogs(false);
+        });
+    } else {
+      // Para VIPs/Sintéticos sem UID no Firestore
+      const fallbackList: any[] = [];
+      if (u.lastLoginAt) {
+        fallbackList.push({
+          id: 'last_login',
+          timestamp: u.lastLoginAt,
+          device: 'Navegador Web (VIP)',
+          type: 'Acesso VIP Registrado'
+        });
+      }
+      if (u.createdAt) {
+        fallbackList.push({
+          id: 'created_at',
+          timestamp: u.createdAt,
+          device: 'Ativação VIP',
+          type: 'Concessão do Acesso'
+        });
+      }
+      setSelectedUserLogs(fallbackList);
+      setLoadingLogs(false);
+    }
+  }, [selectedUserForLogs]);
+
   // Stream all users from Firestore
   useEffect(() => {
+    if (!isAuthorized) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const usersRef = collection(db, 'users');
     const unsubscribe = onSnapshot(
@@ -124,6 +240,27 @@ export default function AdminPanel({
         });
 
         const users = Array.from(emailMap.values());
+
+        // Garantir exibição de e-mails VIPs configurados mesmo que ainda não tenham documento Firestore
+        const KNOWN_VIP_EMAILS = ['msouzacintia600@gmail.com', 'teste@gmail.com'];
+        KNOWN_VIP_EMAILS.forEach((vipEmail) => {
+          const key = vipEmail.toLowerCase().trim();
+          if (!emailMap.has(key)) {
+            users.push({
+              uid: `vip_${key.replace(/[^a-z0-9]/g, '_')}`,
+              allUids: [`vip_${key.replace(/[^a-z0-9]/g, '_')}`],
+              email: vipEmail,
+              username: vipEmail.split('@')[0],
+              displayName: vipEmail.split('@')[0],
+              createdAt: new Date().toISOString(),
+              lastLoginAt: '',
+              assinante: true,
+              dataVencimento: new Date('2030-12-31T23:59:59Z').toISOString(),
+              paymentStatus: 'vip_access',
+              paymentSystem: 'Acesso VIP'
+            });
+          }
+        });
 
         // Ordenar por data de criação / login mais recente
         users.sort((a, b) => {
@@ -399,6 +536,22 @@ export default function AdminPanel({
       setIsUpdating(false);
     }
   };
+
+  if (!isAuthorized) {
+    return (
+      <div className={`p-8 sm:p-12 rounded-3xl border text-center space-y-4 my-8 max-w-xl mx-auto shadow-2xl ${
+        currentTheme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-950 border-white/10 text-white'
+      }`}>
+        <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center mx-auto shadow-inner">
+          <ShieldCheck className="w-7 h-7 text-rose-500" />
+        </div>
+        <h3 className="font-display font-black text-xl tracking-tight">Acesso Restrito ao Administrador</h3>
+        <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed font-light">
+          Este painel é protegido por regras de segurança do Firebase no servidor e exclusivo para administradores. Seu usuário não possui autorização.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 pb-20 select-none">
@@ -730,6 +883,15 @@ export default function AdminPanel({
                 {/* Admin Quick Action Buttons */}
                 <div className="flex items-center gap-2 flex-wrap shrink-0 border-t lg:border-t-0 pt-3 lg:pt-0 border-white/5">
                   <button
+                    onClick={() => setSelectedUserForLogs(u)}
+                    className="px-3 py-2 rounded-xl bg-cyan-600/20 hover:bg-cyan-600 border border-cyan-500/40 text-cyan-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                    title="Ver histórico de logins e acessos deste usuário"
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    <span>Logins</span>
+                  </button>
+
+                  <button
                     onClick={() => handleQuickGrant(u, 30)}
                     className="px-3 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
                     title="Conceder +30 dias de acesso"
@@ -873,6 +1035,161 @@ export default function AdminPanel({
                   className="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {isUpdating ? 'Salvando...' : 'Salvar Alteração'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* User Login History Modal */}
+        {selectedUserForLogs && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedUserForLogs(null)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-45"
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-[#0d1322] border border-cyan-500/30 w-full max-w-xl rounded-3xl p-6 shadow-2xl relative z-50 space-y-5 text-white max-h-[90vh] flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between border-b border-white/10 pb-4 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center shrink-0">
+                    <History className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-black text-base text-white flex items-center gap-2">
+                      Histórico de Logins e Acessos
+                    </h3>
+                    <p className="text-xs text-slate-400 font-mono mt-0.5 truncate max-w-xs">
+                      {selectedUserForLogs.email}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setSelectedUserForLogs(null)}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* User Overview Quick Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 rounded-2xl bg-slate-900/80 border border-white/5 text-xs shrink-0">
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Status da Conta:</span>
+                  <span className={`font-black ${selectedUserForLogs.assinante ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {selectedUserForLogs.assinante ? '👑 Assinante Premium' : '👤 Gratuito'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Acessos Gravados:</span>
+                  <span className="font-mono font-bold text-cyan-300">
+                    {selectedUserLogs.length} registro{selectedUserLogs.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                <div className="col-span-2 sm:col-span-1">
+                  <span className="text-[10px] text-slate-400 block font-bold uppercase">Último Acesso:</span>
+                  <span className="font-mono font-medium text-slate-200 text-[11px]">
+                    {selectedUserForLogs.lastLoginAt ? formatDateTime(selectedUserForLogs.lastLoginAt) : 'Sem registro'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Login Log Entries List */}
+              <div className="overflow-y-auto space-y-2.5 pr-1 flex-1 min-h-[220px]">
+                {loadingLogs ? (
+                  <div className="p-12 text-center text-slate-400 text-xs font-semibold space-y-2">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto text-cyan-400" />
+                    <p>Buscando histórico de acessos no banco de dados...</p>
+                  </div>
+                ) : selectedUserLogs.length === 0 ? (
+                  <div className="p-8 text-center border border-dashed border-white/10 rounded-2xl text-slate-400 text-xs font-medium space-y-2">
+                    <Activity className="w-8 h-8 text-slate-500 mx-auto" />
+                    <p>Nenhum registro de acesso detalhado encontrado para este usuário.</p>
+                    <p className="text-[10px] text-slate-500">Novos logins efetuados serão gravados automaticamente aqui em tempo real.</p>
+                  </div>
+                ) : (
+                  selectedUserLogs.map((log, index) => {
+                    const isMobile = log.device?.toLowerCase().includes('iphone') || log.device?.toLowerCase().includes('android') || log.device?.toLowerCase().includes('ipad');
+                    const isDesktop = log.device?.toLowerCase().includes('windows') || log.device?.toLowerCase().includes('mac') || log.device?.toLowerCase().includes('pc') || log.device?.toLowerCase().includes('linux');
+
+                    return (
+                      <div
+                        key={log.id || index}
+                        className="p-3.5 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-cyan-500/30 transition-all flex items-start justify-between gap-3 text-xs"
+                      >
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                            isMobile 
+                              ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+                              : isDesktop 
+                              ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                              : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'
+                          }`}>
+                            {isMobile ? <Smartphone className="w-4 h-4" /> : isDesktop ? <Monitor className="w-4 h-4" /> : <Globe className="w-4 h-4" />}
+                          </div>
+
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-extrabold text-slate-200">
+                                {log.device || 'Navegador Web'}
+                              </span>
+
+                              {index === 0 && (
+                                <span className="px-2 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                  Mais Recente
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="text-[11px] font-mono text-cyan-300">
+                              📅 {formatDateTime(log.timestamp) || log.timestamp}
+                            </p>
+
+                            {log.screen && (
+                              <p className="text-[10px] text-slate-400 font-mono">
+                                Resolução da tela: {log.screen}
+                              </p>
+                            )}
+
+                            {log.userAgent && (
+                              <p className="text-[9.5px] text-slate-500 truncate max-w-sm font-mono" title={log.userAgent}>
+                                {log.userAgent}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-800 text-slate-300 border border-white/5 inline-block">
+                            {log.type || 'Sessão Ativa'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-3 border-t border-white/10 text-right shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserForLogs(null)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all cursor-pointer"
+                >
+                  Fechar
                 </button>
               </div>
             </motion.div>

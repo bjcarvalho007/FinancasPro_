@@ -421,28 +421,29 @@ function MainApp() {
 
   // Monitor if user needs to configure a username (only for brand new users without any existing name)
   useEffect(() => {
-    if (user && !loadingProfile && !usernameSaving) {
-      const uProfile = userProfile || {};
-      
-      const hasUsername = Boolean(uProfile.username && String(uProfile.username).trim().length > 0);
-      const hasProfileName = Boolean(uProfile.name && String(uProfile.name).trim().length > 0) || Boolean(uProfile.nome && String(uProfile.nome).trim().length > 0);
-      const hasDisplayName = Boolean(uProfile.displayName && String(uProfile.displayName).trim().length > 0);
-      const hasAuthDisplayName = Boolean(user.displayName && user.displayName.trim().length > 0);
-      const isConfiguredFlag = Boolean(uProfile.username_configured === true);
+    // DO NOT evaluate or show prompt while application or user profile is loading
+    if (!user || loadingUser || loadingProfile || minSplashLoading || usernameSaving) {
+      setShowUsernamePromptModal(false);
+      return;
+    }
 
-      const promptDoneLocal = localStorage.getItem(`financas_username_prompt_done_${user.uid}`) === 'true';
+    const uProfile = userProfile || {};
+    
+    const hasUsername = Boolean(uProfile.username && String(uProfile.username).trim().length > 0);
+    const hasProfileName = Boolean(uProfile.name && String(uProfile.name).trim().length > 0) || Boolean(uProfile.nome && String(uProfile.nome).trim().length > 0);
+    const hasDisplayName = Boolean(uProfile.displayName && String(uProfile.displayName).trim().length > 0);
+    const hasAuthDisplayName = Boolean(user.displayName && user.displayName.trim().length > 0);
+    const isConfiguredFlag = Boolean(uProfile.username_configured === true);
+    const promptDoneLocal = localStorage.getItem(`financas_username_prompt_done_${user.uid}`) === 'true';
 
-      const userAlreadyHasName = hasUsername || hasProfileName || hasDisplayName || hasAuthDisplayName || isConfiguredFlag || promptDoneLocal;
+    const userAlreadyHasName = hasUsername || hasProfileName || hasDisplayName || hasAuthDisplayName || isConfiguredFlag || promptDoneLocal;
 
-      if (!userAlreadyHasName) {
-        setShowUsernamePromptModal(true);
-      } else {
-        setShowUsernamePromptModal(false);
-      }
-    } else if (!user) {
+    if (!userAlreadyHasName) {
+      setShowUsernamePromptModal(true);
+    } else {
       setShowUsernamePromptModal(false);
     }
-  }, [user, userProfile, loadingProfile, usernameSaving]);
+  }, [user, userProfile, loadingUser, loadingProfile, minSplashLoading, usernameSaving]);
 
   // Profile snapshot stream
   useEffect(() => {
@@ -5176,7 +5177,7 @@ function MainApp() {
                     />
                   </div>
 
-                  <div className="space-y-2 pt-1">
+                  <div className="pt-2">
                     <button 
                       type="submit"
                       disabled={usernameSaving}
@@ -5184,35 +5185,6 @@ function MainApp() {
                     >
                       {usernameSaving ? 'Salvando...' : 'Confirmar & Começar'}
                       {!usernameSaving && <ArrowRight className="w-4 h-4" />}
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={usernameSaving}
-                      onClick={async () => {
-                        if (user?.uid) {
-                          localStorage.setItem(`financas_username_prompt_done_${user.uid}`, 'true');
-                          try {
-                            const userRef = doc(db, 'users', user.uid);
-                            await setDoc(userRef, { 
-                              username_configured: true,
-                              updatedAt: new Date().toISOString()
-                            }, { merge: true });
-                          } catch (e) {
-                            // ignore
-                          }
-                          setUserProfile((prev: any) => ({
-                            ...(prev || {}),
-                            username_configured: true
-                          }));
-                        }
-                        setShowUsernamePromptModal(false);
-                      }}
-                      className={`w-full py-2 px-3 text-[11px] font-semibold text-center transition-all cursor-pointer bg-transparent border-none ${
-                        theme === 'light' ? 'text-slate-400 hover:text-slate-600' : 'text-slate-500 hover:text-slate-300'
-                      }`}
-                    >
-                      Manter padrão / Definir depois
                     </button>
                   </div>
                 </form>

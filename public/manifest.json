@@ -1,6 +1,7 @@
 {
   "short_name": "FinançasPro",
-  "name": "FinançasPro - Gestão de Caixa Premium",
+  "name": "FinançasPro - Seu Sistema de Controle Financeiro Completo",
+  "description": "Seu sistema de controle financeiro completo! Analise rendas fixas, despesas variáveis e parcelamentos. Domine suas finanças, saiba exatamente quanto lhe sobra a cada mês e planeje o seu futuro. ⚡ Venha testar 5 dias grátis!",
   "icons": [
     {
       "src": "/app_icon.png",

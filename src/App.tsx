@@ -419,10 +419,24 @@ function MainApp() {
     }
   }, [user]);
 
-  // Monitor if user needs to configure a username (for both existing and new users after login)
+  // Monitor if user needs to configure a username (only for users without any existing name)
   useEffect(() => {
     if (user && !loadingProfile && !usernameSaving) {
-      if (!userProfile || !userProfile.username) {
+      const hasUsername = Boolean(userProfile?.username && userProfile.username.trim().length > 0);
+      const hasProfileName = Boolean(userProfile?.name && userProfile.name.trim().length > 0) || Boolean(userProfile?.nome && userProfile.nome.trim().length > 0);
+      
+      const emailPrefix = user.email ? user.email.split('@')[0].toLowerCase().trim() : '';
+      const profileDisplayName = userProfile?.displayName ? userProfile.displayName.trim() : '';
+      const authDisplayName = user.displayName ? user.displayName.trim() : '';
+
+      const hasCustomProfileDisplayName = Boolean(profileDisplayName && profileDisplayName.toLowerCase() !== emailPrefix);
+      const hasCustomAuthDisplayName = Boolean(authDisplayName && authDisplayName.toLowerCase() !== emailPrefix);
+
+      const promptDoneLocal = localStorage.getItem(`financas_username_prompt_done_${user.uid}`) === 'true';
+
+      const userAlreadyHasName = hasUsername || hasProfileName || hasCustomProfileDisplayName || hasCustomAuthDisplayName || promptDoneLocal;
+
+      if (!userAlreadyHasName) {
         setShowUsernamePromptModal(true);
       } else {
         setShowUsernamePromptModal(false);
@@ -5109,15 +5123,21 @@ function MainApp() {
                         uid: user!.uid,
                         email: user!.email || '',
                         username: trimmed,
+                        displayName: trimmed,
                         updatedAt: new Date().toISOString()
                       }, { merge: true });
                       
+                      if (user?.uid) {
+                        localStorage.setItem(`financas_username_prompt_done_${user.uid}`, 'true');
+                      }
+
                       // Immediately update the local state to prevent any race condition or latency flashes
                       setUserProfile((prev: any) => ({
                         ...(prev || {}),
                         uid: user!.uid,
                         email: user!.email || '',
-                        username: trimmed
+                        username: trimmed,
+                        displayName: trimmed
                       }));
                       
                       triggerToast(`Bem-vindo, ${trimmed}! Seu nome foi configurado com sucesso.`, 'success');

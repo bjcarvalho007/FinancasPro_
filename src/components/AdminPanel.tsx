@@ -413,25 +413,14 @@ export default function AdminPanel({
   // Pre-fill email client mailto link
   const handleSendMarketingEmail = (email: string, username?: string) => {
     const name = username || email.split('@')[0];
-    const subject = encodeURIComponent('🚨 URGENTE: Restam apenas 2 VAGAS na promoção R$ 11,99/mês | FinançasPro');
+    const subject = encodeURIComponent('FinançasPro Premium: Libere seu acesso completo');
     const body = encodeURIComponent(
-      `Olá, ${name}! Tudo bem?\n\n` +
-      `Estou passando para te avisar que restam APENAS 2 VAGAS para garantir o acesso Premium ao FinançasPro pelo valor promocional exclusivo de R$ 11,99/mês (com o preço congelado para sempre)!\n\n` +
-      `📌 O QUE O FINANÇASPRO FAZ POR VOCÊ:\n` +
-      `O FinançasPro é o seu organizador financeiro pessoal inteligente. Ele foi desenvolvido para eliminar a complicação do seu dinheiro e te dar clareza total sobre os seus gastos e investimentos:\n\n` +
-      `🔹 Controle Total de Contas: Organize despesas fixas, variáveis, receitas e rendas extras em segundos.\n` +
-      `🔹 Gestão de Cartão e Parcelamentos: Acompanhe faturas e parcelas mês a mês sem surpresas.\n` +
-      `🔹 Metas Financeiras e Economia: Defina objetivos (reserva de emergência, viagens, compras) com acompanhamento em tempo real.\n` +
-      `🔹 Relatórios e Análises Automáticas: Saiba exatamente seus maiores gastos com gráficos intuitivos e exportação em PDF e Excel em 1 clique.\n\n` +
-      `💥 POR QUE GARANTIR SUA VAGA HOJE?\n` +
-      `Tenha total paz mental e previsibilidade financeira!\n\n` +
-      `🚨 Como resta apenas 2 vagas no valor promocional de R$ 11,99/mês, aproveite para ativar agora antes que encerre:\n` +
-      `👉 Acesse o site e libere seu Acesso Premium completo:\n` +
+      `Olá, ${name}!\n\n` +
+      `Garanta seu Acesso Premium no FinançasPro e tenha controle financeiro completo com gráficos, relatórios e gestão de metas.\n\n` +
+      `Acesse o site e libere seu plano:\n` +
       `https://www.financaspro.solutions/\n\n` +
-      `Qualquer dúvida, estamos à disposição para te ajudar.\n\n` +
-      `Abraços,\n` +
-      `Equipe FinançasPro • BJC Desenvolvimentos\n` +
-      `https://www.financaspro.solutions/`
+      `Atenciosamente,\n` +
+      `Equipe FinançasPro`
     );
     window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
   };
@@ -479,13 +468,15 @@ export default function AdminPanel({
   const handleRevokePremium = async (userDoc: UserProfileData) => {
     try {
       const targetUids = userDoc.allUids && userDoc.allUids.length > 0 ? userDoc.allUids : [userDoc.uid];
+      const nowIso = new Date().toISOString();
       await Promise.all(
         targetUids.map((uid) =>
-          updateDoc(doc(db, 'users', uid), {
+          setDoc(doc(db, 'users', uid), {
             assinante: false,
+            dataVencimento: nowIso,
             paymentStatus: 'revoked_admin',
-            updatedAt: new Date().toISOString()
-          })
+            updatedAt: nowIso
+          }, { merge: true })
         )
       );
       showToast(`Acesso Premium revogado para ${userDoc.email}.`, 'warning');
@@ -500,38 +491,52 @@ export default function AdminPanel({
     if (!editingUser) return;
     setIsUpdating(true);
     try {
-      let targetIsoDate = customExpiryDate;
-      if (customDays > 0 && !customExpiryDate) {
-        const d = new Date();
-        d.setDate(d.getDate() + customDays);
-        targetIsoDate = d.toISOString();
-      }
+      let targetExpiry: Date;
 
-      if (!targetIsoDate) {
-        showToast('Por favor, defina um número de dias ou uma data válida.', 'error');
+      if (customExpiryDate) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(customExpiryDate)) {
+          targetExpiry = new Date(`${customExpiryDate}T23:59:59.999Z`);
+        } else {
+          targetExpiry = new Date(customExpiryDate);
+        }
+      } else if (customDays > 0) {
+        targetExpiry = new Date();
+        targetExpiry.setDate(targetExpiry.getDate() + customDays);
+      } else {
+        showToast('Por favor, defina um número de dias ou selecione uma data válida no calendário.', 'error');
         setIsUpdating(false);
         return;
       }
 
+      if (isNaN(targetExpiry.getTime())) {
+        showToast('Data selecionada inválida.', 'error');
+        setIsUpdating(false);
+        return;
+      }
+
+      const isFuture = targetExpiry.getTime() > Date.now();
       const nowIso = new Date().toISOString();
       const targetUids = editingUser.allUids && editingUser.allUids.length > 0 ? editingUser.allUids : [editingUser.uid];
 
       await Promise.all(
         targetUids.map((uid) =>
           setDoc(doc(db, 'users', uid), {
-            assinante: true,
-            dataVencimento: new Date(targetIsoDate).toISOString(),
-            paymentStatus: 'approved_admin',
+            assinante: isFuture,
+            dataVencimento: targetExpiry.toISOString(),
+            paymentStatus: isFuture ? 'approved_admin' : 'expired_admin',
+            paymentSystem: 'AdminManual',
             updatedAt: nowIso
           }, { merge: true })
         )
       );
 
-      showToast(`Data de vencimento atualizada para ${editingUser.email}!`, 'success');
+      showToast(`Data de vencimento (${targetExpiry.toLocaleDateString('pt-BR')}) atualizada com sucesso para ${editingUser.email}!`, 'success');
       setEditingUser(null);
+      setCustomExpiryDate('');
+      setCustomDays(0);
     } catch (err) {
       console.error('Erro ao salvar nova data de vencimento:', err);
-      showToast('Falha ao atualizar registro.', 'error');
+      showToast('Falha ao atualizar data de vencimento no banco de dados.', 'error');
     } finally {
       setIsUpdating(false);
     }

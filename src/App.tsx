@@ -111,6 +111,28 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
+// Local storage user cache helpers for instant UI loading
+const saveLocalUserCache = (uid: string, key: string, data: any) => {
+  try {
+    if (data === null || data === undefined) {
+      localStorage.removeItem(`finpro_cache_${key}_${uid}`);
+    } else {
+      localStorage.setItem(`finpro_cache_${key}_${uid}`, JSON.stringify(data));
+    }
+  } catch (e) {
+    // ignore quota errors
+  }
+};
+
+const getLocalUserCache = (uid: string, key: string, fallback: any) => {
+  try {
+    const raw = localStorage.getItem(`finpro_cache_${key}_${uid}`);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+};
+
 function MainApp() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
@@ -125,6 +147,45 @@ function MainApp() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isFirebaseOffline, setIsFirebaseOffline] = useState<boolean>(false);
   const [minSplashLoading, setMinSplashLoading] = useState<boolean>(true);
+  
+  // Instant local user data hydration from cache upon authentication
+  useEffect(() => {
+    if (!user) return;
+    const uid = user.uid;
+
+    const cachedProfile = getLocalUserCache(uid, 'profile', null);
+    if (cachedProfile) {
+      setUserProfile(cachedProfile);
+      setLoadingProfile(false);
+    }
+
+    const cachedTxs = getLocalUserCache(uid, 'txs', null);
+    if (cachedTxs && Array.isArray(cachedTxs) && cachedTxs.length > 0) {
+      setTransactions(cachedTxs);
+    }
+
+    const cachedCats = getLocalUserCache(uid, 'cats', null);
+    if (cachedCats && Array.isArray(cachedCats) && cachedCats.length > 0) {
+      setCategories(cachedCats);
+    }
+
+    const cachedGoals = getLocalUserCache(uid, 'goals', null);
+    if (cachedGoals && Array.isArray(cachedGoals) && cachedGoals.length > 0) {
+      setGoals(cachedGoals);
+    }
+
+    const cachedSettings = getLocalUserCache(uid, 'settings', null);
+    if (cachedSettings) {
+      setSettings(cachedSettings);
+      if (cachedSettings.theme) setTheme(cachedSettings.theme);
+      if (cachedSettings.currency) setCurrency(cachedSettings.currency);
+    }
+
+    const cachedNotifs = getLocalUserCache(uid, 'notifs', null);
+    if (cachedNotifs && Array.isArray(cachedNotifs) && cachedNotifs.length > 0) {
+      setNotifications(cachedNotifs);
+    }
+  }, [user?.uid]);
   
   // Quick dynamic splash introduction experience (450ms)
   useEffect(() => {
@@ -516,7 +577,9 @@ function MainApp() {
       // Ignorar erros de log de login
     }
 
-    setLoadingProfile(true);
+    if (!getLocalUserCache(user.uid, 'profile', null)) {
+      setLoadingProfile(true);
+    }
     const unsubUserProfile = onSnapshot(userRef, (docSnap) => {
       let profileData = docSnap.exists() ? docSnap.data() : null;
 
@@ -539,6 +602,7 @@ function MainApp() {
       }
 
       setUserProfile(profileData);
+      saveLocalUserCache(user.uid, 'profile', profileData);
       setLoadingProfile(false);
     }, (error) => {
       console.error("Error reading user profile:", error);
@@ -627,6 +691,7 @@ function MainApp() {
         items.push(docSnap.data() as Transaction);
       });
       setTransactions(items);
+      saveLocalUserCache(uid, 'txs', items);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, transactionsPath);
     });
@@ -640,6 +705,7 @@ function MainApp() {
         items.push(docSnap.data() as Category);
       });
       setCategories(items);
+      saveLocalUserCache(uid, 'cats', items);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, categoriesPath);
     });
@@ -653,6 +719,7 @@ function MainApp() {
         items.push(docSnap.data() as Goal);
       });
       setGoals(items);
+      saveLocalUserCache(uid, 'goals', items);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, goalsPath);
     });
@@ -663,6 +730,7 @@ function MainApp() {
       if (docSnap.exists()) {
         const data = docSnap.data() as Setting;
         setSettings(data);
+        saveLocalUserCache(uid, 'settings', data);
         if (data.theme) setTheme(data.theme);
         if (data.currency) setCurrency(data.currency);
       } else {
@@ -695,6 +763,7 @@ function MainApp() {
         items.push(docSnap.data() as AppNotification);
       });
       setNotifications(items);
+      saveLocalUserCache(uid, 'notifs', items);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, notificationsPath);
     });

@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import firebaseConfigJson from '../firebase-applet-config.json';
 
 // Suporta variáveis de ambiente (Vercel/GitHub/Produção) com fallback para o arquivo de configuração
@@ -16,9 +16,24 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+let firestoreLocalCache;
+try {
+  firestoreLocalCache = persistentLocalCache({ tabManager: persistentMultipleTabManager() });
+} catch (e) {
+  console.warn("Firestore persistent cache fallback:", e);
+}
+
+const firestoreOptions: any = {
+  ignoreUndefinedProperties: true
+};
+if (firestoreLocalCache) {
+  firestoreOptions.localCache = firestoreLocalCache;
+}
+
 export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)' 
-  ? initializeFirestore(app, { ignoreUndefinedProperties: true }, firebaseConfig.firestoreDatabaseId) 
-  : initializeFirestore(app, { ignoreUndefinedProperties: true });
+  ? initializeFirestore(app, firestoreOptions, firebaseConfig.firestoreDatabaseId) 
+  : initializeFirestore(app, firestoreOptions);
 export const auth = getAuth();
 
 export enum OperationType {

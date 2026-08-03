@@ -300,7 +300,8 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         dataVencimento: isPremiumUser ? dataVencimento : null,
         paymentApprovedAt: isPremiumUser ? nowIso : null,
         dataAquisicao: isPremiumUser ? nowIso : null,
-        createdAt: nowIso
+        createdAt: nowIso,
+        needs_username_prompt: true
       }, { merge: true });
 
       // Clean URL params after successful registration

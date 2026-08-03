@@ -419,9 +419,9 @@ function MainApp() {
     }
   }, [user]);
 
-  // Monitor if user needs to configure a username (only for brand new users without any existing name)
+  // Monitor if user needs to configure a username (only for new registrations that explicitly require it)
   useEffect(() => {
-    // DO NOT evaluate or show prompt while application or user profile is loading
+    // DO NOT evaluate or show prompt while application, auth, or user profile is loading
     if (!user || loadingUser || loadingProfile || minSplashLoading || usernameSaving) {
       setShowUsernamePromptModal(false);
       return;
@@ -429,6 +429,10 @@ function MainApp() {
 
     const uProfile = userProfile || {};
     
+    // Check if user explicitly needs username prompt (only brand new signups)
+    const needsPrompt = uProfile.needs_username_prompt === true;
+
+    // Check if user already has a name or has configured it
     const hasUsername = Boolean(uProfile.username && String(uProfile.username).trim().length > 0);
     const hasProfileName = Boolean(uProfile.name && String(uProfile.name).trim().length > 0) || Boolean(uProfile.nome && String(uProfile.nome).trim().length > 0);
     const hasDisplayName = Boolean(uProfile.displayName && String(uProfile.displayName).trim().length > 0);
@@ -438,7 +442,8 @@ function MainApp() {
 
     const userAlreadyHasName = hasUsername || hasProfileName || hasDisplayName || hasAuthDisplayName || isConfiguredFlag || promptDoneLocal;
 
-    if (!userAlreadyHasName) {
+    // ONLY show modal if it is a brand new registration explicitly marked for username prompt AND they haven't configured a name yet
+    if (needsPrompt && !userAlreadyHasName) {
       setShowUsernamePromptModal(true);
     } else {
       setShowUsernamePromptModal(false);
@@ -5126,6 +5131,7 @@ function MainApp() {
                         username: trimmed,
                         displayName: trimmed,
                         username_configured: true,
+                        needs_username_prompt: false,
                         updatedAt: new Date().toISOString()
                       }, { merge: true });
                       
@@ -5140,7 +5146,8 @@ function MainApp() {
                         email: user!.email || '',
                         username: trimmed,
                         displayName: trimmed,
-                        username_configured: true
+                        username_configured: true,
+                        needs_username_prompt: false
                       }));
                       
                       triggerToast(`Bem-vindo, ${trimmed}! Seu nome foi configurado com sucesso.`, 'success');

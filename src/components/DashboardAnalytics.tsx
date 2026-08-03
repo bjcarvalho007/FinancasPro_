@@ -218,7 +218,7 @@ export default function DashboardAnalytics({
   const liquidezScoreMonth = totalAvailable > 0 
     ? Math.max(10, Math.min(100, Math.round(100 - (totalSpentMonth / totalAvailable) * 100))) 
     : 45;
-  const adimplenciaScoreMonth = Math.round(paidInMonthRatio);
+  const adimplenciaScoreMonth = Math.min(100, Math.max(0, Math.round(paidInMonthRatio)));
 
   const overdueMonthTransactions = listActive.filter(t => (t.paid_amount || 0) < t.amount && t.due && t.due < todayStr);
   const pontualidadeScoreMonth = Math.max(15, Math.min(100, 100 - overdueMonthTransactions.length * 25));
@@ -421,8 +421,14 @@ export default function DashboardAnalytics({
   const totalPaidAll = listAll.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
   const totalUnpaidAll = totalDevedorParceladoSimples;
   
-  // Dynamic Score parameters
-  const quitacaoScoreAll = totalSpentAll > 0 ? Math.round((totalPaidAll / totalSpentAll) * 100) : 100;
+  // Real historical total amount vs total paid amount in listAll for quitacaoScoreAll
+  const totalAmountAllSum = listAll.reduce((sum, t) => sum + (t.amount || 0), 0);
+  const totalPaidAllSum = listAll.reduce((sum, t) => sum + Math.min(t.amount || 0, t.paid_amount || 0), 0);
+
+  // Dynamic Score parameters (strictly bounded between 0% and 100%)
+  const quitacaoScoreAll = totalAmountAllSum > 0 
+    ? Math.min(100, Math.max(0, Math.round((totalPaidAllSum / totalAmountAllSum) * 100))) 
+    : 100;
   
   // Find all unpaid historical transactions with PAST due dates (unreconciled past items)
   const pastUnreconciledTx = listAll.filter(t => (t.paid_amount || 0) < t.amount && t.due && t.due < todayStr);
@@ -433,11 +439,11 @@ export default function DashboardAnalytics({
   const alavancagemScoreAll = Math.max(15, Math.min(100, 100 - Math.round(installmentRatio * 1.5)));
 
   // Global historical health score combined
-  const globalHealthScore = Math.round(
+  const globalHealthScore = Math.min(100, Math.max(0, Math.round(
     quitacaoScoreAll * 0.40 + 
     conciliacaoScoreAll * 0.40 + 
     alavancagemScoreAll * 0.20
-  );
+  )));
 
   let globalLabel = t('tudoPagoNoPassado', 'Tudo Pago no Passado!');
   let globalColor = 'text-emerald-400';

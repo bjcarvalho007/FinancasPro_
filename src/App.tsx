@@ -374,20 +374,43 @@ function MainApp() {
     return Date.now() <= expiryTime;
   }, [user, userProfile]);
 
-  const isSubscriptionEndingSoon = useMemo(() => {
+  const subExpiryDetails = useMemo(() => {
     if (!userProfile || userProfile.assinante !== true || !userProfile.dataVencimento) {
-      return false;
+      return null;
     }
     
     const expiryTime = Date.parse(userProfile.dataVencimento);
-    if (isNaN(expiryTime)) return false;
+    if (isNaN(expiryTime)) return null;
     
     const diffMs = expiryTime - Date.now();
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    if (diffMs <= 0) return null;
     
-    // Alerta com 2 dias de antecedência (de 0 a 2.1 dias antes de expirar)
-    return diffDays > 0 && diffDays <= 2.1;
+    const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    
+    let daysText = '';
+    if (diffHours <= 24) {
+      daysText = 'menos de 24 horas';
+    } else if (diffDays === 1) {
+      daysText = '1 dia';
+    } else {
+      daysText = `${diffDays} dias`;
+    }
+
+    const expiryFormatted = new Date(expiryTime).toLocaleDateString('pt-BR');
+
+    // Alerta ativo quando faltarem 3 dias ou menos para expirar
+    return {
+      diffMs,
+      diffDays,
+      diffHours,
+      daysText,
+      expiryFormatted,
+      isEndingSoon: diffDays <= 3.1
+    };
   }, [userProfile]);
+
+  const isSubscriptionEndingSoon = Boolean(subExpiryDetails?.isEndingSoon);
 
   const hasAccess = isVIP || isWithinFiveDaysTrial || hasActiveSubscription;
   const isBlocked = !!(user && !hasAccess);
@@ -470,15 +493,54 @@ function MainApp() {
     return unsubscribe;
   }, []);
 
-  // Load premium alert dismissal state
+  // Load premium alert dismissal state (differentiating by remaining days so 1-day warning triggers even if 3-day was dismissed)
   useEffect(() => {
     if (user) {
-      const dismissed = localStorage.getItem(`dismiss_premium_alert_${user.uid}`) === 'true';
-      setIsPremiumAlertDismissed(dismissed);
+      const dayKey = subExpiryDetails?.diffDays ?? 'general';
+      const dismissedByDay = localStorage.getItem(`dismiss_premium_alert_${user.uid}_day_${dayKey}`) === 'true';
+      const dismissedGeneral = localStorage.getItem(`dismiss_premium_alert_${user.uid}`) === 'true';
+      setIsPremiumAlertDismissed(dismissedByDay || (subExpiryDetails?.diffDays === undefined ? dismissedGeneral : false));
     } else {
       setIsPremiumAlertDismissed(false);
     }
-  }, [user]);
+  }, [user, subExpiryDetails?.diffDays]);
+
+  // Trigger browser desktop notification when subscription is ending soon
+  useEffect(() => {
+    if (subExpiryDetails?.isEndingSoon && userProfile?.dataVencimento) {
+      const expiryDateStr = userProfile.dataVencimento.split('T')[0];
+      const sessionKey = `financaspro_notified_sub_expiry_${expiryDateStr}_day_${subExpiryDetails.diffDays}`;
+
+      if (!sessionStorage.getItem(sessionKey)) {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            const title = 'FinançasPro Premium - Vencimento Próximo! ✨';
+            const body = `Atenção: Seu plano Premium vence em ${subExpiryDetails.daysText} (dia ${subExpiryDetails.expiryFormatted}). Clique para renovar antes do vencimento!`;
+            const options = {
+              body,
+              icon: '/app_icon.png',
+              badge: '/app_icon.png',
+              tag: `financaspro-sub-expiry-${expiryDateStr}`,
+              renotify: true
+            };
+
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.ready.then((reg) => {
+                reg.showNotification(title, options);
+              }).catch(() => {
+                new Notification(title, options);
+              });
+            } else {
+              new Notification(title, options);
+            }
+          } catch (e) {
+            console.warn("Subscription notification trigger warning:", e);
+          }
+        }
+        sessionStorage.setItem(sessionKey, 'true');
+      }
+    }
+  }, [subExpiryDetails, userProfile?.dataVencimento]);
 
   // Monitor if user needs to configure a username (only for new registrations that explicitly require it)
   useEffect(() => {
@@ -3034,6 +3096,8 @@ function MainApp() {
               <button
                 onClick={() => {
                   if (user) {
+                    const dayKey = subExpiryDetails?.diffDays ?? 'general';
+                    localStorage.setItem(`dismiss_premium_alert_${user.uid}_day_${dayKey}`, 'true');
                     localStorage.setItem(`dismiss_premium_alert_${user.uid}`, 'true');
                   }
                   setIsPremiumAlertDismissed(true);
@@ -3059,12 +3123,14 @@ function MainApp() {
                     <h4 className={`font-display font-black text-sm uppercase tracking-wide ${
                       theme === 'light' ? 'text-indigo-800' : 'text-indigo-400'
                     }`}>
-                      Seu Plano Premium vence em breve! ✨
+                      {subExpiryDetails?.diffHours && subExpiryDetails.diffHours <= 24
+                        ? 'Seu Plano Premium vence HOJE / amanhã! ⏳'
+                        : 'Seu Plano Premium vence em breve! ✨'}
                     </h4>
                     <p className={`text-xs font-light leading-relaxed ${
                       theme === 'light' ? 'text-slate-650' : 'text-slate-350'
                     }`}>
-                      Olá! Percebemos que faltam apenas <strong className="font-bold">2 dias</strong> para a data de vencimento do seu plano Premium (dia {userProfile?.dataVencimento ? new Date(userProfile.dataVencimento).toLocaleDateString('pt-BR') : ''}). Se você quiser continuar aproveitando o controle total das suas finanças sem qualquer interrupção, você já pode renovar seu mês de uso de forma simples e suave. Obrigado por caminhar conosco!
+                      Olá! Percebemos que {subExpiryDetails?.diffHours && subExpiryDetails.diffHours <= 24 ? 'falta' : 'faltam'} apenas <strong className="font-bold">{subExpiryDetails?.daysText || 'pouco tempo'}</strong> para a data de vencimento do seu plano Premium (dia {subExpiryDetails?.expiryFormatted || (userProfile?.dataVencimento ? new Date(userProfile.dataVencimento).toLocaleDateString('pt-BR') : '')}). Se você quiser continuar aproveitando o controle total das suas finanças sem qualquer interrupção, você já pode renovar seu mês de uso de forma simples e suave antes do vencimento. Obrigado por caminhar conosco!
                     </p>
                   </div>
                 </div>

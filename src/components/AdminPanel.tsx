@@ -54,6 +54,9 @@ export default function AdminPanel({
   const [customExpiryDate, setCustomExpiryDate] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
+  // Email Selection Modal State
+  const [emailUserModal, setEmailUserModal] = useState<UserProfileData | null>(null);
+
   // Login History Modal State
   const [selectedUserForLogs, setSelectedUserForLogs] = useState<UserProfileData | null>(null);
   const [selectedUserLogs, setSelectedUserLogs] = useState<Array<{
@@ -410,23 +413,58 @@ export default function AdminPanel({
     setTimeout(() => setCopiedEmail(null), 2500);
   };
 
-  // Pre-fill email client mailto link
-  const handleSendMarketingEmail = (email: string, username?: string) => {
+  // Pre-fill email client mailto link based on chosen template
+  const handleSendTemplateEmail = (
+    email: string,
+    templateType: 'expiring_soon' | 'expired' | 'promotional',
+    username?: string
+  ) => {
     const name = username || email.split('@')[0];
-    const subject = encodeURIComponent('🚨 Restam apenas 2 vagas no valor promocional de R$ 11,99/mês | FinançasPro');
-    const body = encodeURIComponent(
-      `Olá, ${name}!\n\n` +
-      `Restam APENAS 2 VAGAS para você garantir o Acesso Premium ao FinançasPro pelo valor promocional de R$ 11,99/mês!\n\n` +
-      `Com o FinançasPro você conta com:\n` +
-      `• Controle de receitas, despesas fixas e parcelamentos\n` +
-      `• Gestão de metas financeiras e relatórios gráficos interativos\n` +
-      `• Exportação de relatórios detalhados em 1 clique\n\n` +
-      `Aproveite para liberar seu acesso antes que as vagas acabem:\n` +
-      `https://www.financaspro.solutions/\n\n` +
-      `Atenciosamente,\n` +
-      `Equipe FinançasPro`
-    );
-    window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+    let subject = '';
+    let body = '';
+
+    if (templateType === 'expiring_soon') {
+      subject = '⏳ Seu teste gratuito do FinançasPro está prestes a vencer! Não perca seu controle financeiro';
+      body =
+        `Olá, ${name}!\n\n` +
+        `Passando para te avisar que faltam poucos dias para o término do seu período de teste gratuito do FinançasPro.\n\n` +
+        `Não deixe seu controle financeiro parar! Garanta o Acesso Premium por apenas R$ 11,99/mês e continue aproveitando todas as vantagens sem nenhuma interrupção:\n` +
+        `• Gestão completa de contas, receitas e despesas fixas\n` +
+        `• Controle de parcelamentos e metas financeiras inteligentes\n` +
+        `• Relatórios gráficos interativos e exportação em 1 clique\n\n` +
+        `Ative seu Plano Premium agora mesmo antes que o período de teste acabe:\n` +
+        `https://www.financaspro.solutions/\n\n` +
+        `Atenciosamente,\n` +
+        `Equipe FinançasPro`;
+    } else if (templateType === 'expired') {
+      subject = '🚨 Seu período de teste do FinançasPro acabou! Ative o Premium por R$ 11,99/mês';
+      body =
+        `Olá, ${name}!\n\n` +
+        `Notamos que o seu período de teste gratuito do FinançasPro chegou ao fim.\n\n` +
+        `Para continuar organizando suas finanças com receitas, despesas, parcelamentos e relatórios sem nenhuma interrupção, faça o upgrade para o FinançasPro Premium por apenas R$ 11,99/mês!\n\n` +
+        `Aproveite para reativar seu acesso instantaneamente pelo link abaixo:\n` +
+        `https://www.financaspro.solutions/\n\n` +
+        `Atenciosamente,\n` +
+        `Equipe FinançasPro`;
+    } else {
+      // promotional
+      subject = '🚨 Restam apenas 2 vagas no valor promocional de R$ 11,99/mês | FinançasPro';
+      body =
+        `Olá, ${name}!\n\n` +
+        `Restam APENAS 2 VAGAS para você garantir o Acesso Premium ao FinançasPro pelo valor promocional de R$ 11,99/mês!\n\n` +
+        `Com o FinançasPro você conta com:\n` +
+        `• Controle de receitas, despesas fixas e parcelamentos\n` +
+        `• Gestão de metas financeiras e relatórios gráficos interativos\n` +
+        `• Exportação de relatórios detalhados em 1 clique\n\n` +
+        `Aproveite para liberar seu acesso antes que as vagas acabem:\n` +
+        `https://www.financaspro.solutions/\n\n` +
+        `Atenciosamente,\n` +
+        `Equipe FinançasPro`;
+    }
+
+    window.open(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+    showToast(`Cliente de e-mail aberto para ${email}!`, 'success');
+    setEmailUserModal(null);
   };
 
   // Quick grant premium (+30 days or +365 days)
@@ -839,12 +877,12 @@ export default function AdminPanel({
                       </button>
 
                       <button
-                        onClick={() => handleSendMarketingEmail(u.email, u.username)}
-                        className="p-1 hover:bg-indigo-500/20 rounded-lg text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-sans font-bold"
-                        title="Enviar e-mail de oferta com vantagens"
+                        onClick={() => setEmailUserModal(u)}
+                        className="p-1 hover:bg-indigo-500/20 rounded-lg text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-sans font-bold border border-indigo-500/30 px-2 py-0.5 bg-indigo-500/10"
+                        title="Escolher modelo de e-mail para enviar ao usuário"
                       >
-                        <Send className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Ofertar</span>
+                        <Send className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Enviar E-mail</span>
                       </button>
                     </div>
 
@@ -1232,6 +1270,138 @@ export default function AdminPanel({
                   className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all cursor-pointer"
                 >
                   Fechar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Email Template Options Modal */}
+      <AnimatePresence>
+        {emailUserModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setEmailUserModal(null)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-45"
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-[#0d1322] border border-indigo-500/30 w-full max-w-lg rounded-3xl p-6 shadow-2xl relative z-50 space-y-5 text-white max-h-[90vh] flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="flex items-start justify-between border-b border-white/10 pb-4 shrink-0">
+                <div className="space-y-1">
+                  <h3 className="font-display font-black text-base text-white flex items-center gap-2">
+                    <Mail className="w-5 h-5 text-indigo-400" />
+                    Enviar E-mail ao Usuário
+                  </h3>
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5 flex-wrap">
+                    <span>Destinatário:</span>
+                    <strong className="text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {emailUserModal.email}
+                    </strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEmailUserModal(null)}
+                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed shrink-0">
+                Selecione qual mensagem deseja enviar para <strong className="text-white">{emailUserModal.username || emailUserModal.email}</strong>. Ao clicar na opção, o seu programa/cliente de e-mail será aberto automaticamente com o assunto e corpo preenchidos.
+              </p>
+
+              {/* Template List */}
+              <div className="space-y-3 overflow-y-auto pr-1 flex-1">
+                {/* Opção 1: Prestes a vencer */}
+                <div
+                  onClick={() => handleSendTemplateEmail(emailUserModal.email, 'expiring_soon', emailUserModal.username)}
+                  className="p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 hover:border-amber-400 hover:bg-amber-500/10 transition-all cursor-pointer group flex items-start gap-3.5 shadow-md"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <Clock className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-bold text-sm text-amber-300 group-hover:text-amber-200">
+                        ⏳ Teste Prestes a Vencer
+                      </h4>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Alerta Prévio
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-normal">
+                      Para usuários em teste gratuito com vencimento em breve. Alerta sobre o fim do teste e incentiva o upgrade para R$ 11,99/mês.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Opção 2: Teste Expirado */}
+                <div
+                  onClick={() => handleSendTemplateEmail(emailUserModal.email, 'expired', emailUserModal.username)}
+                  className="p-4 rounded-2xl bg-slate-900/90 border border-rose-500/30 hover:border-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer group flex items-start gap-3.5 shadow-md"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-bold text-sm text-rose-300 group-hover:text-rose-200">
+                        🚨 Teste Gratuito Expirado
+                      </h4>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                        Expirou
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-normal">
+                      Para usuários cujo teste gratuito já encerrou. Solicita a ativação do plano Premium por R$ 11,99/mês para desbloqueio do sistema.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Opção 3: Oferta Promocional (2 Vagas) */}
+                <div
+                  onClick={() => handleSendTemplateEmail(emailUserModal.email, 'promotional', emailUserModal.username)}
+                  className="p-4 rounded-2xl bg-slate-900/90 border border-indigo-500/30 hover:border-indigo-400 hover:bg-indigo-500/10 transition-all cursor-pointer group flex items-start gap-3.5 shadow-md"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <Crown className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-bold text-sm text-indigo-300 group-hover:text-indigo-200">
+                        ✨ Oferta Promocional (2 Vagas)
+                      </h4>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        Promoção
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-normal">
+                      Mensagem com foco em escassez (restam 2 vagas na promoção) para incentivar a assinatura imediata por R$ 11,99/mês.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-3 border-t border-white/10 text-right shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setEmailUserModal(null)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-all cursor-pointer border border-white/10"
+                >
+                  Cancelar
                 </button>
               </div>
             </motion.div>

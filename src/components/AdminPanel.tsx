@@ -45,7 +45,7 @@ export default function AdminPanel({
   const [usersList, setUsersList] = useState<UserProfileData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'premium' | 'free' | 'expiring'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'premium' | 'free' | 'expiring' | 'recent_login'>('all');
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
 
   // Edit Modal State
@@ -382,9 +382,22 @@ export default function AdminPanel({
     };
   }, [usersList]);
 
+  // Helper to extract timestamp ms for latest login
+  const getLastLoginTimeMs = (u: UserProfileData) => {
+    if (u.lastLoginAt) {
+      const t = Date.parse(u.lastLoginAt);
+      if (!isNaN(t)) return t;
+    }
+    if (u.createdAt) {
+      const t = Date.parse(u.createdAt);
+      if (!isNaN(t)) return t;
+    }
+    return 0;
+  };
+
   // Filtered users list
   const filteredUsers = useMemo(() => {
-    return usersList.filter((u) => {
+    const list = usersList.filter((u) => {
       const searchLower = searchTerm.toLowerCase().trim();
       const matchesSearch =
         !searchLower ||
@@ -403,6 +416,14 @@ export default function AdminPanel({
 
       return true;
     });
+
+    if (statusFilter === 'recent_login') {
+      return [...list].sort((a, b) => {
+        return getLastLoginTimeMs(b) - getLastLoginTimeMs(a);
+      });
+    }
+
+    return list;
   }, [usersList, searchTerm, statusFilter]);
 
   // Copy email helper
@@ -788,6 +809,19 @@ export default function AdminPanel({
             <Clock className="w-3.5 h-3.5 text-rose-300" />
             <span>Vencendo ({metrics.expiringSoonCount})</span>
           </button>
+
+          <button
+            onClick={() => setStatusFilter('recent_login')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              statusFilter === 'recent_login'
+                ? 'bg-cyan-600 text-white shadow-md'
+                : 'bg-slate-800/40 hover:bg-slate-800 text-slate-400 border border-white/5'
+            }`}
+            title="Ordenar usuários pelo login mais recente"
+          >
+            <Activity className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Último Login ({metrics.total})</span>
+          </button>
         </div>
       </div>
 
@@ -956,6 +990,21 @@ export default function AdminPanel({
                           {u.paymentSystem}
                         </span>
                       )}
+
+                      {/* 4. Last Login Timestamp */}
+                      {(() => {
+                        const lastLoginFormatted = u.lastLoginAt ? formatDateTime(u.lastLoginAt) : (u.createdAt ? formatDateTime(u.createdAt) : null);
+                        return (
+                          <span className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg font-medium transition-all ${
+                            statusFilter === 'recent_login'
+                              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                              : 'bg-cyan-500/10 text-cyan-300/90 border border-cyan-500/20'
+                          }`}>
+                            <Activity className="w-3 h-3 text-cyan-400 shrink-0" />
+                            <span>Último Login: <strong className="font-bold">{lastLoginFormatted || 'Sem registro'}</strong></span>
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

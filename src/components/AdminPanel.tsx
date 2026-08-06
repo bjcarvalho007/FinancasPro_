@@ -770,6 +770,11 @@ export default function AdminPanel({
             const isPremiumActive = u.assinante && daysRemaining !== null && daysRemaining > 0;
             const isExpiringSoon = isPremiumActive && daysRemaining <= 5;
 
+            // Effective expiration date for Free / Trial accounts (explicit dataVencimento or createdAt + 5 days)
+            const effectiveFreeVencimento = u.dataVencimento || (u.createdAt ? new Date(Date.parse(u.createdAt) + 5 * 24 * 60 * 60 * 1000).toISOString() : null);
+            const freeDaysRemaining = calculateDaysRemaining(effectiveFreeVencimento || undefined);
+            const isFreeTrialActive = !isPremiumActive && freeDaysRemaining !== null && freeDaysRemaining > 0;
+
             return (
               <div
                 key={u.uid}
@@ -784,9 +789,11 @@ export default function AdminPanel({
                   <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-base font-black shrink-0 border ${
                     isPremiumActive
                       ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                      : 'bg-slate-800 border-white/10 text-slate-400'
+                      : isFreeTrialActive
+                      ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                      : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
                   }`}>
-                    {isPremiumActive ? '👑' : '👤'}
+                    {isPremiumActive ? '👑' : isFreeTrialActive ? '⏳' : '👤'}
                   </div>
 
                   <div className="min-w-0 space-y-1">
@@ -806,8 +813,12 @@ export default function AdminPanel({
                           {isExpiringSoon ? 'Vencendo em breve' : 'Assinante Premium'}
                         </span>
                       ) : (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-slate-800 text-slate-400 border border-white/10">
-                          Gratuito / Trial
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
+                          isFreeTrialActive
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 animate-pulse'
+                            : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                        }`}>
+                          {isFreeTrialActive ? `Trial Ativo (${freeDaysRemaining}d restante${freeDaysRemaining > 1 ? 's' : ''})` : 'Gratuito / Trial Expirado'}
                         </span>
                       )}
                     </div>
@@ -874,10 +885,32 @@ export default function AdminPanel({
                         </span>
                       )}
 
-                      {!isPremiumActive && u.dataVencimento && (
-                        <span className="text-rose-400 font-bold">
-                          ❌ Expirou
-                        </span>
+                      {!isPremiumActive && (
+                        <>
+                          {effectiveFreeVencimento ? (
+                            <>
+                              <span className="flex items-center gap-1 text-slate-300">
+                                <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                                {freeDaysRemaining !== null && freeDaysRemaining > 0 ? 'Vencimento do Teste: ' : 'Venceu o teste em: '}
+                                <strong className={freeDaysRemaining !== null && freeDaysRemaining <= 0 ? 'text-rose-400 font-bold' : 'text-amber-300 font-bold'}>
+                                  {new Date(effectiveFreeVencimento).toLocaleDateString('pt-BR')}
+                                </strong>
+                              </span>
+
+                              {freeDaysRemaining !== null && freeDaysRemaining > 0 ? (
+                                <span className="text-amber-400 font-extrabold">
+                                  ⏳ Restam {freeDaysRemaining} dia{freeDaysRemaining > 1 ? 's' : ''} de teste
+                                </span>
+                              ) : (
+                                <span className="text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                                  ❌ Expirou em {new Date(effectiveFreeVencimento).toLocaleDateString('pt-BR')}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-slate-400 text-[10px]">Sem data de vencimento</span>
+                          )}
+                        </>
                       )}
 
                       {u.paymentSystem && (

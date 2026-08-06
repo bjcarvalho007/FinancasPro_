@@ -237,6 +237,7 @@ function MainApp() {
   const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, boolean>>({});
   const [showUpdateAlert, setShowUpdateAlert] = useState<boolean>(false);
   const [isPremiumAlertDismissed, setIsPremiumAlertDismissed] = useState<boolean>(false);
+  const [isTrialAlertDismissed, setIsTrialAlertDismissed] = useState<boolean>(false);
   const [showUsernamePromptModal, setShowUsernamePromptModal] = useState<boolean>(false);
   const [newUsernameInput, setNewUsernameInput] = useState<string>('');
   const [usernameSaving, setUsernameSaving] = useState<boolean>(false);
@@ -410,6 +411,54 @@ function MainApp() {
     };
   }, [userProfile]);
 
+  const freeTrialExpiryDetails = useMemo(() => {
+    // Only for FREE / trial users (not VIP and not active subscribers)
+    if (!user || isVIP || hasActiveSubscription) {
+      return null;
+    }
+
+    let trialExpiryTime: number | null = null;
+    if (userProfile?.dataVencimento) {
+      trialExpiryTime = Date.parse(userProfile.dataVencimento);
+    } else {
+      let creationTime = Date.now();
+      if (userProfile?.createdAt) {
+        creationTime = Date.parse(userProfile.createdAt);
+      } else if (user.metadata.creationTime) {
+        creationTime = Date.parse(user.metadata.creationTime);
+      }
+      trialExpiryTime = creationTime + 5 * 24 * 60 * 60 * 1000;
+    }
+
+    if (!trialExpiryTime || isNaN(trialExpiryTime)) return null;
+
+    const diffMs = trialExpiryTime - Date.now();
+    if (diffMs <= 0) return null; // Already expired trial, blocked overlay handles it
+
+    const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+    let daysText = '';
+    if (diffHours <= 24) {
+      daysText = 'menos de 24 horas';
+    } else if (diffDays === 1) {
+      daysText = '1 dia';
+    } else {
+      daysText = `${diffDays} dias`;
+    }
+
+    const expiryFormatted = new Date(trialExpiryTime).toLocaleDateString('pt-BR');
+
+    return {
+      diffMs,
+      diffDays,
+      diffHours,
+      daysText,
+      expiryFormatted,
+      isTrialEndingSoon: true
+    };
+  }, [user, isVIP, hasActiveSubscription, userProfile]);
+
   const isSubscriptionEndingSoon = Boolean(subExpiryDetails?.isEndingSoon);
 
   const hasAccess = isVIP || isWithinFiveDaysTrial || hasActiveSubscription;
@@ -505,6 +554,18 @@ function MainApp() {
     }
   }, [user, subExpiryDetails?.diffDays]);
 
+  // Load trial alert dismissal state for FREE users
+  useEffect(() => {
+    if (user && freeTrialExpiryDetails) {
+      const dayKey = freeTrialExpiryDetails.diffDays;
+      const dismissedByDay = localStorage.getItem(`dismiss_trial_alert_${user.uid}_day_${dayKey}`) === 'true';
+      const dismissedGeneral = localStorage.getItem(`dismiss_trial_alert_${user.uid}`) === 'true';
+      setIsTrialAlertDismissed(dismissedByDay || dismissedGeneral);
+    } else {
+      setIsTrialAlertDismissed(false);
+    }
+  }, [user, freeTrialExpiryDetails?.diffDays]);
+
   // Trigger browser desktop notification when subscription is ending soon
   useEffect(() => {
     if (subExpiryDetails?.isEndingSoon && userProfile?.dataVencimento) {
@@ -541,6 +602,42 @@ function MainApp() {
       }
     }
   }, [subExpiryDetails, userProfile?.dataVencimento]);
+
+  // Trigger browser desktop notification when FREE trial access is ending
+  useEffect(() => {
+    if (freeTrialExpiryDetails?.isTrialEndingSoon && user && !isVIP && !hasActiveSubscription) {
+      const sessionKey = `financaspro_notified_free_trial_${user.uid}_day_${freeTrialExpiryDetails.diffDays}`;
+
+      if (!sessionStorage.getItem(sessionKey)) {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            const title = 'FinançasPro - Seu Teste Gratuito vence em breve! ⏳';
+            const body = `Atenção: Seu acesso de teste gratuito expira em ${freeTrialExpiryDetails.daysText} (dia ${freeTrialExpiryDetails.expiryFormatted}). Ative seu Plano Premium e continue organizando suas finanças!`;
+            const options = {
+              body,
+              icon: '/app_icon.png',
+              badge: '/app_icon.png',
+              tag: `financaspro-free-trial-expiry-${user.uid}`,
+              renotify: true
+            };
+
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.ready.then((reg) => {
+                reg.showNotification(title, options);
+              }).catch(() => {
+                new Notification(title, options);
+              });
+            } else {
+              new Notification(title, options);
+            }
+          } catch (e) {
+            console.warn("Trial notification trigger warning:", e);
+          }
+        }
+        sessionStorage.setItem(sessionKey, 'true');
+      }
+    }
+  }, [freeTrialExpiryDetails, user, isVIP, hasActiveSubscription]);
 
   // Monitor if user needs to configure a username (only for new registrations that explicitly require it)
   useEffect(() => {
@@ -3142,6 +3239,82 @@ function MainApp() {
                   >
                     <span>{checkoutLoading ? "Processando..." : "Renovar Agora"}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Alerta de Expiração Próxima do Período de Teste Gratuito (Apenas para usuários Free / Trial) */}
+          {freeTrialExpiryDetails && !isVIP && !hasActiveSubscription && !isTrialAlertDismissed && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-5 rounded-3xl border transition-all relative overflow-hidden ${
+                theme === 'light'
+                  ? 'bg-gradient-to-r from-amber-50/90 via-amber-100/50 to-orange-50/80 border-amber-200 shadow-md text-slate-800'
+                  : 'bg-gradient-to-r from-[#2c1e10] via-slate-900 to-[#1e1710] border border-amber-500/25 text-white shadow-xl shadow-amber-950/10'
+              }`}
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+              
+              <button
+                onClick={() => {
+                  if (user && freeTrialExpiryDetails) {
+                    localStorage.setItem(`dismiss_trial_alert_${user.uid}_day_${freeTrialExpiryDetails.diffDays}`, 'true');
+                    localStorage.setItem(`dismiss_trial_alert_${user.uid}`, 'true');
+                  }
+                  setIsTrialAlertDismissed(true);
+                }}
+                className={`absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent ${
+                  theme === 'light' ? 'hover:bg-amber-200/60 text-amber-800' : 'hover:bg-white/10 text-amber-300'
+                }`}
+                title="Fechar alerta de teste"
+              >
+                ✕
+              </button>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 pr-6">
+                <div className="flex items-start gap-3.5">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                    theme === 'light'
+                      ? 'bg-amber-100 border-amber-200 text-amber-700'
+                      : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                  }`}>
+                    <Clock className="w-5 h-5 text-amber-400 animate-pulse" />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <h4 className={`font-display font-black text-sm uppercase tracking-wide ${
+                      theme === 'light' ? 'text-amber-900' : 'text-amber-300'
+                    }`}>
+                      {freeTrialExpiryDetails.diffHours <= 24
+                        ? 'Seu Período de Teste Gratuito vence HOJE / amanhã! ⏳'
+                        : `Seu Período de Teste Gratuito vence em ${freeTrialExpiryDetails.daysText}! ⏳`}
+                    </h4>
+                    <p className={`text-xs font-light leading-relaxed ${
+                      theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                    }`}>
+                      Olá! Percebemos que {freeTrialExpiryDetails.diffHours <= 24 ? 'falta' : 'faltam'} apenas <strong className="font-bold text-amber-400">{freeTrialExpiryDetails.daysText}</strong> para o término do seu período de teste gratuito (dia <strong className="font-bold">{freeTrialExpiryDetails.expiryFormatted}</strong>). Para garantir a continuidade do seu controle financeiro sem nenhuma interrupção, você já pode ativar seu Plano Premium a qualquer momento!
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col sm:flex-row items-center gap-2 sm:self-center shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentInfoModal(true)}
+                    className="w-full sm:w-auto text-center bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 hover:from-amber-400 hover:to-teal-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none hover:scale-[1.02] active:scale-95"
+                  >
+                    <Sparkles className="w-4 h-4 fill-slate-950" />
+                    <span>Seja Premium (R$ 11,99)</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={checkoutLoading}
+                    onClick={handleDynamicMercadoPagoCheckout}
+                    className="w-full sm:w-auto text-center bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-3.5 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    <span>{checkoutLoading ? "Carregando..." : "Ir para Pagamento"}</span>
                   </button>
                 </div>
               </div>

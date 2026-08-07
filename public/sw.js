@@ -120,7 +120,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil(notificationPromise);
 });
 
-// Listener for notification click events (leads user directly to client)
+// Listener for notification click events (leads user directly to client or payment modal)
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
@@ -128,22 +128,36 @@ self.addEventListener('notificationclick', (event) => {
     return;
   }
 
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+  const notifData = event.notification.data || {};
+  const isPaymentAction =
+    notifData.action === 'OPEN_PAYMENT' ||
+    (event.notification.tag && (
+      event.notification.tag.includes('sub-expiry') ||
+      event.notification.tag.includes('trial-expiry') ||
+      event.notification.tag.includes('free-trial')
+    ));
+
+  const targetPath = notifData.url || (isPaymentAction ? '/?action=open_pay' : '/');
 
   const clickPromise = clients.matchAll({
     type: 'window',
     includeUncontrolled: true
   }).then((windowClients) => {
-    // Check if there is already a window open
+    // Check if there is already an open window client for this app
     for (let i = 0; i < windowClients.length; i++) {
       const client = windowClients[i];
-      if (client.url === targetUrl && 'focus' in client) {
-        return client.focus();
+      if ('focus' in client) {
+        client.focus();
+        if (isPaymentAction) {
+          client.postMessage({ type: 'OPEN_PAYMENT', action: 'OPEN_PAYMENT' });
+        }
+        return;
       }
     }
-    // If not, open a new window
+    // If no window is currently open, open a new window pointing to the target URL
+    const fullUrl = new URL(targetPath, self.location.origin).href;
     if (clients.openWindow) {
-      return clients.openWindow(targetUrl);
+      return clients.openWindow(fullUrl);
     }
   });
 

@@ -542,6 +542,30 @@ function MainApp() {
     return unsubscribe;
   }, []);
 
+  // Handle payment modal trigger from URL parameter or ServiceWorker notification click
+  useEffect(() => {
+    // 1. URL parameter check on startup
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'open_pay' || params.get('open_pay') === 'true') {
+      setShowPaymentInfoModal(true);
+      const newUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, '', newUrl);
+    }
+
+    // 2. ServiceWorker message listener (when notification is clicked while app is open)
+    if ('serviceWorker' in navigator) {
+      const handleSWMessage = (event: MessageEvent) => {
+        if (event.data && (event.data.type === 'OPEN_PAYMENT' || event.data.action === 'OPEN_PAYMENT')) {
+          setShowPaymentInfoModal(true);
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleSWMessage);
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      };
+    }
+  }, []);
+
   // Load premium alert dismissal state (differentiating by remaining days so 1-day warning triggers even if 3-day was dismissed)
   useEffect(() => {
     if (user) {
@@ -582,17 +606,31 @@ function MainApp() {
               icon: '/app_icon.png',
               badge: '/app_icon.png',
               tag: `financaspro-sub-expiry-${expiryDateStr}`,
-              renotify: true
+              renotify: true,
+              data: {
+                action: 'OPEN_PAYMENT',
+                url: '/?action=open_pay'
+              }
             };
 
             if ('serviceWorker' in navigator) {
               navigator.serviceWorker.ready.then((reg) => {
                 reg.showNotification(title, options);
               }).catch(() => {
-                new Notification(title, options);
+                const notif = new Notification(title, options);
+                notif.onclick = (e) => {
+                  e.preventDefault();
+                  window.focus();
+                  setShowPaymentInfoModal(true);
+                };
               });
             } else {
-              new Notification(title, options);
+              const notif = new Notification(title, options);
+              notif.onclick = (e) => {
+                e.preventDefault();
+                window.focus();
+                setShowPaymentInfoModal(true);
+              };
             }
           } catch (e) {
             console.warn("Subscription notification trigger warning:", e);
@@ -618,17 +656,31 @@ function MainApp() {
               icon: '/app_icon.png',
               badge: '/app_icon.png',
               tag: `financaspro-free-trial-expiry-${user.uid}`,
-              renotify: true
+              renotify: true,
+              data: {
+                action: 'OPEN_PAYMENT',
+                url: '/?action=open_pay'
+              }
             };
 
             if ('serviceWorker' in navigator) {
               navigator.serviceWorker.ready.then((reg) => {
                 reg.showNotification(title, options);
               }).catch(() => {
-                new Notification(title, options);
+                const notif = new Notification(title, options);
+                notif.onclick = (e) => {
+                  e.preventDefault();
+                  window.focus();
+                  setShowPaymentInfoModal(true);
+                };
               });
             } else {
-              new Notification(title, options);
+              const notif = new Notification(title, options);
+              notif.onclick = (e) => {
+                e.preventDefault();
+                window.focus();
+                setShowPaymentInfoModal(true);
+              };
             }
           } catch (e) {
             console.warn("Trial notification trigger warning:", e);
@@ -3231,13 +3283,22 @@ function MainApp() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 sm:self-center shrink-0 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row items-center gap-2 sm:self-center shrink-0 w-full sm:w-auto mt-2 sm:mt-0">
                   <button
+                    type="button"
+                    onClick={() => setShowPaymentInfoModal(true)}
+                    className="w-full sm:w-auto text-center bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 hover:from-amber-400 hover:to-teal-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none hover:scale-[1.02] active:scale-95"
+                  >
+                    <Sparkles className="w-4 h-4 fill-slate-950" />
+                    <span>Opções de Pagamento</span>
+                  </button>
+                  <button
+                    type="button"
                     disabled={checkoutLoading}
                     onClick={handleDynamicMercadoPagoCheckout}
-                    className="flex-1 sm:flex-none text-center bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold px-4.5 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md shadow-indigo-600/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto text-center bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md shadow-indigo-600/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none hover:scale-[1.02] active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <span>{checkoutLoading ? "Processando..." : "Renovar Agora"}</span>
+                    <span>{checkoutLoading ? "Processando..." : "Ir para Pagamento"}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>

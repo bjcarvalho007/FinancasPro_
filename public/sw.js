@@ -120,7 +120,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil(notificationPromise);
 });
 
-// Listener for notification click events (leads user directly to client or payment modal)
+// Listener for notification click events (leads user directly to payment or client)
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
@@ -137,7 +137,7 @@ self.addEventListener('notificationclick', (event) => {
       event.notification.tag.includes('free-trial')
     ));
 
-  const targetPath = notifData.url || (isPaymentAction ? '/?action=open_pay' : '/');
+  const directPaymentUrl = 'https://mpago.la/1SfRUJ2';
 
   const clickPromise = clients.matchAll({
     type: 'window',
@@ -154,10 +154,17 @@ self.addEventListener('notificationclick', (event) => {
         return;
       }
     }
-    // If no window is currently open, open a new window pointing to the target URL
-    const fullUrl = new URL(targetPath, self.location.origin).href;
-    if (clients.openWindow) {
-      return clients.openWindow(fullUrl);
+    // If no window is currently open and it's a payment action, direct user straight to Mercado Pago checkout
+    if (isPaymentAction) {
+      if (clients.openWindow) {
+        return clients.openWindow(directPaymentUrl);
+      }
+    } else {
+      const targetPath = notifData.url || '/';
+      const fullUrl = new URL(targetPath, self.location.origin).href;
+      if (clients.openWindow) {
+        return clients.openWindow(fullUrl);
+      }
     }
   });
 

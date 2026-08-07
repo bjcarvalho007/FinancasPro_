@@ -92,9 +92,17 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
     setShowPaymentInfoModal(true);
   };
 
-  const confirmMercadoPagoCheckout = async () => {
+  const confirmMercadoPagoCheckout = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setShowPaymentInfoModal(false);
     setCheckoutLoading(true);
+
+    // Open blank window synchronously inside user click handler to prevent popup blocking
+    const checkoutWindow = window.open('about:blank', '_blank');
+
     try {
       const response = await fetch('/api/mercadopago/create-preference', {
         method: 'POST',
@@ -106,20 +114,26 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Erro ao gerar preferência no backend');
+      let targetUrl = "https://mpago.la/1SfRUJ2";
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.url) {
+          targetUrl = data.url;
+        }
       }
 
-      const data = await response.json();
-      if (data && data.url) {
-        window.open(data.url, '_blank');
+      if (checkoutWindow && !checkoutWindow.closed) {
+        checkoutWindow.location.href = targetUrl;
       } else {
-        window.open("https://mpago.la/1SfRUJ2", "_blank");
+        window.open(targetUrl, '_blank');
       }
     } catch (err) {
       console.error("Erro ao gerar link de pagamento dinâmico:", err);
-      // Fallback seguro para link estático
-      window.open("https://mpago.la/1SfRUJ2", "_blank");
+      if (checkoutWindow && !checkoutWindow.closed) {
+        checkoutWindow.location.href = "https://mpago.la/1SfRUJ2";
+      } else {
+        window.open("https://mpago.la/1SfRUJ2", "_blank");
+      }
     } finally {
       setCheckoutLoading(false);
     }
@@ -967,23 +981,28 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-45"
             onClick={() => setShowPaymentInfoModal(false)}
           />
           
           <motion.div
             initial={{ scale: 0.95, y: 20 }}
             animate={{ scale: 1, y: 0 }}
-            className="bg-[#0f1524] border border-amber-500/20 w-full max-w-sm rounded-3xl p-5 shadow-2xl relative z-10 flex flex-col space-y-3.5 text-left"
+            className="bg-[#0f1524] border border-emerald-500/20 w-full max-w-sm rounded-3xl p-5 shadow-2xl relative z-50 flex flex-col space-y-4 text-left"
           >
             <div className="flex items-start justify-between">
-              <div>
-                <span className="text-[9px] text-amber-400 font-extrabold uppercase tracking-widest bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-full inline-flex items-center gap-1.5 animate-pulse">
-                  <Sparkles className="w-3 h-3 text-amber-400" /> RESTAM APENAS 2 VAGAS DE 8
-                </span>
-                <h4 className="font-display font-black text-base text-white tracking-tight leading-snug mt-2">
-                  {t('ofertaLancamentoLimitada')}
-                </h4>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                  <Sparkles className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h4 className="font-display font-black text-base text-white tracking-tight leading-snug">
+                    Renovação do Plano Premium
+                  </h4>
+                  <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
+                    FinançasPro Premium • R$ 11,99/mês
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setShowPaymentInfoModal(false)}
@@ -993,67 +1012,49 @@ export default function AuthScreen({ onSuccess, showToast }: AuthScreenProps) {
               </button>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/15 space-y-3">
-              <div className="flex items-start gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
-                  <Zap className="w-4 h-4" />
-                </div>
+            <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/15 space-y-3">
+              <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                Seu plano de acesso ao FinançasPro está prestes a vencer ou precisa de renovação. Renove agora para continuar gerenciando suas finanças com acesso ilimitado sem nenhuma interrupção.
+              </p>
+
+              <div className="bg-slate-950/80 p-3 rounded-xl border border-emerald-500/20 flex items-center justify-between">
                 <div>
-                  <h5 className="text-[10.5px] font-black uppercase text-amber-400 tracking-wider leading-none">
-                    {t('lotePromocionalEstreia')}
-                  </h5>
-                  <p className="text-[10px] text-slate-300 font-medium leading-tight mt-1">
-                    Garantia de 58% de desconto exclusivo para os primeiros assinantes.
-                  </p>
+                  <span className="text-[9px] text-slate-400 uppercase tracking-wider font-extrabold block">Valor da Renovação</span>
+                  <span className="text-[10px] text-emerald-400 font-bold">Sem fidelidade • Cancele quando quiser</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-lg font-black text-emerald-400">R$ 11,99</span>
+                  <span className="text-[10px] text-slate-400 font-semibold block">/ mês</span>
                 </div>
               </div>
 
-              <div className="space-y-1 bg-slate-950/70 p-3 rounded-xl border border-amber-500/20 text-center relative overflow-hidden">
-                <div className="absolute top-0 right-0 bg-emerald-500/20 text-emerald-400 text-[8.5px] font-extrabold px-2 py-0.5 rounded-bl-lg border-b border-l border-emerald-500/30 uppercase tracking-wider">
-                  Desconto Vitalício
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center gap-2 text-[10.5px] text-slate-200">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Acesso imediato e completo liberado</span>
                 </div>
-                <p className="text-[9.5px] text-slate-400 font-bold uppercase tracking-wider">{t('voceGaranteValor')}</p>
-                <div className="flex items-center justify-center gap-2 mt-0.5">
-                  <span className="text-xs text-slate-450 line-through font-bold">R$ 28,99</span>
-                  <span className="text-xl font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">R$ 11,99</span>
-                  <span className="text-[10px] text-slate-300 font-semibold">{t('porMes')}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-0.5">
-                <div className="flex items-start gap-2 text-[10.5px] text-slate-200">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong className="text-white font-bold">Preço congelado para sempre:</strong> Seu valor de R$ 11,99/mês não aumenta nas próximas renovações.</span>
-                </div>
-                <div className="flex items-start gap-2 text-[10.5px] text-slate-200">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong className="text-white font-bold">Acesso imediato e completo:</strong> Liberado na hora no seu e-mail após a confirmação.</span>
-                </div>
-                <div className="flex items-start gap-2 text-[10.5px] text-slate-200">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                  <span><strong className="text-white font-bold">Sem fidelidade:</strong> Cancele a qualquer momento com apenas 1 clique.</span>
-                </div>
-                <div className="flex items-start gap-2 text-[10px] text-amber-300/90 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 mt-1 leading-tight">
-                  <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                  <span><strong>Atenção:</strong> Restam apenas 2 vagas deste lote. Após o preenchimento, o plano volta para R$ 28,99/mês.</span>
+                <div className="flex items-center gap-2 text-[10.5px] text-slate-200">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Pagamento 100% seguro via Mercado Pago</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-2.5 text-center text-xs">
+            <div className="flex gap-2.5 text-center text-xs pt-1">
               <button
                 type="button"
                 onClick={() => setShowPaymentInfoModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/10 text-slate-400 font-bold uppercase tracking-wider transition-colors cursor-pointer text-[10px]"
+                className="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-850 border border-white/10 text-slate-400 font-bold uppercase tracking-wider transition-colors cursor-pointer text-[10px]"
               >
                 {t('voltar')}
               </button>
               <button
                 type="button"
+                disabled={checkoutLoading}
                 onClick={confirmMercadoPagoCheckout}
-                className="flex-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black py-2.5 px-3 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none text-[10px]"
+                className="flex-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black py-3 px-3 rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none text-[10px] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {t('irParaPagamento')}
+                <span>{checkoutLoading ? "Carregando..." : t('irParaPagamento')}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>

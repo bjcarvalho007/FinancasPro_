@@ -121,42 +121,70 @@ app.use(express.json({
   }
 }));
 
-// Generate dynamic VAPID keys on boot if not configured, ensuring immediate zero-config functionality
+// Generate or load persistent VAPID keys ensuring zero-config and persistent push subscriptions
 let vapidPublic = (process.env.VAPID_PUBLIC_KEY || "").trim();
 let vapidPrivate = (process.env.VAPID_PRIVATE_KEY || "").trim();
+let vapidInitialized = false;
 
-let needGenerate = false;
+async function ensureVapidKeys() {
+  if (vapidInitialized) return;
 
-if (!vapidPublic || !vapidPrivate || vapidPublic.includes("YOUR") || vapidPublic.includes("MY") || vapidPublic.length < 40) {
-  needGenerate = true;
-} else {
-  try {
-    // Try configuring web-push to validate key format
-    webpush.setVapidDetails(
-      "mailto:suporte@financapro.com",
-      vapidPublic,
-      vapidPrivate
-    );
-  } catch (err) {
-    console.warn("⚠️ Chaves VAPID configuradas no .env são inválidas! Erro:", err);
-    needGenerate = true;
+  if (vapidPublic && vapidPrivate && !vapidPublic.includes("YOUR") && !vapidPublic.includes("MY") && vapidPublic.length >= 40) {
+    try {
+      webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
+      vapidInitialized = true;
+      console.log("✅ [VAPID] Configurado com sucesso usando chaves do ambiente.");
+      return;
+    } catch (e) {
+      console.warn("⚠️ Chaves VAPID do ambiente inválidas, tentando recuperar do Firestore...", e);
+    }
   }
-}
 
-if (needGenerate) {
-  console.log("⚠️ Chaves VAPID inválidas ou não encontradas. Gerando par de chaves temporário em memória para funcionamento imediato...");
-  const tempKeys = webpush.generateVAPIDKeys();
-  vapidPublic = tempKeys.publicKey;
-  vapidPrivate = tempKeys.privateKey;
-  webpush.setVapidDetails(
-    "mailto:suporte@financapro.com",
-    vapidPublic,
-    vapidPrivate
-  );
+  try {
+    const db = admin.firestore();
+    const docRef = db.collection("system_config").doc("vapid_keys");
+    const docSnap = await docRef.get();
+
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      if (data && data.publicKey && data.privateKey) {
+        vapidPublic = data.publicKey;
+        vapidPrivate = data.privateKey;
+        webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
+        vapidInitialized = true;
+        console.log("✅ [VAPID] Chaves VAPID persistentes recuperadas do Firestore com sucesso!");
+        return;
+      }
+    }
+
+    console.log("🔑 [VAPID] Gerando novo par de chaves VAPID único e gravando no Firestore...");
+    const newKeys = webpush.generateVAPIDKeys();
+    vapidPublic = newKeys.publicKey;
+    vapidPrivate = newKeys.privateKey;
+    webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
+    vapidInitialized = true;
+
+    await docRef.set({
+      publicKey: vapidPublic,
+      privateKey: vapidPrivate,
+      createdAt: new Date().toISOString()
+    });
+    console.log("✅ [VAPID] Chaves VAPID salvas no Firestore! Subscrições dos usuários mantidas ativas permanentemente.");
+  } catch (err) {
+    console.warn("⚠️ Falha ao acessar Firestore para salvar/carregar VAPID. Usando gerador temporário:", err);
+    if (!vapidPublic || !vapidPrivate) {
+      const tempKeys = webpush.generateVAPIDKeys();
+      vapidPublic = tempKeys.publicKey;
+      vapidPrivate = tempKeys.privateKey;
+      webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
+    }
+    vapidInitialized = true;
+  }
 }
 
 // Background Checker Task for push notifications when browser is closed
 async function runBackgroundPushNotificationChecker() {
+  await ensureVapidKeys();
   console.log("⏰ [BACKGROUND SWEEPER] Iniciando varredura automatizada de vencimentos...");
   try {
     const db = admin.firestore();
@@ -921,8 +949,20 @@ app.post(["/api/stripe/webhook", "/api/webhook"], async (req: any, res) => {
 });
 
 // API route 2: VAPID Public Key delivery
-app.get("/api/push/vapid-public-key", (req, res) => {
+app.get("/api/push/vapid-public-key", async (req, res) => {
+  await ensureVapidKeys();
   res.json({ publicKey: vapidPublic });
+});
+
+// API route for external cron / automated triggers to sweep and send alerts
+app.all("/api/cron/check-alerts", async (req, res) => {
+  try {
+    await ensureVapidKeys();
+    await runBackgroundPushNotificationChecker();
+    res.json({ success: true, message: "Varredura de notificações executada com sucesso.", timestamp: new Date().toISOString() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
 });
 
 // API route 3: Dispatch email and push notification alerts

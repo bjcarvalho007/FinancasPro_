@@ -272,6 +272,9 @@ function MainApp() {
     confirmText2?: string;
     classNameConfirm2?: string;
     onConfirm2?: () => void;
+    confirmText3?: string;
+    classNameConfirm3?: string;
+    onConfirm3?: () => void;
   }>({
     isOpen: false,
     title: '',
@@ -3919,7 +3922,7 @@ function MainApp() {
                                   const valueToAdd = handleParseMoney(valStr);
                                   if (valueToAdd <= 0) return;
 
-                                  const executeAddExtraGasto = async (addToCurrentMonthParcela: boolean) => {
+                                  const executeAddExtraGasto = async (mode: 'current' | 'next' | 'debt_only') => {
                                     const path = `transactions/${masterId}`;
                                     try {
                                       const docRef = doc(db, 'transactions', masterId);
@@ -3940,16 +3943,57 @@ function MainApp() {
                                         updatedAt: new Date().toISOString()
                                       });
 
-                                      // 2. Se o usuário escolheu somar também na parcela atual deste mês
-                                      if (addToCurrentMonthParcela) {
+                                      // 2. Se o usuário escolheu somar na parcela do mês atual
+                                      if (mode === 'current') {
                                         const currentTxDocRef = doc(db, 'transactions', tx.id);
                                         const newParcelaAmount = (tx.amount || 0) + valueToAdd;
-                                        await updateDoc(currentTxDocRef, {
+                                        await setDoc(currentTxDocRef, {
+                                          userId: masterTx.userId || user?.uid,
+                                          name: masterTx.name,
                                           amount: newParcelaAmount,
+                                          type: masterTx.type,
+                                          cat: masterTx.cat,
+                                          due: masterTx.due,
+                                          masterId: masterId,
+                                          monthKey: tx.monthKey || currentMonthKey,
+                                          total_parcelado: masterTx.total_parcelado,
+                                          establishment: masterTx.establishment,
+                                          installmentsCount: masterTx.installmentsCount,
                                           updatedAt: new Date().toISOString()
-                                        });
+                                        }, { merge: true });
                                         triggerToast(`Gasto de ${formatCurrency(valueToAdd)} adicionado ao saldo devedor e somado à parcela deste mês (${formatCurrency(newParcelaAmount)})!`, 'success');
-                                      } else {
+                                      } 
+                                      // 3. Se o usuário escolheu somar na parcela do mês seguinte
+                                      else if (mode === 'next') {
+                                        const nextMonthKey = addMonthsToKey(tx.monthKey || currentMonthKey, 1);
+                                        const existingNextTx = transactions.find(t => !t.id.startsWith('v_') && (t.masterId === masterId || t.id === masterId) && t.monthKey === nextMonthKey);
+                                        
+                                        const targetDocId = existingNextTx ? existingNextTx.id : `v_${masterId}_${nextMonthKey}`;
+                                        const baseAmount = existingNextTx ? (existingNextTx.amount || 0) : (tx.amount || 0);
+                                        const newParcelaAmount = baseAmount + valueToAdd;
+
+                                        await setDoc(doc(db, 'transactions', targetDocId), {
+                                          userId: masterTx.userId || user?.uid,
+                                          name: masterTx.name,
+                                          amount: newParcelaAmount,
+                                          type: masterTx.type,
+                                          cat: masterTx.cat,
+                                          due: masterTx.due,
+                                          paid_amount: existingNextTx?.paid_amount || 0,
+                                          paid_at: existingNextTx?.paid_at || '',
+                                          masterId: masterId,
+                                          monthKey: nextMonthKey,
+                                          total_parcelado: masterTx.total_parcelado,
+                                          establishment: masterTx.establishment,
+                                          installmentsCount: masterTx.installmentsCount,
+                                          createdAt: new Date().toISOString(),
+                                          updatedAt: new Date().toISOString()
+                                        }, { merge: true });
+
+                                        triggerToast(`Gasto de ${formatCurrency(valueToAdd)} adicionado ao saldo devedor e somado à parcela do mês seguinte (${formatCurrency(newParcelaAmount)})!`, 'success');
+                                      } 
+                                      // 4. Se escolheu apenas somar no saldo devedor
+                                      else {
                                         triggerToast(`Gasto de ${formatCurrency(valueToAdd)} adicionado apenas ao saldo devedor com sucesso!`, 'success');
                                       }
 
@@ -3960,17 +4004,27 @@ function MainApp() {
                                     setConfirmModal(prev => ({ ...prev, isOpen: false }));
                                   };
 
+                                  const nextMonthKey = addMonthsToKey(tx.monthKey || currentMonthKey, 1);
+                                  const existingNextTx = transactions.find(t => !t.id.startsWith('v_') && (t.masterId === masterId || t.id === masterId) && t.monthKey === nextMonthKey);
+                                  const nextMonthBaseAmount = existingNextTx ? (existingNextTx.amount || 0) : (tx.amount || 0);
+
+                                  const currentMonthNewAmount = (tx.amount || 0) + valueToAdd;
+                                  const nextMonthNewAmount = nextMonthBaseAmount + valueToAdd;
+
                                   setConfirmModal({
                                     isOpen: true,
                                     title: '➕ Adicionar Novo Gasto ao Parcelamento',
-                                    message: `Você está adicionando um novo gasto de ${formatCurrency(valueToAdd)} ao parcelamento "${tx.name}".\n\nDeseja somar este valor também no valor da parcela deste mês (${formatCurrency(tx.amount)} ➔ ${formatCurrency(tx.amount + valueToAdd)})?`,
+                                    message: `Você está adicionando um novo gasto de ${formatCurrency(valueToAdd)} ao parcelamento "${tx.name}". Como deseja aplicar este valor?`,
                                     showThreeButtons: true,
-                                    confirmText: '⚡ Sim, somar na parcela do mês',
+                                    confirmText: `⚡ SIM, SOMAR NA PARCELA DO MÊS (${formatCurrency(tx.amount || 0)} ➔ ${formatCurrency(currentMonthNewAmount)})`,
                                     classNameConfirm: 'bg-indigo-600 hover:bg-indigo-700 text-white font-bold',
-                                    onConfirm: () => executeAddExtraGasto(true),
-                                    confirmText2: '💳 Não, somar apenas no saldo devedor',
-                                    classNameConfirm2: 'bg-amber-600 hover:bg-amber-700 text-white font-bold',
-                                    onConfirm2: () => executeAddExtraGasto(false),
+                                    onConfirm: () => executeAddExtraGasto('current'),
+                                    confirmText2: `📅 SIM, SOMAR NA PARCELA DO MÊS SEGUINTE (${formatCurrency(nextMonthBaseAmount)} ➔ ${formatCurrency(nextMonthNewAmount)})`,
+                                    classNameConfirm2: 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold',
+                                    onConfirm2: () => executeAddExtraGasto('next'),
+                                    confirmText3: '💳 NÃO, SOMAR APENAS NO SALDO DEVEDOR',
+                                    classNameConfirm3: 'bg-amber-600 hover:bg-amber-700 text-white font-bold',
+                                    onConfirm3: () => executeAddExtraGasto('debt_only'),
                                     cancelText: 'Cancelar'
                                   });
                                 };
@@ -4707,6 +4761,16 @@ function MainApp() {
                         }`}
                       >
                         {confirmModal.confirmText2 || 'Toda a série'}
+                      </button>
+                    )}
+                    {confirmModal.onConfirm3 && (
+                      <button
+                        onClick={confirmModal.onConfirm3}
+                        className={`w-full py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer shadow-lg active:scale-[0.98] rounded-xl ${
+                          confirmModal.classNameConfirm3 || 'bg-amber-600 hover:bg-amber-700 text-white'
+                        }`}
+                      >
+                        {confirmModal.confirmText3 || 'Somar apenas no saldo devedor'}
                       </button>
                     )}
                     <button

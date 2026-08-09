@@ -2,6 +2,7 @@ export interface ExtraGastoHistoryItem {
   id: string;
   amount: number;
   createdAt: string;
+  assignedMonthKey?: string;
 }
 
 export interface Transaction {

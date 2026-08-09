@@ -16,7 +16,7 @@ import {
   getDocFromServer,
   updateDoc
 } from 'firebase/firestore';
-import { Transaction, Category, Goal, Setting, AppNotification, ExtraEarning } from './types';
+import { Transaction, Category, Goal, Setting, AppNotification, ExtraEarning, ExtraGastoHistoryItem } from './types';
 import AuthScreen from './components/AuthScreen';
 import SplashLoader from './components/SplashLoader';
 import TransactionFormModal from './components/TransactionFormModal';
@@ -1994,7 +1994,15 @@ function MainApp() {
         let defaultAmount = 0;
         if (masterTx.type === 'parcelas') {
           const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
-          const totalExtraGasto = masterTx.extra_gasto || 0;
+          const history = masterTx.extra_gastos_history || [];
+          
+          const unassignedExtraGasto = history.length > 0 
+            ? history.filter(h => !h.assignedMonthKey).reduce((sum, h) => sum + (h.amount || 0), 0)
+            : (masterTx.extra_gasto || 0);
+            
+          const monthAssignedExtraGasto = history
+            .filter(h => h.assignedMonthKey === currentMonthKey)
+            .reduce((sum, h) => sum + (h.amount || 0), 0);
           
           let count = masterTx.installmentsCount || 1;
           if (!masterTx.installmentsCount) {
@@ -2006,7 +2014,7 @@ function MainApp() {
             ? masterTx.amount
             : (totalOriginalBase / count);
             
-          defaultAmount = baseInstallment + (totalExtraGasto / count);
+          defaultAmount = baseInstallment + (unassignedExtraGasto / count) + monthAssignedExtraGasto;
         } else {
           defaultAmount = masterTx.amount;
         }
@@ -3922,21 +3930,73 @@ function MainApp() {
                                   const valueToAdd = handleParseMoney(valStr);
                                   if (valueToAdd <= 0) return;
 
+                                  const currMonthKey = tx.monthKey || currentMonthKey;
+                                  const nextMonthKey = addMonthsToKey(currMonthKey, 1);
+
+                                  const getInstallmentAmountForMonthKey = (mKey: string): number => {
+                                    const foundTx = transactions.find(t => 
+                                      (t.masterId === masterId || t.id === masterId) && 
+                                      t.monthKey === mKey &&
+                                      !t.is_skipped
+                                    );
+                                    if (foundTx && typeof foundTx.amount === 'number' && foundTx.amount > 0) {
+                                      return foundTx.amount;
+                                    }
+
+                                    const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+                                    const history = masterTx.extra_gastos_history || [];
+                                    const unassignedExtraGasto = history.length > 0 
+                                      ? history.filter(h => !h.assignedMonthKey).reduce((sum, h) => sum + (h.amount || 0), 0)
+                                      : (masterTx.extra_gasto || 0);
+                                      
+                                    const monthAssignedExtraGasto = history
+                                      .filter(h => h.assignedMonthKey === mKey)
+                                      .reduce((sum, h) => sum + (h.amount || 0), 0);
+
+                                    let count = masterTx.installmentsCount || 1;
+                                    if (!masterTx.installmentsCount) {
+                                      const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? masterTx.createdAt.substring(0, 7) : currentMonthKey);
+                                      const standardEndMonthKey = masterTx.target_payoff_month || (masterTx.target_payoff_date ? masterTx.target_payoff_date.substring(0, 7) : currentMonthKey);
+                                      count = Math.max(1, getMonthsDiff(startMonthKey, standardEndMonthKey) + 1);
+                                    }
+
+                                    const baseInstallment = (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0))
+                                      ? masterTx.amount
+                                      : (totalOriginalBase / count);
+
+                                    return baseInstallment + (unassignedExtraGasto / count) + monthAssignedExtraGasto;
+                                  };
+
+                                  const currentMonthBaseAmount = getInstallmentAmountForMonthKey(currMonthKey);
+                                  const nextMonthBaseAmount = getInstallmentAmountForMonthKey(nextMonthKey);
+
+                                  const currentMonthNewAmount = currentMonthBaseAmount + valueToAdd;
+                                  const nextMonthNewAmount = nextMonthBaseAmount + valueToAdd;
+
                                   const executeAddExtraGasto = async (mode: 'current' | 'next' | 'debt_only') => {
                                     const path = `transactions/${masterId}`;
                                     try {
                                       const docRef = doc(db, 'transactions', masterId);
-                                      const newHistoryItem = {
+                                      
+                                      const assignedKey = mode === 'current' 
+                                        ? currMonthKey 
+                                        : mode === 'next' 
+                                          ? nextMonthKey 
+                                          : undefined;
+
+                                      const newHistoryItem: ExtraGastoHistoryItem = {
                                         id: `eg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
                                         amount: valueToAdd,
-                                        createdAt: new Date().toISOString()
+                                        createdAt: new Date().toISOString(),
+                                        ...(assignedKey ? { assignedMonthKey: assignedKey } : {})
                                       };
+
                                       const updatedHistory = [
                                         ...(masterTx.extra_gastos_history || []),
                                         newHistoryItem
                                       ];
 
-                                      // 1. Atualiza o saldo devedor no masterTx
+                                      // 1. Atualiza o saldo devedor e histórico no masterTx
                                       await updateDoc(docRef, {
                                         extra_gasto: totalExtraGasto + valueToAdd,
                                         extra_gastos_history: updatedHistory,
@@ -3945,37 +4005,45 @@ function MainApp() {
 
                                       // 2. Se o usuário escolheu somar na parcela do mês atual
                                       if (mode === 'current') {
-                                        const currentTxDocRef = doc(db, 'transactions', tx.id);
-                                        const newParcelaAmount = (tx.amount || 0) + valueToAdd;
-                                        await setDoc(currentTxDocRef, {
+                                        const existingCurrTx = transactions.find(t => 
+                                          (t.masterId === masterId || t.id === masterId) && 
+                                          t.monthKey === currMonthKey && 
+                                          !t.is_skipped
+                                        );
+                                        const targetDocId = existingCurrTx ? existingCurrTx.id : (tx.id.startsWith('v_') ? tx.id : `v_${masterId}_${currMonthKey}`);
+
+                                        await setDoc(doc(db, 'transactions', targetDocId), {
                                           userId: masterTx.userId || user?.uid,
                                           name: masterTx.name,
-                                          amount: newParcelaAmount,
+                                          amount: currentMonthNewAmount,
                                           type: masterTx.type,
                                           cat: masterTx.cat,
                                           due: masterTx.due,
+                                          paid_amount: existingCurrTx?.paid_amount || tx.paid_amount || 0,
+                                          paid_at: existingCurrTx?.paid_at || tx.paid_at || '',
                                           masterId: masterId,
-                                          monthKey: tx.monthKey || currentMonthKey,
+                                          monthKey: currMonthKey,
                                           total_parcelado: masterTx.total_parcelado,
                                           establishment: masterTx.establishment,
                                           installmentsCount: masterTx.installmentsCount,
                                           updatedAt: new Date().toISOString()
                                         }, { merge: true });
-                                        triggerToast(`Gasto de ${formatCurrency(valueToAdd)} adicionado ao saldo devedor e somado à parcela deste mês (${formatCurrency(newParcelaAmount)})!`, 'success');
+
+                                        triggerToast(`Gasto de ${formatCurrency(valueToAdd)} adicionado ao saldo devedor e somado à parcela deste mês (${formatCurrency(currentMonthNewAmount)})!`, 'success');
                                       } 
                                       // 3. Se o usuário escolheu somar na parcela do mês seguinte
                                       else if (mode === 'next') {
-                                        const nextMonthKey = addMonthsToKey(tx.monthKey || currentMonthKey, 1);
-                                        const existingNextTx = transactions.find(t => !t.id.startsWith('v_') && (t.masterId === masterId || t.id === masterId) && t.monthKey === nextMonthKey);
-                                        
+                                        const existingNextTx = transactions.find(t => 
+                                          (t.masterId === masterId || t.id === masterId) && 
+                                          t.monthKey === nextMonthKey && 
+                                          !t.is_skipped
+                                        );
                                         const targetDocId = existingNextTx ? existingNextTx.id : `v_${masterId}_${nextMonthKey}`;
-                                        const baseAmount = existingNextTx ? (existingNextTx.amount || 0) : (tx.amount || 0);
-                                        const newParcelaAmount = baseAmount + valueToAdd;
 
                                         await setDoc(doc(db, 'transactions', targetDocId), {
                                           userId: masterTx.userId || user?.uid,
                                           name: masterTx.name,
-                                          amount: newParcelaAmount,
+                                          amount: nextMonthNewAmount,
                                           type: masterTx.type,
                                           cat: masterTx.cat,
                                           due: masterTx.due,
@@ -3990,7 +4058,7 @@ function MainApp() {
                                           updatedAt: new Date().toISOString()
                                         }, { merge: true });
 
-                                        triggerToast(`Gasto de ${formatCurrency(valueToAdd)} adicionado ao saldo devedor e somado à parcela do mês seguinte (${formatCurrency(newParcelaAmount)})!`, 'success');
+                                        triggerToast(`Gasto de ${formatCurrency(valueToAdd)} adicionado ao saldo devedor e somado à parcela do mês seguinte (${formatCurrency(nextMonthNewAmount)})!`, 'success');
                                       } 
                                       // 4. Se escolheu apenas somar no saldo devedor
                                       else {
@@ -4004,19 +4072,12 @@ function MainApp() {
                                     setConfirmModal(prev => ({ ...prev, isOpen: false }));
                                   };
 
-                                  const nextMonthKey = addMonthsToKey(tx.monthKey || currentMonthKey, 1);
-                                  const existingNextTx = transactions.find(t => !t.id.startsWith('v_') && (t.masterId === masterId || t.id === masterId) && t.monthKey === nextMonthKey);
-                                  const nextMonthBaseAmount = existingNextTx ? (existingNextTx.amount || 0) : (tx.amount || 0);
-
-                                  const currentMonthNewAmount = (tx.amount || 0) + valueToAdd;
-                                  const nextMonthNewAmount = nextMonthBaseAmount + valueToAdd;
-
                                   setConfirmModal({
                                     isOpen: true,
                                     title: '➕ Adicionar Novo Gasto ao Parcelamento',
                                     message: `Você está adicionando um novo gasto de ${formatCurrency(valueToAdd)} ao parcelamento "${tx.name}". Como deseja aplicar este valor?`,
                                     showThreeButtons: true,
-                                    confirmText: `⚡ SIM, SOMAR NA PARCELA DO MÊS (${formatCurrency(tx.amount || 0)} ➔ ${formatCurrency(currentMonthNewAmount)})`,
+                                    confirmText: `⚡ SIM, SOMAR NA PARCELA DO MÊS (${formatCurrency(currentMonthBaseAmount)} ➔ ${formatCurrency(currentMonthNewAmount)})`,
                                     classNameConfirm: 'bg-indigo-600 hover:bg-indigo-700 text-white font-bold',
                                     onConfirm: () => executeAddExtraGasto('current'),
                                     confirmText2: `📅 SIM, SOMAR NA PARCELA DO MÊS SEGUINTE (${formatCurrency(nextMonthBaseAmount)} ➔ ${formatCurrency(nextMonthNewAmount)})`,

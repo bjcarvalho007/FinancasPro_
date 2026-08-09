@@ -126,20 +126,41 @@ let vapidPublic = (process.env.VAPID_PUBLIC_KEY || "").trim();
 let vapidPrivate = (process.env.VAPID_PRIVATE_KEY || "").trim();
 let vapidInitialized = false;
 
+const VAPID_FILE = path.join(process.cwd(), "vapid-keys.json");
+
 async function ensureVapidKeys() {
   if (vapidInitialized) return;
 
+  // 1. Check environment variables
   if (vapidPublic && vapidPrivate && !vapidPublic.includes("YOUR") && !vapidPublic.includes("MY") && vapidPublic.length >= 40) {
     try {
       webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
       vapidInitialized = true;
       console.log("✅ [VAPID] Configurado com sucesso usando chaves do ambiente.");
       return;
-    } catch (e) {
-      console.warn("⚠️ Chaves VAPID do ambiente inválidas, tentando recuperar do Firestore...", e);
+    } catch (e: any) {
+      console.warn("⚠️ Chaves VAPID do ambiente inválidas, tentando backup local...", e?.message || e);
     }
   }
 
+  // 2. Check local file storage (guarantees persistence across restarts)
+  try {
+    if (fs.existsSync(VAPID_FILE)) {
+      const fileData = JSON.parse(fs.readFileSync(VAPID_FILE, "utf8"));
+      if (fileData && fileData.publicKey && fileData.privateKey) {
+        vapidPublic = fileData.publicKey;
+        vapidPrivate = fileData.privateKey;
+        webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
+        vapidInitialized = true;
+        console.log("✅ [VAPID] Chaves VAPID persistentes carregadas do arquivo local com sucesso.");
+        return;
+      }
+    }
+  } catch (fileErr) {
+    // ignore file read error, will try generating/syncing
+  }
+
+  // 3. Try Firestore if available
   try {
     const db = admin.firestore();
     const docRef = db.collection("system_config").doc("vapid_keys");
@@ -152,33 +173,53 @@ async function ensureVapidKeys() {
         vapidPrivate = data.privateKey;
         webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
         vapidInitialized = true;
-        console.log("✅ [VAPID] Chaves VAPID persistentes recuperadas do Firestore com sucesso!");
+
+        // Save to local file cache
+        try {
+          fs.writeFileSync(VAPID_FILE, JSON.stringify({ publicKey: vapidPublic, privateKey: vapidPrivate }), "utf8");
+        } catch (e) {}
+
+        console.log("✅ [VAPID] Chaves VAPID persistentes recuperadas do Firestore!");
         return;
       }
     }
 
-    console.log("🔑 [VAPID] Gerando novo par de chaves VAPID único e gravando no Firestore...");
+    console.log("🔑 [VAPID] Gerando novo par de chaves VAPID único...");
     const newKeys = webpush.generateVAPIDKeys();
     vapidPublic = newKeys.publicKey;
     vapidPrivate = newKeys.privateKey;
     webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
     vapidInitialized = true;
 
-    await docRef.set({
-      publicKey: vapidPublic,
-      privateKey: vapidPrivate,
-      createdAt: new Date().toISOString()
-    });
-    console.log("✅ [VAPID] Chaves VAPID salvas no Firestore! Subscrições dos usuários mantidas ativas permanentemente.");
-  } catch (err) {
-    console.warn("⚠️ Falha ao acessar Firestore para salvar/carregar VAPID. Usando gerador temporário:", err);
+    // Save to local file
+    try {
+      fs.writeFileSync(VAPID_FILE, JSON.stringify({ publicKey: vapidPublic, privateKey: vapidPrivate }), "utf8");
+    } catch (e) {}
+
+    // Try saving to Firestore quietly
+    try {
+      await docRef.set({
+        publicKey: vapidPublic,
+        privateKey: vapidPrivate,
+        createdAt: new Date().toISOString()
+      });
+      console.log("✅ [VAPID] Chaves VAPID salvas no Firestore!");
+    } catch (saveErr) {
+      // Ignored silently as local file is active
+    }
+  } catch (err: any) {
     if (!vapidPublic || !vapidPrivate) {
+      console.log("🔑 [VAPID] Gerando chave VAPID e salvando em arquivo local...");
       const tempKeys = webpush.generateVAPIDKeys();
       vapidPublic = tempKeys.publicKey;
       vapidPrivate = tempKeys.privateKey;
       webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
+      try {
+        fs.writeFileSync(VAPID_FILE, JSON.stringify({ publicKey: vapidPublic, privateKey: vapidPrivate }), "utf8");
+      } catch (e) {}
     }
     vapidInitialized = true;
+    console.log("ℹ️ [VAPID] Modo local ativo (armazenamento persistente em vapid-keys.json).");
   }
 }
 

@@ -20,34 +20,71 @@ async function checkExpiringBillsAndNotify() {
     if (!response) return;
     
     const bills = await response.json();
+    if (!bills || !Array.isArray(bills) || bills.length === 0) return;
+
     const now = new Date();
     const currentDay = now.getDate();
     
-    for (const bill of bills) {
+    // Filter pending/expiring/overdue bills
+    const pendingBills = bills.filter(bill => {
+      if (bill.isOverdue) return true;
       const dueDay = parseInt(bill.due, 10);
-      if (isNaN(dueDay)) continue;
-      
+      if (isNaN(dueDay)) return false;
       const diffDays = dueDay - currentDay;
-      // If due in the next 3 days (urgency window)
-      if (diffDays >= 0 && diffDays <= 3) {
-        const cacheKey = `/notified-${bill.id}-${currentDay}.json`;
-        const alreadyNotified = await cache.match(cacheKey);
-        
-        if (!alreadyNotified) {
-          await self.registration.showNotification('FinançasPro', {
-            body: `Atenção: A despesa "${bill.name}" vence no dia ${bill.due}.`,
-            icon: '/app_icon.png',
-            badge: '/app_icon.png',
-            vibrate: [200, 100, 200],
-            tag: `financaspro-bill-${bill.id}`,
-            renotify: true,
-            data: { url: '/' }
-          });
-          
-          // Mark as notified today to prevent double alerts
-          await cache.put(cacheKey, new Response('true'));
+      return diffDays >= 0 && diffDays <= 3;
+    });
+
+    if (pendingBills.length === 0) return;
+
+    // Signature based on current bills list to re-notify if list updates
+    const signature = pendingBills.map(b => `${b.id}-${b.amount || 0}-${b.due}-${b.isOverdue ? 'overdue' : 'due'}`).sort().join('|');
+    const cacheKey = `/notified-all-${currentDay}-${signature}.json`;
+    const alreadyNotified = await cache.match(cacheKey);
+
+    if (!alreadyNotified) {
+      let title = '';
+      let body = '';
+
+      const count = pendingBills.length;
+      if (count === 1) {
+        const bill = pendingBills[0];
+        const valStr = bill.amount ? ` (R$ ${Number(bill.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : '';
+        title = bill.isOverdue ? '🚨 CONTA EM ATRASO' : '⚠️ ATENÇÃO - VENCIMENTO';
+        body = `A despesa "${bill.name}"${valStr} vence no dia ${bill.due}. Toque para abrir o FinançasPro.`;
+      } else {
+        const overdueCount = pendingBills.filter(b => b.isOverdue).length;
+        if (overdueCount > 0) {
+          title = `🚨 ATENÇÃO - ${count} CONTAS A PAGAR (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`;
+        } else {
+          title = `⚠️ ATENÇÃO - VENCIMENTO DE ${count} CONTAS`;
         }
+
+        const maxDisplay = 5;
+        const lines = pendingBills.slice(0, maxDisplay).map(b => {
+          const valStr = b.amount ? ` - R$ ${Number(b.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
+          const statusStr = b.isOverdue ? ' [ATRASADA]' : ` (Dia ${b.due})`;
+          return `• ${b.name}${valStr}${statusStr}`;
+        });
+
+        if (count > maxDisplay) {
+          lines.push(`... e mais ${count - maxDisplay} conta(s).`);
+        }
+
+        body = `Você tem ${count} contas para regularizar:\n` + lines.join('\n');
       }
+
+      await self.registration.showNotification(title, {
+        body: body,
+        icon: '/app_icon.png',
+        badge: '/app_icon.png',
+        vibrate: [200, 100, 200, 100, 200],
+        tag: 'financaspro-vencimentos-resumo',
+        renotify: true,
+        data: { url: '/', action: 'OPEN_APP' }
+      });
+
+      // Mark as notified for this signature today
+      await cache.put(cacheKey, new Response('true'));
     }
   } catch (e) {
     console.warn('[SW] Falha ao escanear vencimentos em segundo plano:', e);

@@ -119,6 +119,18 @@ export default function SettingsPanel({
         });
 
         if (auth.currentUser) {
+          // 1. Send subscription to Express API for background OS push
+          await fetch('/api/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: auth.currentUser.uid,
+              subscription: sub,
+              bills: transactions || []
+            })
+          }).catch(() => {});
+
+          // 2. Backup to Firestore
           const cleanEndpoint = sub.endpoint
             .replace(/[^a-zA-Z0-9]/g, '_')
             .substring(sub.endpoint.length - 60);
@@ -130,7 +142,7 @@ export default function SettingsPanel({
             subscription: JSON.stringify(sub),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
-          });
+          }).catch(() => {});
         }
 
         setIsPushSubscribed(true);

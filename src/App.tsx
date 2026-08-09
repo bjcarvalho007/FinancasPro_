@@ -487,7 +487,7 @@ function MainApp() {
     testConnection();
   }, []);
 
-  const silentAutoSubscribe = async (currentUser: User) => {
+  const silentAutoSubscribe = async (currentUser: User, currentBills?: any[]) => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
     if (Notification.permission !== 'granted') return;
 
@@ -506,6 +506,18 @@ function MainApp() {
         });
       }
 
+      // 1. Post subscription and current bills to Express backend for OS background push
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.uid,
+          subscription: sub,
+          bills: currentBills || []
+        })
+      }).catch(() => {});
+
+      // 2. Backup to Firestore
       const cleanEndpoint = sub.endpoint
         .replace(/[^a-zA-Z0-9]/g, '_')
         .substring(sub.endpoint.length - 60);
@@ -517,8 +529,8 @@ function MainApp() {
         subscription: JSON.stringify(sub),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
-      });
-      console.log('👷 Auto-inscrição de push do usuário ativa no Firestore.');
+      }).catch(() => {});
+      console.log('👷 Auto-inscrição de push do usuário ativa no servidor e Firestore.');
     } catch (e) {
       console.warn('Falha silenciosa ao atualizar inscrição de push:', e);
     }
@@ -909,6 +921,29 @@ function MainApp() {
       });
       setTransactions(items);
       saveLocalUserCache(uid, 'txs', items);
+
+      // Synchronize unpaid transactions with server for OS background push notifications when app is closed
+      if (items.length > 0) {
+        fetch('/api/push/sync-bills', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: uid,
+            bills: items.map(t => ({
+              id: t.id,
+              name: t.name,
+              due: t.due,
+              amount: t.amount,
+              paid_amount: t.paid_amount || 0,
+              type: t.type,
+              monthKey: t.monthKey
+            }))
+          })
+        }).catch(() => {});
+
+        // Re-ensure push subscription is synced with latest bills
+        silentAutoSubscribe(user, items);
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, transactionsPath);
     });

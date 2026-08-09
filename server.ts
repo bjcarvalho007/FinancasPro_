@@ -223,170 +223,257 @@ async function ensureVapidKeys() {
   }
 }
 
+// Background Checker & Push Cache File Storage
+const PUSH_SUBS_FILE = path.join(process.cwd(), "push-subscriptions.json");
+const USER_BILLS_FILE = path.join(process.cwd(), "user-bills-cache.json");
+const NOTIFIED_ALERTS_FILE = path.join(process.cwd(), "notified-alerts-cache.json");
+
+function getLocalSubscriptions(): { [userId: string]: any[] } {
+  try {
+    if (fs.existsSync(PUSH_SUBS_FILE)) {
+      return JSON.parse(fs.readFileSync(PUSH_SUBS_FILE, "utf8")) || {};
+    }
+  } catch (e) {}
+  return {};
+}
+
+function saveLocalSubscription(userId: string, subscription: any) {
+  try {
+    const data = getLocalSubscriptions();
+    if (!data[userId]) data[userId] = [];
+    const subObj = typeof subscription === 'string' ? JSON.parse(subscription) : subscription;
+    
+    const endpoint = subObj?.endpoint;
+    const exists = data[userId].some((s: any) => {
+      const ep = typeof s === 'string' ? JSON.parse(s)?.endpoint : s?.endpoint;
+      return ep === endpoint;
+    });
+
+    if (!exists && endpoint) {
+      data[userId].push(subObj);
+      fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(data, null, 2), "utf8");
+    }
+  } catch (e) {
+    console.warn("⚠️ Erro ao salvar assinatura local:", e);
+  }
+}
+
+function getLocalUserBills(): { [userId: string]: any[] } {
+  try {
+    if (fs.existsSync(USER_BILLS_FILE)) {
+      return JSON.parse(fs.readFileSync(USER_BILLS_FILE, "utf8")) || {};
+    }
+  } catch (e) {}
+  return {};
+}
+
+function saveLocalUserBills(userId: string, bills: any[]) {
+  try {
+    const data = getLocalUserBills();
+    data[userId] = bills;
+    fs.writeFileSync(USER_BILLS_FILE, JSON.stringify(data, null, 2), "utf8");
+  } catch (e) {
+    console.warn("⚠️ Erro ao salvar faturas locais:", e);
+  }
+}
+
+function getLocalNotifiedAlerts(): { [alertKey: string]: boolean } {
+  try {
+    if (fs.existsSync(NOTIFIED_ALERTS_FILE)) {
+      return JSON.parse(fs.readFileSync(NOTIFIED_ALERTS_FILE, "utf8")) || {};
+    }
+  } catch (e) {}
+  return {};
+}
+
+function markLocalAlertNotified(alertKey: string) {
+  try {
+    const data = getLocalNotifiedAlerts();
+    data[alertKey] = true;
+    fs.writeFileSync(NOTIFIED_ALERTS_FILE, JSON.stringify(data, null, 2), "utf8");
+  } catch (e) {}
+}
+
 // Background Checker Task for push notifications when browser is closed
 async function runBackgroundPushNotificationChecker() {
   await ensureVapidKeys();
-  console.log("⏰ [BACKGROUND SWEEPER] Iniciando varredura automatizada de vencimentos...");
+  console.log("⏰ [BACKGROUND SWEEPER] Executando varredura automatizada de vencimentos em segundo plano...");
+
+  const userSubsMap: { [userId: string]: any[] } = getLocalSubscriptions();
+
+  // Supplement with Firestore subscriptions if accessible
   try {
     const db = admin.firestore();
     const subsSnapshot = await db.collection("push_subscriptions").get();
-    if (subsSnapshot.empty) {
-      console.log("ℹ️ [BACKGROUND SWEEPER] Nenhuma assinatura de PWA cadastrada.");
-      return;
-    }
-
-    // Group subscriptions by user ID to prevent redundant transaction queries
-    const userSubsMap: { [userId: string]: any[] } = {};
-    subsSnapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data && data.userId && data.subscription) {
-        try {
-          const subParsed = JSON.parse(data.subscription);
-          if (!userSubsMap[data.userId]) {
-            userSubsMap[data.userId] = [];
-          }
-          userSubsMap[data.userId].push(subParsed);
-        } catch (e) {
-          console.warn("⚠️ Falha ao analisar assinatura do push:", doc.id, e);
+    if (!subsSnapshot.empty) {
+      subsSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data && data.userId && data.subscription) {
+          try {
+            const subParsed = typeof data.subscription === 'string' ? JSON.parse(data.subscription) : data.subscription;
+            if (!userSubsMap[data.userId]) userSubsMap[data.userId] = [];
+            const ep = subParsed?.endpoint;
+            const exists = userSubsMap[data.userId].some((s: any) => s?.endpoint === ep);
+            if (!exists && ep) {
+              userSubsMap[data.userId].push(subParsed);
+            }
+          } catch (e) {}
         }
-      }
-    });
+      });
+    }
+  } catch (dbErr: any) {
+    // Firestore admin service account key not provided, using local subscription cache
+  }
 
-    const now = new Date();
-    const currentDay = now.getDate();
-    const todayStr = now.toISOString().substring(0, 10);
+  const userIds = Object.keys(userSubsMap);
+  if (userIds.length === 0) {
+    console.log("ℹ️ [BACKGROUND SWEEPER] Nenhuma assinatura de Web Push cadastrada.");
+    return;
+  }
 
-    for (const userId of Object.keys(userSubsMap)) {
-      const subs = userSubsMap[userId];
-      if (!subs || subs.length === 0) continue;
+  const localUserBills = getLocalUserBills();
+  const notifiedAlerts = getLocalNotifiedAlerts();
 
-      // Query unpaid transactions for this user
+  const now = new Date();
+  const currentDay = now.getDate();
+  const todayStr = now.toISOString().substring(0, 10);
+
+  for (const userId of userIds) {
+    const subs = userSubsMap[userId];
+    if (!subs || subs.length === 0) continue;
+
+    let userBills = localUserBills[userId] || [];
+
+    // Try fetching from Firestore if accessible
+    try {
+      const db = admin.firestore();
       const txSnapshot = await db.collection("transactions").where("userId", "==", userId).get();
-      if (txSnapshot.empty) continue;
+      if (!txSnapshot.empty) {
+        userBills = txSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+    } catch (e) {}
 
-      const userExpiringBills: Array<{ id: string; name: string; due: string; remaining: number; isOverdue: boolean }> = [];
+    if (!userBills || userBills.length === 0) continue;
 
-      for (const docTx of txSnapshot.docs) {
-        const tx = docTx.data();
-        if (!tx || !tx.name || !tx.due) continue;
+    const userExpiringBills: Array<{ id: string; name: string; due: string; remaining: number; isOverdue: boolean }> = [];
 
-        const amount = Number(tx.amount) || 0;
-        const paid_amount = Number(tx.paid_amount) || 0;
-        
-        // Skip if already fully paid
-        if (paid_amount >= amount) continue;
+    for (const tx of userBills) {
+      if (!tx || !tx.name || !tx.due) continue;
 
-        let isNearDue = false;
-        let isOverdue = false;
+      const amount = Number(tx.amount) || 0;
+      const paid_amount = Number(tx.paid_amount) || 0;
+      if (paid_amount >= amount) continue;
 
-        const dueStr = String(tx.due).trim();
-        if (dueStr.includes("-")) {
-          const dueParts = dueStr.split("-");
-          const dueDate = new Date(Number(dueParts[0]), Number(dueParts[1]) - 1, Number(dueParts[2]), 12, 0, 0);
-          const diffTime = dueDate.getTime() - now.getTime();
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      let isNearDue = false;
+      let isOverdue = false;
+
+      const dueStr = String(tx.due).trim();
+      if (dueStr.includes("-")) {
+        const dueParts = dueStr.split("-");
+        const dueDate = new Date(Number(dueParts[0]), Number(dueParts[1]) - 1, Number(dueParts[2]), 12, 0, 0);
+        const diffTime = dueDate.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) {
+          isOverdue = true;
+          isNearDue = true;
+        } else if (diffDays <= 3) {
+          isNearDue = true;
+        }
+      } else {
+        const dueDay = parseInt(dueStr, 10);
+        if (!isNaN(dueDay)) {
+          const diffDays = dueDay - currentDay;
           if (diffDays < 0) {
             isOverdue = true;
             isNearDue = true;
           } else if (diffDays <= 3) {
             isNearDue = true;
           }
-        } else {
-          const dueDay = parseInt(dueStr, 10);
-          if (!isNaN(dueDay)) {
-            const diffDays = dueDay - currentDay;
-            if (diffDays < 0) {
-              isOverdue = true;
-              isNearDue = true;
-            } else if (diffDays <= 3) {
-              isNearDue = true;
-            }
-          }
-        }
-
-        if (isNearDue) {
-          userExpiringBills.push({
-            id: tx.id || docTx.id,
-            name: tx.name,
-            due: dueStr,
-            remaining: amount - paid_amount,
-            isOverdue
-          });
         }
       }
 
-      if (userExpiringBills.length > 0) {
-        const batchSignature = userExpiringBills.map(b => b.id).sort().join("_");
-        const alertDateKey = `push_alert_batch_${userId}_${todayStr}_${batchSignature}`;
-        
-        const alertRef = db.collection("notified_alerts").doc(alertDateKey);
-        const alertDoc = await alertRef.get();
-        
-        if (!alertDoc.exists) {
-          console.log(`🚀 [BACKGROUND ALERT] Despachando notificação agrupada (${userExpiringBills.length} contas) para usuário: ${userId}`);
-          
-          let pushTitle = '';
-          let pushBody = '';
+      if (isNearDue) {
+        userExpiringBills.push({
+          id: tx.id || String(Math.random()),
+          name: tx.name,
+          due: dueStr,
+          remaining: amount - paid_amount,
+          isOverdue
+        });
+      }
+    }
 
-          if (userExpiringBills.length === 1) {
-            const b = userExpiringBills[0];
-            pushTitle = b.isOverdue ? "🚨 CONTA EM ATRASO - FinançasPro" : "⚠️ ATENÇÃO - VENCIMENTO";
-            pushBody = `A despesa "${b.name}" (R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}) vence no dia ${b.due}. Toque para regularizar.`;
-          } else {
-            const overdueCount = userExpiringBills.filter(b => b.isOverdue).length;
-            pushTitle = overdueCount > 0
-              ? `🚨 ATENÇÃO - ${userExpiringBills.length} CONTAS A PAGAR (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`
-              : `⚠️ ATENÇÃO - VENCIMENTO DE ${userExpiringBills.length} CONTAS`;
+    if (userExpiringBills.length > 0) {
+      const batchSignature = userExpiringBills.map(b => b.id).sort().join("_");
+      const alertDateKey = `push_alert_batch_${userId}_${todayStr}_${batchSignature}`;
 
-            const listSummary = userExpiringBills.slice(0, 5).map(b => {
-              const valStr = ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-              const st = b.isOverdue ? ' [ATRASADA]' : ` (Dia ${b.due})`;
-              return `• ${b.name}${valStr}${st}`;
-            });
+      const alreadyNotified = notifiedAlerts[alertDateKey];
 
-            if (userExpiringBills.length > 5) {
-              listSummary.push(`... e mais ${userExpiringBills.length - 5} conta(s).`);
-            }
+      if (!alreadyNotified) {
+        console.log(`🚀 [BACKGROUND PUSH] Despachando notificação agrupada (${userExpiringBills.length} contas) para usuário: ${userId}`);
 
-            pushBody = `Você tem ${userExpiringBills.length} contas para regularizar:\n` + listSummary.join('\n');
-          }
+        let pushTitle = '';
+        let pushBody = '';
 
-          const messagePayload = JSON.stringify({
-            title: pushTitle,
-            body: pushBody,
-            icon: "/app_icon.png",
-            badge: "/app_icon.png",
-            tag: "financaspro-vencimentos-resumo",
-            data: { url: "/" }
+        if (userExpiringBills.length === 1) {
+          const b = userExpiringBills[0];
+          pushTitle = b.isOverdue ? "🚨 CONTA EM ATRASO - FinançasPro" : "⚠️ ATENÇÃO - VENCIMENTO";
+          pushBody = `A despesa "${b.name}" (R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}) vence no dia ${b.due}. Toque para regularizar.`;
+        } else {
+          const overdueCount = userExpiringBills.filter(b => b.isOverdue).length;
+          pushTitle = overdueCount > 0
+            ? `🚨 ATENÇÃO - ${userExpiringBills.length} CONTAS A PAGAR (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`
+            : `⚠️ ATENÇÃO - VENCIMENTO DE ${userExpiringBills.length} CONTAS`;
+
+          const listSummary = userExpiringBills.slice(0, 5).map(b => {
+            const valStr = ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+            const st = b.isOverdue ? ' [ATRASADA]' : ` (Dia ${b.due})`;
+            return `• ${b.name}${valStr}${st}`;
           });
 
-          for (const sub of subs) {
-            try {
-              await webpush.sendNotification(sub, messagePayload);
-            } catch (subErr) {
-              console.warn(`⚠️ Falha ao despachar push de background para dispositivo do usuário ${userId}:`, subErr);
-            }
+          if (userExpiringBills.length > 5) {
+            listSummary.push(`... e mais ${userExpiringBills.length - 5} conta(s).`);
           }
 
-          await alertRef.set({
+          pushBody = `Você tem ${userExpiringBills.length} contas para regularizar:\n` + listSummary.join('\n');
+        }
+
+        const messagePayload = JSON.stringify({
+          title: pushTitle,
+          body: pushBody,
+          icon: "/app_icon.png",
+          badge: "/app_icon.png",
+          tag: "financaspro-vencimentos-resumo",
+          data: { url: "/" }
+        });
+
+        let sentCount = 0;
+        for (const sub of subs) {
+          try {
+            await webpush.sendNotification(sub, messagePayload);
+            sentCount++;
+          } catch (subErr: any) {
+            console.warn(`⚠️ Falha ao despachar push de background para dispositivo do usuário ${userId}:`, subErr?.message || subErr);
+          }
+        }
+
+        markLocalAlertNotified(alertDateKey);
+
+        try {
+          const db = admin.firestore();
+          await db.collection("notified_alerts").doc(alertDateKey).set({
             userId,
             count: userExpiringBills.length,
             dispatchedAt: new Date().toISOString()
           });
-        }
+        } catch (e) {}
+
+        console.log(`✅ [BACKGROUND PUSH] Notificação entregue ao sistema operacional para ${sentCount} dispositivo(s).`);
       }
-    }
-  } catch (err: any) {
-    const isPermissionError = err?.code === 7 || (err?.message && (err.message.includes("PERMISSION_DENIED") || err.message.includes("Missing or insufficient permissions")));
-    if (isPermissionError) {
-      console.warn("⚠️ [BACKGROUND SWEEPER] Varredura de push de fundo em pausa: O Firestore Admin do servidor requer chave de Service Account (FIREBASE_SERVICE_ACCOUNT_KEY) para consulta de assinaturas.");
-    } else {
-      console.warn("⚠️ [BACKGROUND SWEEPER] Erro na verificação em segundo plano:", err?.message || err);
     }
   }
 }
 
-// Check on boot (after a 10s cooldown to allow server initialization) and reschedule every 3 hours
 if (!process.env.VERCEL) {
   setTimeout(() => {
     runBackgroundPushNotificationChecker().catch((e) => console.warn("⚠️ Background push checker error:", e?.message || e));
@@ -394,7 +481,7 @@ if (!process.env.VERCEL) {
 
   setInterval(() => {
     runBackgroundPushNotificationChecker().catch((e) => console.warn("⚠️ Background push checker error:", e?.message || e));
-  }, 1000 * 60 * 60 * 3); // 3 hours
+  }, 1000 * 60 * 15); // Check every 15 minutes
 }
 
 // API route 1: Healthcheck
@@ -1031,6 +1118,61 @@ app.post(["/api/stripe/webhook", "/api/webhook"], async (req: any, res) => {
 app.get("/api/push/vapid-public-key", async (req, res) => {
   await ensureVapidKeys();
   res.json({ publicKey: vapidPublic });
+});
+
+// API route: Save PWA Web Push Subscription for background alerts when app is closed
+app.post("/api/push/subscribe", async (req, res) => {
+  try {
+    const { userId, subscription, bills } = req.body;
+    if (!userId || !subscription) {
+      return res.status(400).json({ error: "userId e subscription são obrigatórios." });
+    }
+
+    saveLocalSubscription(userId, subscription);
+
+    if (Array.isArray(bills)) {
+      saveLocalUserBills(userId, bills);
+    }
+
+    // Backup to Firestore if permitted
+    try {
+      const db = admin.firestore();
+      const endpoint = typeof subscription === 'string' ? JSON.parse(subscription).endpoint : subscription?.endpoint;
+      const cleanEndpoint = endpoint ? endpoint.replace(/[^a-zA-Z0-9]/g, '_').substring(endpoint.length - 60) : 'sub';
+      const subId = `sub_${userId}_${cleanEndpoint}`;
+
+      await db.collection("push_subscriptions").doc(subId).set({
+        id: subId,
+        userId,
+        subscription: typeof subscription === 'string' ? subscription : JSON.stringify(subscription),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {}
+
+    console.log(`✅ [PUSH SUBSCRIBE] Dispositivo registrado com sucesso para notificações nativas (User: ${userId}).`);
+    res.json({ success: true, message: "Inscrição de push registrada para background." });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Erro interno" });
+  }
+});
+
+// API route: Synchronize user unpaid bills so server can sweep when app is closed
+app.post("/api/push/sync-bills", async (req, res) => {
+  try {
+    const { userId, bills } = req.body;
+    if (!userId || !Array.isArray(bills)) {
+      return res.status(400).json({ error: "userId e faturas são obrigatórios." });
+    }
+
+    saveLocalUserBills(userId, bills);
+
+    // Run check immediately to trigger push if any bill is due/overdue right now
+    runBackgroundPushNotificationChecker().catch((e) => console.warn("Background push check err:", e));
+
+    res.json({ success: true, syncedCount: bills.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Erro interno" });
+  }
 });
 
 // API route for external cron / automated triggers to sweep and send alerts

@@ -264,6 +264,8 @@ async function runBackgroundPushNotificationChecker() {
       const txSnapshot = await db.collection("transactions").where("userId", "==", userId).get();
       if (txSnapshot.empty) continue;
 
+      const userExpiringBills: Array<{ id: string; name: string; due: string; remaining: number; isOverdue: boolean }> = [];
+
       for (const docTx of txSnapshot.docs) {
         const tx = docTx.data();
         if (!tx || !tx.name || !tx.due) continue;
@@ -275,66 +277,102 @@ async function runBackgroundPushNotificationChecker() {
         if (paid_amount >= amount) continue;
 
         let isNearDue = false;
-        let daysRemainingText = "";
+        let isOverdue = false;
 
         const dueStr = String(tx.due).trim();
         if (dueStr.includes("-")) {
-          // Format YYYY-MM-DD
           const dueParts = dueStr.split("-");
           const dueDate = new Date(Number(dueParts[0]), Number(dueParts[1]) - 1, Number(dueParts[2]), 12, 0, 0);
           const diffTime = dueDate.getTime() - now.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          if (diffDays >= 0 && diffDays <= 3) {
+          if (diffDays < 0) {
+            isOverdue = true;
             isNearDue = true;
-            daysRemainingText = diffDays === 0 ? "hoje" : `em ${diffDays} dias`;
+          } else if (diffDays <= 3) {
+            isNearDue = true;
           }
         } else {
-          // Day number (e.g. "12")
           const dueDay = parseInt(dueStr, 10);
           if (!isNaN(dueDay)) {
             const diffDays = dueDay - currentDay;
-            if (diffDays >= 0 && diffDays <= 3) {
+            if (diffDays < 0) {
+              isOverdue = true;
               isNearDue = true;
-              daysRemainingText = diffDays === 0 ? "hoje" : `em ${diffDays} dias`;
+            } else if (diffDays <= 3) {
+              isNearDue = true;
             }
           }
         }
 
         if (isNearDue) {
-          const alertDateKey = `push_alert_${userId}_${tx.id}_${todayStr}`;
+          userExpiringBills.push({
+            id: tx.id || docTx.id,
+            name: tx.name,
+            due: dueStr,
+            remaining: amount - paid_amount,
+            isOverdue
+          });
+        }
+      }
+
+      if (userExpiringBills.length > 0) {
+        const batchSignature = userExpiringBills.map(b => b.id).sort().join("_");
+        const alertDateKey = `push_alert_batch_${userId}_${todayStr}_${batchSignature}`;
+        
+        const alertRef = db.collection("notified_alerts").doc(alertDateKey);
+        const alertDoc = await alertRef.get();
+        
+        if (!alertDoc.exists) {
+          console.log(`🚀 [BACKGROUND ALERT] Despachando notificação agrupada (${userExpiringBills.length} contas) para usuário: ${userId}`);
           
-          // Use isNearDue tracking schema inside Firestore to avoid spamming multiple notifications on the same calendar day
-          const alertRef = db.collection("notified_alerts").doc(alertDateKey);
-          const alertDoc = await alertRef.get();
-          
-          if (!alertDoc.exists) {
-            console.log(`🚀 [BACKGROUND ALERT] Despachando pushes por vencimento iminente de "${tx.name}" para usuário: ${userId}`);
-            
-            const remaining = amount - paid_amount;
-            const messagePayload = JSON.stringify({
-              title: "🚨 Conta Próxima do Vencimento - FinançasPro",
-              body: `O lançamento "${tx.name}" vence ${daysRemainingText}. Resta pagar R$ ${remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}.`,
-              icon: "/app_icon.png",
-              badge: "/app_icon.png",
-              data: { url: "/" }
+          let pushTitle = '';
+          let pushBody = '';
+
+          if (userExpiringBills.length === 1) {
+            const b = userExpiringBills[0];
+            pushTitle = b.isOverdue ? "🚨 CONTA EM ATRASO - FinançasPro" : "⚠️ ATENÇÃO - VENCIMENTO";
+            pushBody = `A despesa "${b.name}" (R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}) vence no dia ${b.due}. Toque para regularizar.`;
+          } else {
+            const overdueCount = userExpiringBills.filter(b => b.isOverdue).length;
+            pushTitle = overdueCount > 0
+              ? `🚨 ATENÇÃO - ${userExpiringBills.length} CONTAS A PAGAR (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`
+              : `⚠️ ATENÇÃO - VENCIMENTO DE ${userExpiringBills.length} CONTAS`;
+
+            const listSummary = userExpiringBills.slice(0, 5).map(b => {
+              const valStr = ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+              const st = b.isOverdue ? ' [ATRASADA]' : ` (Dia ${b.due})`;
+              return `• ${b.name}${valStr}${st}`;
             });
 
-            // Try dispatching to each subscribed device for this user
-            for (const sub of subs) {
-              try {
-                await webpush.sendNotification(sub, messagePayload);
-              } catch (subErr) {
-                console.warn(`⚠️ Falha ao despachar push de background para dispositivo do usuário ${userId}:`, subErr);
-              }
+            if (userExpiringBills.length > 5) {
+              listSummary.push(`... e mais ${userExpiringBills.length - 5} conta(s).`);
             }
 
-            // Lock this alert day in Firestore
-            await alertRef.set({
-              userId,
-              transactionId: tx.id,
-              dispatchedAt: new Date().toISOString()
-            });
+            pushBody = `Você tem ${userExpiringBills.length} contas para regularizar:\n` + listSummary.join('\n');
           }
+
+          const messagePayload = JSON.stringify({
+            title: pushTitle,
+            body: pushBody,
+            icon: "/app_icon.png",
+            badge: "/app_icon.png",
+            tag: "financaspro-vencimentos-resumo",
+            data: { url: "/" }
+          });
+
+          for (const sub of subs) {
+            try {
+              await webpush.sendNotification(sub, messagePayload);
+            } catch (subErr) {
+              console.warn(`⚠️ Falha ao despachar push de background para dispositivo do usuário ${userId}:`, subErr);
+            }
+          }
+
+          await alertRef.set({
+            userId,
+            count: userExpiringBills.length,
+            dispatchedAt: new Date().toISOString()
+          });
         }
       }
     }

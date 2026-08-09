@@ -2118,7 +2118,8 @@ function MainApp() {
               id: e.item.id,
               name: e.item.name,
               due: e.item.due,
-              amount: e.item.amount || e.item.total_parcelado || 0
+              amount: e.item.amount || e.item.total_parcelado || 0,
+              isOverdue: e.isOverdue
             }))
           });
         }
@@ -2140,22 +2141,47 @@ function MainApp() {
         type: 'vencimento'
       });
 
-      // Browser Web Notifications integration with active visual styling
+      // Browser Web Notifications integration with active visual styling for ALL expiring bills
       if ('Notification' in window && Notification.permission === 'granted') {
-        const sessionKey = `financaspro_notified_bill_${item.id}`;
+        const sessionKey = `financaspro_notified_batch_${expiring.map(e => e.item.id).sort().join('_')}`;
         if (!sessionStorage.getItem(sessionKey)) {
           try {
             const hasServiceWorker = 'serviceWorker' in navigator;
-            const notificationTitle = isOverdue ? 'Conta Atrasada!' : 'FinançasPro';
+            
+            let notificationTitle = '';
+            let notificationBody = '';
+
+            if (expiring.length === 1) {
+              notificationTitle = isOverdue ? '🚨 CONTA EM ATRASO' : '⚠️ ATENÇÃO - VENCIMENTO';
+              const pendingVal = item.amount ? ` (R$ ${Number(item.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : '';
+              notificationBody = `A despesa "${item.name}"${pendingVal} vence no dia ${item.due}. Toque para regularizar.`;
+            } else {
+              const overdueCount = expiring.filter(e => e.isOverdue).length;
+              notificationTitle = overdueCount > 0 
+                ? `🚨 ATENÇÃO - ${expiring.length} CONTAS A PAGAR (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`
+                : `⚠️ ATENÇÃO - VENCIMENTO DE ${expiring.length} CONTAS`;
+
+              const listSummary = expiring.slice(0, 5).map(e => {
+                const valStr = e.item.amount ? ` - R$ ${Number(e.item.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
+                const st = e.isOverdue ? ' [ATRASADA]' : ` (Dia ${e.item.due})`;
+                return `• ${e.item.name}${valStr}${st}`;
+              });
+
+              if (expiring.length > 5) {
+                listSummary.push(`... e mais ${expiring.length - 5} conta(s).`);
+              }
+
+              notificationBody = `Você tem ${expiring.length} contas pendentes para regularizar:\n` + listSummary.join('\n');
+            }
+
             const notificationOptions = {
-              body: isOverdue 
-                ? `Atenção: A despesa "${item.name}" está em atraso desde o dia ${item.due}.`
-                : `Atenção: A despesa "${item.name}" vence no dia ${item.due}.`,
+              body: notificationBody,
               icon: '/app_icon.png',
               badge: '/app_icon.png',
-              vibrate: [200, 100, 200],
-              tag: `financaspro-bill-${item.id}`,
-              renotify: true
+              vibrate: [200, 100, 200, 100, 200],
+              tag: 'financaspro-vencimentos-resumo',
+              renotify: true,
+              data: { url: '/', action: 'OPEN_APP' }
             };
 
             if (hasServiceWorker) {

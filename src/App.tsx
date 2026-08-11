@@ -58,7 +58,11 @@ import {
   MessageCircle,
   Clock,
   Crown,
-  X
+  X,
+  BellOff,
+  VolumeX,
+  EyeOff,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LANGUAGES, Language, useLanguage, LanguageProvider } from './utils/i18n';
@@ -250,6 +254,35 @@ function MainApp() {
     setPrevMonthKey(currentMonthKey);
     setDismissedAlerts({});
   }
+
+  // Frequency and Silence Handlers for Expiring Bills Modal Pop-up
+  const handleSnoozeAlerts = (days: number) => {
+    const snoozeUntil = Date.now() + days * 24 * 60 * 60 * 1000;
+    localStorage.setItem('financaspro_bills_snooze_until', snoozeUntil.toString());
+    localStorage.removeItem('financaspro_bills_never_show');
+    sessionStorage.setItem('financaspro_bills_modal_dismissed_session', 'true');
+    setIsExpiringBillsModalOpen(false);
+    setToastMessage(`Alertas de vencimento silenciados por ${days} dia(s).`);
+    setToastType('warning');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 4000);
+  };
+
+  const handleNeverShowAlerts = () => {
+    localStorage.setItem('financaspro_bills_never_show', 'true');
+    localStorage.removeItem('financaspro_bills_snooze_until');
+    sessionStorage.setItem('financaspro_bills_modal_dismissed_session', 'true');
+    setIsExpiringBillsModalOpen(false);
+    setToastMessage('Pop-up de vencimentos desativado. Você ainda pode visualizar suas contas pelo ícone de sino.');
+    setToastType('warning');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 4000);
+  };
+
+  const handleCloseModalSession = () => {
+    sessionStorage.setItem('financaspro_bills_modal_dismissed_session', 'true');
+    setIsExpiringBillsModalOpen(false);
+  };
 
   // Floating Action Support Widget State
   const [isSupportOpen, setIsSupportOpen] = useState<boolean>(false);
@@ -2162,6 +2195,18 @@ function MainApp() {
     }
 
     if (expiring.length > 0) {
+      // Auto-display prominent modal on load/sync if not snoozed or disabled
+      const neverShowStr = localStorage.getItem('financaspro_bills_never_show');
+      const snoozeUntilStr = localStorage.getItem('financaspro_bills_snooze_until');
+      const sessionDismissed = sessionStorage.getItem('financaspro_bills_modal_dismissed_session') === 'true';
+
+      const isNeverShow = neverShowStr === 'true';
+      const isSnoozed = snoozeUntilStr ? Date.now() < parseInt(snoozeUntilStr, 10) : false;
+
+      if (!isNeverShow && !isSnoozed && !sessionDismissed) {
+        setIsExpiringBillsModalOpen(true);
+      }
+
       const { item, diffInDays, isOverdue } = expiring[0];
       
       const title = isOverdue ? '🚨 CONTA ATRASADA' : '⚠️ ATENÇÃO - VENCIMENTO';
@@ -2947,87 +2992,91 @@ function MainApp() {
         </motion.div>
       )}
 
-      {/* Animated Bouncing Red Dot Notification on Left Side for Overdue/Expiring Bills */}
-      {expiringBillsList.length > 0 && (
-        <motion.div
-          initial={{ scale: 0, opacity: 0, x: -60 }}
-          animate={{ scale: 1, opacity: 1, x: 0 }}
-          exit={{ scale: 0, opacity: 0, x: -60 }}
-          transition={{ type: 'spring', damping: 20, stiffness: 200 }}
-          className="fixed left-3 sm:left-5 top-1/2 -translate-y-1/2 z-[55] flex items-center"
-        >
-          <button
-            onClick={() => setIsExpiringBillsModalOpen(true)}
-            className="relative group flex items-center justify-center p-3 sm:p-3.5 rounded-full bg-gradient-to-tr from-rose-600 via-rose-500 to-red-600 text-white shadow-[0_0_25px_rgba(225,29,72,0.6)] border-2 border-white/30 cursor-pointer animate-bounce hover:scale-110 active:scale-95 transition-all duration-300"
-            title={`${expiringBillsList.length} conta(s) a vencer ou atrasada(s). Clique para ver as contas!`}
-          >
-            {/* Outer pulsing ring */}
-            <span className="absolute -inset-1 rounded-full bg-rose-500/60 animate-ping pointer-events-none opacity-75" />
 
-            {/* Bell Icon */}
-            <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-white relative z-10 animate-swing" />
 
-            {/* Counter Badge */}
-            <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black border-2 border-slate-950 shadow-md relative z-20">
-              {expiringBillsList.length}
-            </span>
-
-            {/* Side Label on Hover */}
-            <span className="absolute left-full ml-3 px-3 py-1.5 rounded-xl bg-slate-900/95 text-rose-300 text-[11px] font-black uppercase tracking-wider whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none shadow-2xl border border-rose-500/30">
-              ⚠️ ATENÇÃO - VENCIMENTO ({expiringBillsList.length})
-            </span>
-          </button>
-        </motion.div>
-      )}
-
-      {/* Modal Listing Overdue and Upcoming Bills */}
+      {/* Modal Listing Overdue and Upcoming Bills with Silence Controls */}
       {isExpiringBillsModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-fade-in overflow-y-auto">
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            className={`w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl border flex flex-col max-h-[85vh] ${
+            className={`w-full max-w-xl rounded-3xl shadow-2xl border flex flex-col max-h-[90vh] overflow-hidden my-auto ${
               theme === 'light'
-                ? 'bg-white border-rose-200 text-slate-900 shadow-slate-300/50'
-                : 'bg-slate-900 border-rose-500/30 text-slate-100 shadow-black/80'
+                ? 'bg-white border-rose-300/80 text-slate-900 shadow-rose-900/10'
+                : 'bg-slate-900 border-rose-500/40 text-slate-100 shadow-black/90'
             }`}
           >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-rose-500/20 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center text-white shadow-lg shadow-rose-500/30 shrink-0">
-                  <Bell className="w-5 h-5 animate-bounce" />
+            {/* Modal Header Banner */}
+            <div className="bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 p-4 sm:p-5 text-white shadow-lg relative shrink-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white border border-white/30 shadow-inner shrink-0">
+                    <Bell className="w-6 h-6 animate-bounce" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2.5 py-0.5 rounded-full bg-slate-950/40 text-amber-300 text-[10px] font-black uppercase tracking-wider border border-white/20">
+                        🚨 ALERTA PRIORITÁRIO
+                      </span>
+                      <span className="px-2 py-0.5 text-[11px] font-black rounded-full bg-white text-rose-600 shadow-xs">
+                        {expiringBillsList.length} {expiringBillsList.length === 1 ? 'conta' : 'contas'}
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-black tracking-tight text-white mt-1">
+                      Contas a Pagar e Vencimentos
+                    </h3>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-base font-black uppercase tracking-wider flex items-center gap-2">
-                    <span>Atenção - Vencimentos</span>
-                    <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-rose-500/20 text-rose-500 border border-rose-500/30">
-                      {expiringBillsList.length}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    Contas com vencimento próximo ou em atraso neste mês
-                  </p>
-                </div>
+                <button
+                  onClick={handleCloseModalSession}
+                  className="p-2 rounded-xl bg-slate-950/20 hover:bg-slate-950/40 text-white transition-all cursor-pointer shrink-0 border border-white/10"
+                  title="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={() => setIsExpiringBillsModalOpen(false)}
-                className={`p-2 rounded-xl transition-all cursor-pointer ${
-                  theme === 'light' ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-slate-800 text-slate-400'
-                }`}
-                title="Fechar"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Financial Summary Box */}
+              {expiringBillsList.length > 0 && (() => {
+                const overdueItems = expiringBillsList.filter(b => b.isOverdue);
+                const upcomingItems = expiringBillsList.filter(b => !b.isOverdue);
+                const totalOverdue = overdueItems.reduce((acc, b) => acc + (b.item.amount - (b.item.paid_amount || 0)), 0);
+                const totalUpcoming = upcomingItems.reduce((acc, b) => acc + (b.item.amount - (b.item.paid_amount || 0)), 0);
+                const totalPending = totalOverdue + totalUpcoming;
+
+                return (
+                  <div className="mt-4 p-3 rounded-2xl bg-slate-950/40 backdrop-blur-md border border-white/20 grid grid-cols-2 sm:grid-cols-3 gap-2 text-white">
+                    <div className="p-2 rounded-xl bg-rose-950/50 border border-rose-400/30">
+                      <span className="text-[10px] text-rose-200 uppercase font-black block">🚨 Em Atraso</span>
+                      <span className="text-sm font-black font-mono text-rose-300 block">
+                        {overdueItems.length} ({formatCurrency(totalOverdue)})
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-amber-950/50 border border-amber-400/30">
+                      <span className="text-[10px] text-amber-200 uppercase font-black block">⚠️ A Vencer</span>
+                      <span className="text-sm font-black font-mono text-amber-300 block">
+                        {upcomingItems.length} ({formatCurrency(totalUpcoming)})
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-slate-900/60 border border-white/10 col-span-2 sm:col-span-1">
+                      <span className="text-[10px] text-slate-300 uppercase font-black block">💰 Total Pendente</span>
+                      <span className="text-sm font-black font-mono text-emerald-300 block">
+                        {formatCurrency(totalPending)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* List of Expiring / Overdue Bills */}
-            <div className="flex-1 overflow-y-auto py-4 space-y-3 pr-1">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
               {expiringBillsList.length === 0 ? (
                 <div className="text-center py-8 text-slate-500">
-                  <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2 opacity-80" />
+                  <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-2 opacity-80" />
                   <p className="text-sm font-bold">Nenhuma conta em atraso ou a vencer no momento!</p>
+                  <p className="text-xs text-slate-400 mt-1">Todas as suas despesas agendadas estão em dia.</p>
                 </div>
               ) : (
                 expiringBillsList.map(({ item, diffInDays, isOverdue }) => {
@@ -3036,23 +3085,25 @@ function MainApp() {
                   return (
                     <div
                       key={item.id}
-                      className={`p-4 rounded-2xl border transition-all flex flex-col gap-3 ${
+                      className={`p-4 rounded-2xl border transition-all flex flex-col gap-3 shadow-xs ${
                         isOverdue
                           ? theme === 'light'
-                            ? 'bg-rose-50/80 border-rose-300 shadow-xs'
-                            : 'bg-rose-950/30 border-rose-500/40'
+                            ? 'bg-rose-50/90 border-rose-300'
+                            : 'bg-rose-950/40 border-rose-500/50 text-slate-100'
                           : theme === 'light'
                             ? 'bg-slate-50 border-slate-200'
-                            : 'bg-slate-800/60 border-slate-700/60'
+                            : 'bg-slate-800/80 border-slate-700/80 text-slate-100'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
+                        <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                            <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
                               isOverdue
-                                ? 'bg-rose-600 text-white animate-pulse'
-                                : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                                ? 'bg-rose-600 text-white animate-pulse shadow-xs'
+                                : diffInDays === 0
+                                  ? 'bg-amber-500 text-slate-950 font-black'
+                                  : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
                             }`}>
                               {isOverdue 
                                 ? '🚨 ATRASADA' 
@@ -3061,12 +3112,12 @@ function MainApp() {
                                   : `⚠️ VENCE EM ${diffInDays} DIA(S)`}
                             </span>
                             {item.cat && (
-                              <span className="text-[10px] font-bold text-slate-500 uppercase">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase truncate">
                                 • {item.cat}
                               </span>
                             )}
                           </div>
-                          <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                          <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 truncate">
                             {item.name}
                           </h4>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -3075,26 +3126,26 @@ function MainApp() {
                         </div>
 
                         <div className="text-right shrink-0">
-                          <span className="text-xs text-slate-500 dark:text-slate-400 block font-medium">Valor Pendente</span>
-                          <span className={`text-base font-black font-mono ${isOverdue ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium uppercase tracking-wider">A Pagar</span>
+                          <span className={`text-base sm:text-lg font-black font-mono ${isOverdue ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100'}`}>
                             {formatCurrency(pendingAmount > 0 ? pendingAmount : item.amount)}
                           </span>
                         </div>
                       </div>
 
-                      {/* Card Actions */}
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/50 dark:border-slate-700/50">
+                      {/* Card Action Buttons */}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
                         <button
                           onClick={() => {
                             setDismissedAlerts(prev => ({ ...prev, [item.id]: true }));
                           }}
-                          className={`text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+                          className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
                             theme === 'light'
                               ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/60'
                               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/60'
                           }`}
                         >
-                          Dispensar
+                          Dispensar esta
                         </button>
 
                         <button
@@ -3103,9 +3154,10 @@ function MainApp() {
                             handleOpenPay(item.id);
                             setIsExpiringBillsModalOpen(false);
                           }}
-                          className="px-4 py-2 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/20 active:scale-95 flex items-center gap-1.5"
+                          className="px-4 py-2 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/20 active:scale-95 flex items-center gap-1.5"
                         >
-                          <span>Efetuar Pagamento</span>
+                          <DollarSign className="w-3.5 h-3.5" />
+                          <span>Pagar Agora</span>
                         </button>
                       </div>
                     </div>
@@ -3114,33 +3166,93 @@ function MainApp() {
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="pt-3 border-t border-rose-500/20 flex items-center justify-between gap-2 shrink-0">
-              {expiringBillsList.length > 0 && (
+            {/* Silence / Frequency Control Box (Explicit user request) */}
+            <div className={`p-4 border-t shrink-0 ${
+              theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/70 border-slate-800'
+            }`}>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-500" />
+                    Controle de Frequência do Alerta
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                    Escolha quando deseja voltar a receber este aviso automático:
+                  </span>
+                </div>
+              </div>
+
+              {/* 3 Snooze Options Buttons */}
+              <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={() => {
-                    const newDismissed: Record<string, boolean> = { ...dismissedAlerts };
-                    expiringBillsList.forEach(b => {
-                      newDismissed[b.item.id] = true;
-                    });
-                    setDismissedAlerts(newDismissed);
-                    setIsExpiringBillsModalOpen(false);
-                  }}
-                  className="text-xs font-bold text-slate-500 hover:text-rose-500 transition-colors cursor-pointer"
+                  onClick={() => handleSnoozeAlerts(1)}
+                  className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 group active:scale-95 ${
+                    theme === 'light'
+                      ? 'bg-white hover:bg-amber-50 border-slate-200 hover:border-amber-300 text-slate-700 hover:text-amber-700'
+                      : 'bg-slate-800/80 hover:bg-amber-950/30 border-slate-700 hover:border-amber-500/40 text-slate-300 hover:text-amber-300'
+                  }`}
+                  title="Silenciar o pop-up automático por 24 horas"
                 >
-                  Dispensar Todos os Alertas
+                  <Clock className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
+                  <span className="text-[11px] font-extrabold leading-tight">Silenciar 1 dia</span>
                 </button>
-              )}
-              <button
-                onClick={() => setIsExpiringBillsModalOpen(false)}
-                className={`ml-auto px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  theme === 'light'
-                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                }`}
-              >
-                Fechar
-              </button>
+
+                <button
+                  onClick={() => handleSnoozeAlerts(2)}
+                  className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 group active:scale-95 ${
+                    theme === 'light'
+                      ? 'bg-white hover:bg-amber-50 border-slate-200 hover:border-amber-300 text-slate-700 hover:text-amber-700'
+                      : 'bg-slate-800/80 hover:bg-amber-950/30 border-slate-700 hover:border-amber-500/40 text-slate-300 hover:text-amber-300'
+                  }`}
+                  title="Silenciar o pop-up automático por 48 horas"
+                >
+                  <Clock className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
+                  <span className="text-[11px] font-extrabold leading-tight">Silenciar 2 dias</span>
+                </button>
+
+                <button
+                  onClick={handleNeverShowAlerts}
+                  className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 group active:scale-95 ${
+                    theme === 'light'
+                      ? 'bg-white hover:bg-rose-50 border-slate-200 hover:border-rose-300 text-slate-700 hover:text-rose-700'
+                      : 'bg-slate-800/80 hover:bg-rose-950/30 border-slate-700 hover:border-rose-500/40 text-slate-300 hover:text-rose-300'
+                  }`}
+                  title="Desativar a exibição automática. Você pode reabrir a qualquer momento pelo sino."
+                >
+                  <BellOff className="w-4 h-4 text-rose-500 group-hover:scale-110 transition-transform" />
+                  <span className="text-[11px] font-extrabold leading-tight">Não mostrar</span>
+                </button>
+              </div>
+
+              {/* Bottom dismissal link */}
+              <div className="mt-3 pt-2.5 border-t border-slate-200/50 dark:border-slate-800 flex items-center justify-between gap-2">
+                {expiringBillsList.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const newDismissed: Record<string, boolean> = { ...dismissedAlerts };
+                      expiringBillsList.forEach(b => {
+                        newDismissed[b.item.id] = true;
+                      });
+                      setDismissedAlerts(newDismissed);
+                      setIsExpiringBillsModalOpen(false);
+                    }}
+                    className="text-xs font-bold text-slate-500 hover:text-rose-500 transition-colors cursor-pointer"
+                  >
+                    Dispensar alertas da sessão
+                  </button>
+                )}
+
+                <button
+                  onClick={handleCloseModalSession}
+                  className={`ml-auto px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    theme === 'light'
+                      ? 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                  }`}
+                >
+                  Entendido, Fechar
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>

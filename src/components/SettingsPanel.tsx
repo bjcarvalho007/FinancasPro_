@@ -615,6 +615,8 @@ export default function SettingsPanel({
             </select>
           </div>
 
+
+
           {/* Web Push configuration section */}
           <div className="pt-4 border-t border-white/5 space-y-4">
             <div className="flex items-center justify-between">

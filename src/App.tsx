@@ -2826,48 +2826,43 @@ function MainApp() {
     }`}>
 
       {/* PROFESSIONAL DESKTOP SIDEBAR PANEL (SITE VIEW) */}
-      <aside className={`hidden lg:flex lg:w-64 xl:w-72 h-full flex-col justify-between border-r shrink-0 transition-all duration-300 ${
+      <aside className={`hidden lg:flex w-72 h-full flex-col justify-between border-r shrink-0 transition-colors duration-300 ${
         theme === 'light' 
-          ? 'bg-white border-slate-200/90 text-slate-900 shadow-sm' 
-          : 'bg-[#090d18] border-white/10 text-slate-100 shadow-2xl'
-      } p-5 select-none z-30`}>
+          ? 'bg-white border-slate-200/85 text-slate-900' 
+          : 'bg-[#0b0f1a] border-white/5 text-slate-100'
+      } p-6 select-none z-30`}>
         
         {/* Top: Branding */}
         <div className="space-y-6">
-          <div className="flex items-center gap-3 px-1 py-1">
-            <div className="relative group">
-              <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 opacity-30 blur-xs group-hover:opacity-70 transition duration-300" />
-              <img 
-                src="/app_icon.png" 
-                alt="FinançasPro Logo" 
-                className="relative w-10 h-10 rounded-2xl object-cover border border-white/20 shrink-0 shadow-md"
-                referrerPolicy="no-referrer"
-              />
-            </div>
+          <div className="flex items-center gap-3">
+            <img 
+              src="/app_icon.png" 
+              alt="FinançasPro Logo" 
+              className="w-10 h-10 rounded-2xl object-cover border border-white/5 shrink-0 shadow-lg"
+              referrerPolicy="no-referrer"
+            />
             <div className="min-w-0">
               <h1 className="font-display font-black text-[15px] tracking-tight leading-none">
                 FINANÇAS<span className="text-emerald-400 font-extrabold ml-0.5">PRO</span>
               </h1>
               {isVIP ? (
-                <span className="inline-flex items-center gap-1 text-[8.5px] text-emerald-400 font-extrabold uppercase tracking-widest mt-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
-                  <Sparkles className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
-                  <span>VIP</span>
+                <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-400 font-black uppercase tracking-wider mt-1.5">
+                  ★ Membro VIP
                 </span>
               ) : hasActiveSubscription ? (
-                <span className="inline-flex items-center gap-1 text-[8.5px] text-indigo-400 font-extrabold uppercase tracking-widest mt-1.5 px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/20">
-                  <Sparkles className="w-2.5 h-2.5 text-indigo-400" />
-                  <span>PRO</span>
+                <span className="inline-flex items-center gap-0.5 text-[9px] text-indigo-400 font-black uppercase tracking-wider mt-1.5">
+                  ★ Assinante PRO
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-[8.5px] text-amber-500 font-extrabold uppercase tracking-widest mt-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20">
-                  <span>GRÁTIS</span>
+                <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-500 font-black uppercase tracking-wider mt-1.5">
+                  ⚡ Conta Grátis
                 </span>
               )}
             </div>
           </div>
 
           {/* Web Navigation Menu */}
-          <nav className="space-y-1.5 pt-2">
+          <nav className="space-y-1.5 pt-4">
             {( () => {
               const menuItems = [
                 { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
@@ -2886,23 +2881,18 @@ function MainApp() {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id as any)}
-                  className={`relative w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all duration-200 border text-left cursor-pointer group ${
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-[11.5px] font-black uppercase tracking-wider transition-all border border-transparent text-left cursor-pointer ${
                     isSelected
                       ? theme === 'light'
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/15 font-black'
-                        : 'bg-gradient-to-r from-indigo-500/20 to-teal-500/10 text-indigo-300 border-indigo-500/30 shadow-sm shadow-indigo-950/40 font-black'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
+                        : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/20'
                       : theme === 'light'
-                        ? 'border-transparent text-slate-600 hover:bg-slate-100/80 hover:text-slate-900'
-                        : 'border-transparent text-slate-400 hover:bg-white/5 hover:text-slate-100'
+                        ? 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
                   }`}
                 >
-                  {isSelected && (
-                    <span className="absolute left-0 top-2 bottom-2 w-1 bg-emerald-400 rounded-r-full shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                  )}
-                  <Icon className={`w-4 h-4 shrink-0 transition-transform duration-200 group-hover:scale-110 ${
-                    isSelected ? (theme === 'light' ? 'text-white' : 'text-emerald-400') : 'text-slate-400 group-hover:text-slate-200'
-                  }`} />
-                  <span className="truncate">{item.label}</span>
+                  <Icon className={`w-4.5 h-4.5 shrink-0 ${isSelected ? '' : 'text-slate-450'}`} />
+                  <span>{item.label}</span>
                 </button>
               );
             })}
@@ -2910,17 +2900,17 @@ function MainApp() {
         </div>
 
         {/* Bottom Section */}
-        <div className="space-y-3 pt-4 border-t border-slate-200/60 dark:border-white/5">
+        <div className="space-y-4">
           
           {/* Theme switcher */}
-          <div className={`p-1 rounded-xl border flex items-center transition-all ${
-            theme === 'light' ? 'bg-slate-100/90 border-slate-200' : 'bg-white/5 border-white/10'
+          <div className={`p-1 rounded-2xl border flex items-center transition-all ${
+            theme === 'light' ? 'bg-slate-100/80 border-slate-200' : 'bg-white/3 border-white/5'
           }`}>
             <button
               onClick={() => handleThemeModify('light')}
-              className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
+              className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
                 theme === 'light'
-                  ? 'bg-white text-indigo-600 shadow-xs'
+                  ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -2928,9 +2918,9 @@ function MainApp() {
             </button>
             <button
               onClick={() => handleThemeModify('dark')}
-              className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
+              className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
                 theme === 'dark'
-                  ? 'bg-indigo-600 text-white shadow-xs'
+                  ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-slate-500 hover:text-indigo-400'
               }`}
             >
@@ -2939,16 +2929,16 @@ function MainApp() {
           </div>
 
           {/* Active User Level Info */}
-          <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all ${
-            theme === 'light' ? 'bg-slate-50 border-slate-200/80' : 'bg-white/5 border-white/10'
+          <div className={`p-3 rounded-2xl border flex items-center justify-between gap-2.5 ${
+            theme === 'light' ? 'bg-slate-50 border-slate-200/60' : 'bg-white/3 border-white/5'
           }`}>
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[11px] shrink-0 select-none ${
+              <div className={`w-8.5 h-8.5 rounded-xl flex items-center justify-center font-black text-[11px] shrink-0 select-none ${
                 isVIP 
-                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                   : hasActiveSubscription
-                  ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                  : 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
+                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                  : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
               }`}>
                 {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
               </div>
@@ -2966,10 +2956,10 @@ function MainApp() {
 
             <button
               onClick={handleUserLogout}
-              className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center transition-colors cursor-pointer border ${
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
                 theme === 'light'
                   ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-700'
-                  : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/20 text-rose-400'
+                  : 'bg-rose-500/5 hover:bg-rose-500/15 border-rose-500/10 text-rose-450'
               }`}
               title="Sair"
             >
@@ -3477,7 +3467,7 @@ function MainApp() {
         onTouchEnd={handleTouchEnd}
         className="flex-1 overflow-y-auto pb-28 lg:pb-12 scroll-smooth"
       >
-        <div className="max-w-7xl lg:max-w-none lg:px-8 xl:px-12 2xl:px-16 3xl:max-w-[1920px] 3xl:mx-auto py-6 md:py-8 space-y-6">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 md:py-8 space-y-6">
           {isFirebaseOffline && (
             <div className="p-5 rounded-3xl bg-amber-955/20 border border-amber-500/20 text-text-amber-200 text-xs space-y-3 shadow-xl relative overflow-hidden">
               <div className="flex items-start gap-3">
@@ -3701,125 +3691,80 @@ function MainApp() {
           {/* Render Mobile summary cards */}
           {activeTab !== 'dashboard' && activeTab !== 'contas' && activeTab !== 'variaveis' && activeTab !== 'parcelas' && activeTab !== 'fixos' && renderSummaryCardsMobile()}
 
-          {/* Top Desktop Bento Metric Bar (Card 1 + Card 2 + Month Selector integrated seamlessly on lg+) */}
+          {/* If on dashboard or transaction list tabs, render the two cards side-by-side above the month selector */}
           {(activeTab === 'dashboard' || activeTab === 'contas' || activeTab === 'variaveis' || activeTab === 'parcelas' || activeTab === 'fixos') && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               {/* Card 1: Sobra Estimada de Caixa */}
               <motion.div
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 15 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-20px' }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.35 }}
                 whileHover={{ scale: 1.01 }}
                 onClick={handleOpenIncome}
-                className={`lg:col-span-5 p-5 rounded-3xl ${
+                className={`p-5 rounded-3xl ${
                   theme === 'light' 
-                    ? 'bg-gradient-to-br from-[#f0fdf4] to-white border-slate-205 text-slate-900 shadow-sm shadow-emerald-100/10 hover:border-emerald-350' 
+                    ? 'bg-gradient-to-br from-[#f0fdf4] to-white border-slate-205 text-slate-900 shadow-md shadow-emerald-100/10 hover:border-emerald-350' 
                     : 'bg-gradient-to-br from-[#0c2617]/50 to-slate-950/20 border border-emerald-500/15 text-white shadow-xl hover:border-emerald-500/35'
-                } border flex items-center justify-between cursor-pointer transition-all group relative overflow-hidden`}
+                } border flex items-center justify-between cursor-pointer transition-all group`}
               >
                 <div>
                   <span className={`text-[10px] font-black ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>
                     💎 {t('sobraEstimada')}
                   </span>
-                  <h3 className={`font-mono text-2xl lg:text-3xl font-black ${theme === 'light' ? 'text-emerald-700' : 'text-emerald-450'} tracking-tight leading-none`}>
+                  <h3 className={`font-mono text-2xl font-black ${theme === 'light' ? 'text-emerald-700' : 'text-emerald-450'} tracking-tight leading-none`}>
                     {formatCurrency(leftoverCash)}
                   </h3>
                   <span className={`text-[10px] ${theme === 'light' ? 'text-emerald-600 font-bold' : 'text-emerald-400/80'} block font-bold uppercase tracking-wider mt-1.5`}>
                     Do total disponível de {formatCurrency(totalInflowsSum)}
                   </span>
                 </div>
-                <div className={`w-11 h-11 lg:w-12 lg:h-12 rounded-2xl flex items-center justify-center shrink-0 border ${
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
                   theme === 'light' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
                 }`}>
-                  <Sparkles className="w-5 h-5 lg:w-6 lg:h-6" />
+                  <Sparkles className="w-5 h-5" />
                 </div>
               </motion.div>
 
               {/* Card 2: Total a Pagar Pendente */}
               <motion.div
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 15 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-20px' }}
-                transition={{ duration: 0.3, delay: 0.05 }}
+                transition={{ duration: 0.35, delay: 0.08 }}
                 whileHover={{ scale: 1.01 }}
                 onClick={() => setIsPendingDebtListOpen(true)}
-                className={`lg:col-span-4 p-5 rounded-3xl ${
+                className={`p-5 rounded-3xl ${
                   theme === 'light' 
-                    ? 'bg-white border-slate-205 shadow-sm text-slate-900 hover:border-indigo-305' 
+                    ? 'bg-white border-slate-205 shadow-md shadow-slate-100/10 text-slate-900 hover:border-indigo-305' 
                     : 'bg-slate-950/40 border border-white/5 text-white shadow-xl hover:border-slate-800'
-                } border flex items-center justify-between cursor-pointer transition-all group relative overflow-hidden`}
+                } border flex items-center justify-between cursor-pointer transition-all group`}
               >
                 <div>
                   <span className={`text-[10px] font-black ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>
                     💸 {t('totalPendente')}
                   </span>
-                  <h3 className="font-mono text-2xl lg:text-3xl font-black text-rose-450 tracking-tight leading-none">
+                  <h3 className="font-mono text-2xl font-black text-rose-450 tracking-tight leading-none">
                     {formatCurrency(pendingTotalDebt)}
                   </h3>
                   <span className={`text-[10px] ${theme === 'light' ? 'text-slate-450 font-bold' : 'text-slate-500'} block font-bold uppercase tracking-wider mt-1.5`}>
                     {t('comprometidoMes')}: {formatCurrency(totalSpentInMonth)}
                   </span>
                 </div>
-                <div className={`w-11 h-11 lg:w-12 lg:h-12 rounded-2xl flex items-center justify-center shrink-0 border ${
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
                   theme === 'light' ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-rose-500/10 border-rose-500/25 text-rose-400'
                 }`}>
-                  <DollarSign className="w-5 h-5 lg:w-6 lg:h-6" />
+                  <DollarSign className="w-5 h-5" />
                 </div>
               </motion.div>
-
-              {/* Desktop Month Selector (Embedded inside top bar on lg+ screens) */}
-              <div className={`hidden lg:flex lg:col-span-3 p-4 rounded-3xl border flex-col justify-between ${
-                theme === 'light' ? 'bg-white border-slate-205 shadow-sm text-slate-900' : 'bg-white/3 border-white/5 text-white'
-              }`}>
-                <div className="flex items-center justify-between">
-                  <span className={`text-[9.5px] font-black uppercase tracking-widest ${theme === 'light' ? 'text-slate-400' : 'text-slate-500'}`}>
-                    📅 Mês Referência
-                  </span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                </div>
-                
-                <div className="flex items-center justify-between gap-2 my-1">
-                  <button
-                    onClick={() => handleMonthTurn(-1)}
-                    className={`w-8.5 h-8.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
-                      theme === 'light' 
-                        ? 'bg-slate-50 border-slate-200 hover:bg-slate-100/80 text-slate-800' 
-                        : 'bg-slate-900 border-white/5 hover:border-white/15 text-white'
-                    }`}
-                    title="Mês Anterior"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <h4 className={`font-display font-black text-xs uppercase tracking-widest select-none text-center ${
-                    theme === 'light' ? 'text-slate-800' : 'text-white'
-                  }`}>
-                    {monthsPortuguese[calendarDate.getMonth()].toUpperCase()} {calendarDate.getFullYear()}
-                  </h4>
-                  <button
-                    onClick={() => handleMonthTurn(1)}
-                    className={`w-8.5 h-8.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
-                      theme === 'light' 
-                        ? 'bg-slate-50 border-slate-200 hover:bg-slate-100/80 text-slate-800' 
-                        : 'bg-slate-900 border-white/5 hover:border-white/15 text-white'
-                    }`}
-                    title="Próximo Mês"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="text-[9px] font-bold text-slate-500 text-center uppercase tracking-wider">
-                  Navegação no Histórico
-                </div>
-              </div>
             </div>
           )}
 
-          {/* Mobile & Tablet Standalone Month Navigator (hidden on lg+) */}
-          <div className={`lg:hidden flex items-center justify-center p-3.5 rounded-2xl border ${
+          {/* Ledger Calendar Month Navigator */}
+          <div className={`flex items-center justify-center p-3.5 rounded-2xl border ${
             theme === 'light' ? 'bg-white border-slate-205 shadow-sm text-slate-900' : 'bg-white/3 border-white/5 text-white'
           } mb-4`}>
+            {/* Centered Month Navigator alignment */}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => handleMonthTurn(-1)}

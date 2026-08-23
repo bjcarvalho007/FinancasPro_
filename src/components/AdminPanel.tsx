@@ -437,14 +437,36 @@ export default function AdminPanel({
   // Pre-fill email client mailto link based on chosen template
   const handleSendTemplateEmail = (
     email: string,
-    templateType: 'expiring_soon' | 'expired' | 'promotional',
-    username?: string
+    templateType: 'premium_expiring_soon' | 'expiring_soon' | 'expired' | 'promotional',
+    username?: string,
+    dataVencimento?: string
   ) => {
     const name = username || email.split('@')[0];
     let subject = '';
     let body = '';
 
-    if (templateType === 'expiring_soon') {
+    if (templateType === 'premium_expiring_soon') {
+      const vencimentoFormatado = dataVencimento 
+        ? new Date(dataVencimento).toLocaleDateString('pt-BR')
+        : '';
+      const vencimentoMsg = vencimentoFormatado ? ` (data prevista de vencimento: ${vencimentoFormatado})` : '';
+
+      subject = '⚠️ Sua assinatura Premium do FinançasPro está vencendo! Renove seu plano';
+      body =
+        `Olá, ${name}!\n\n` +
+        `Esperamos que você esteja aproveitando ao máximo a gestão das suas finanças com o FinançasPro.\n\n` +
+        `Passando para te avisar que o seu plano Premium está prestes a expirar${vencimentoMsg}.\n\n` +
+        `Para não perder o acesso a nenhum dos seus recursos exclusivos e manter seu histórico e controle financeiro sempre atualizados sem nenhuma interrupção, garanta a renovação do seu plano por apenas R$ 11,99/mês:\n` +
+        `• Gestão completa e ilimitada de contas, receitas e despesas fixas\n` +
+        `• Controle avançado de parcelamentos e metas financeiras inteligentes\n` +
+        `• Relatórios gráficos analíticos detalhados e exportação em 1 clique\n` +
+        `• Sincronização segura na nuvem e suporte prioritário\n\n` +
+        `Renove seu Acesso Premium agora mesmo pelo link:\n` +
+        `https://www.financaspro.solutions/\n\n` +
+        `Caso já tenha efetuado o pagamento ou renovação recente, por favor desconsidere este aviso.\n\n` +
+        `Atenciosamente,\n` +
+        `Equipe FinançasPro`;
+    } else if (templateType === 'expiring_soon') {
       subject = '⏳ Seu teste gratuito do FinançasPro está prestes a vencer! Não perca seu controle financeiro';
       body =
         `Olá, ${name}!\n\n` +
@@ -1373,6 +1395,29 @@ export default function AdminPanel({
 
               {/* Template List */}
               <div className="space-y-3 overflow-y-auto pr-1 flex-1">
+                {/* Opção 0: Plano Premium Expirando / Vencendo */}
+                <div
+                  onClick={() => handleSendTemplateEmail(emailUserModal.email, 'premium_expiring_soon', emailUserModal.username, emailUserModal.dataVencimento)}
+                  className="p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/40 hover:border-emerald-400 hover:bg-emerald-500/10 transition-all cursor-pointer group flex items-start gap-3.5 shadow-md"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                    <Crown className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-bold text-sm text-emerald-300 group-hover:text-emerald-200 flex items-center gap-1.5">
+                        <span>👑 Plano Premium Expirando</span>
+                      </h4>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Renovação
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-normal">
+                      Para usuários com assinatura Premium ativa que está vencendo. Alerta sobre a expiração da assinatura e envia o link para renovação de R$ 11,99/mês.
+                    </p>
+                  </div>
+                </div>
+
                 {/* Opção 1: Prestes a vencer */}
                 <div
                   onClick={() => handleSendTemplateEmail(emailUserModal.email, 'expiring_soon', emailUserModal.username)}

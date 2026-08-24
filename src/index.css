@@ -1,13 +1,107 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Plus Jakarta Sans', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   
   --radius-xl: 24px;
   --radius-2xl: 32px;
+}
+
+/* Global Bold Typography Enforcement - Todo o sistema em Negrito */
+*, ::before, ::after {
+  font-weight: 700 !important;
+}
+
+body, html, #root,
+p, span, div, a, label, li, td, th, table, small, b, strong, em, i,
+h1, h2, h3, h4, h5, h6,
+input, button, select, textarea, optgroup, option,
+text, tspan {
+  font-weight: 700 !important;
+}
+
+::placeholder {
+  font-weight: 600 !important;
+}
+
+.font-black, .font-extrabold {
+  font-weight: 800 !important;
+}
+
+/* Light Theme High Contrast Rule: Garante que no modo claro nenhum texto fique apagado, transparente ou ilegível */
+.theme-light,
+.theme-light body,
+[data-theme="light"],
+.theme-light * {
+  color-scheme: light;
+}
+
+.theme-light .text-slate-400,
+.theme-light .text-slate-450,
+.theme-light .text-slate-500,
+.theme-light .text-gray-400,
+.theme-light .text-gray-500 {
+  color: #334155 !important; /* slate-700 / alto contraste e ótima legibilidade */
+}
+
+.theme-light .text-slate-300,
+.theme-light .text-slate-350,
+.theme-light .text-gray-300 {
+  color: #1e293b !important; /* slate-800 */
+}
+
+.theme-light .text-slate-200,
+.theme-light .text-slate-100,
+.theme-light .text-white {
+  color: #0f172a !important; /* slate-900 */
+}
+
+/* Exceções necessárias para botões com fundo escuro/colorido no modo claro */
+.theme-light .bg-indigo-600,
+.theme-light .bg-indigo-600 *,
+.theme-light .bg-emerald-600,
+.theme-light .bg-emerald-600 *,
+.theme-light .bg-rose-600,
+.theme-light .bg-rose-600 *,
+.theme-light .bg-slate-900,
+.theme-light .bg-slate-900 *,
+.theme-light .bg-slate-800,
+.theme-light .bg-slate-800 *,
+.theme-light .bg-gradient-to-r,
+.theme-light .bg-gradient-to-r *,
+.theme-light button[class*="bg-indigo-600"],
+.theme-light button[class*="bg-indigo-600"] * {
+  color: #ffffff !important;
+}
+
+/* Manter cores de acento vivas e contrastadas no modo claro */
+.theme-light .text-emerald-400,
+.theme-light .text-emerald-450 {
+  color: #047857 !important; /* emerald-700 */
+}
+
+.theme-light .text-rose-400,
+.theme-light .text-rose-450,
+.theme-light .text-rose-500 {
+  color: #be123c !important; /* rose-700 */
+}
+
+.theme-light .text-indigo-400,
+.theme-light .text-indigo-300 {
+  color: #4338ca !important; /* indigo-700 */
+}
+
+.theme-light .text-amber-400,
+.theme-light .text-amber-500 {
+  color: #b45309 !important; /* amber-700 */
+}
+
+.theme-light .text-sky-400,
+.theme-light .text-cyan-400 {
+  color: #0369a1 !important; /* sky-700 */
 }
 
 /* Custom Scrollbar */

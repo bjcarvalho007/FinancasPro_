@@ -2582,9 +2582,12 @@ function MainApp() {
 
   if (user && isBlocked) {
     return (
-      <div className={`min-h-screen w-full flex flex-col justify-between p-4 md:p-8 bg-[#070a13] bg-[radial-gradient(circle_at_50%_0%,#152039_0%,#070a13_100%)] overflow-y-auto ${
-        theme === 'light' ? 'bg-[#f4f7fa]' : 'bg-[#070a13]'
-      }`}>
+      <div 
+        data-theme={theme}
+        className={`min-h-screen w-full flex flex-col justify-between p-4 md:p-8 bg-[#070a13] bg-[radial-gradient(circle_at_50%_0%,#152039_0%,#070a13_100%)] overflow-y-auto ${
+          theme === 'light' ? 'theme-light bg-[#f4f7fa] text-slate-900' : 'theme-dark bg-[#070a13] text-slate-100'
+        }`}
+      >
         
         {/* Header bar across the access screen */}
         <div className="w-full max-w-4xl mx-auto flex items-center justify-between py-4 border-b border-white/5 mb-6 select-none">
@@ -2821,40 +2824,43 @@ function MainApp() {
   }
 
   return (
-    <div className={`h-screen h-[100dvh] w-full flex flex-col lg:flex-row overflow-hidden transition-colors duration-300 ${
-      theme === 'light' ? 'bg-[#f4f7fa] text-slate-900 font-sans' : 'bg-[#070a13] text-slate-100 font-sans'
-    }`}>
+    <div 
+      data-theme={theme}
+      className={`h-screen h-[100dvh] w-full flex flex-col lg:flex-row overflow-hidden transition-colors duration-300 ${
+        theme === 'light' ? 'theme-light bg-[#f4f7fa] text-slate-900 font-sans' : 'theme-dark bg-[#070a13] text-slate-100 font-sans'
+      }`}
+    >
 
       {/* PROFESSIONAL DESKTOP SIDEBAR PANEL (SITE VIEW) */}
-      <aside className={`hidden lg:flex w-72 h-full flex-col justify-between border-r shrink-0 transition-colors duration-300 ${
+      <aside className={`hidden lg:flex w-60 h-full flex-col justify-between border-r shrink-0 transition-colors duration-300 ${
         theme === 'light' 
           ? 'bg-white border-slate-200/85 text-slate-900' 
           : 'bg-[#0b0f1a] border-white/5 text-slate-100'
-      } p-6 select-none z-30`}>
+      } p-4 select-none z-30`}>
         
         {/* Top: Branding */}
-        <div className="space-y-6">
-          <div className="flex items-center gap-3">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2.5 px-1 pt-0.5">
             <img 
               src="/app_icon.png" 
               alt="FinançasPro Logo" 
-              className="w-10 h-10 rounded-2xl object-cover border border-white/5 shrink-0 shadow-lg"
+              className="w-8.5 h-8.5 rounded-xl object-cover border border-white/5 shrink-0 shadow-md"
               referrerPolicy="no-referrer"
             />
             <div className="min-w-0">
-              <h1 className="font-display font-black text-[15px] tracking-tight leading-none">
+              <h1 className="font-display font-black text-sm tracking-tight leading-none">
                 FINANÇAS<span className="text-emerald-400 font-extrabold ml-0.5">PRO</span>
               </h1>
               {isVIP ? (
-                <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-400 font-black uppercase tracking-wider mt-1.5">
+                <span className="inline-flex items-center gap-1 text-[8.5px] text-emerald-400 font-bold tracking-normal mt-1">
                   ★ Membro VIP
                 </span>
               ) : hasActiveSubscription ? (
-                <span className="inline-flex items-center gap-0.5 text-[9px] text-indigo-400 font-black uppercase tracking-wider mt-1.5">
+                <span className="inline-flex items-center gap-1 text-[8.5px] text-indigo-400 font-bold tracking-normal mt-1">
                   ★ Assinante PRO
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-500 font-black uppercase tracking-wider mt-1.5">
+                <span className="inline-flex items-center gap-1 text-[8.5px] text-amber-500 font-bold tracking-normal mt-1">
                   ⚡ Conta Grátis
                 </span>
               )}
@@ -2862,7 +2868,7 @@ function MainApp() {
           </div>
 
           {/* Web Navigation Menu */}
-          <nav className="space-y-1.5 pt-4">
+          <nav className="space-y-1 pt-1.5">
             {( () => {
               const menuItems = [
                 { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
@@ -2871,7 +2877,7 @@ function MainApp() {
                 { id: 'parcelas', label: t('parcelados'), icon: CreditCard },
                 { id: 'goals', label: t('metas'), icon: Target },
                 { id: 'settings', label: t('configuracoes'), icon: Settings },
-                ...(isAdmin ? [{ id: 'admin', label: '👑 Admin', icon: Crown }] : [])
+                ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: Crown }] : [])
               ];
               return menuItems;
             })().map((item) => {
@@ -2881,18 +2887,18 @@ function MainApp() {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id as any)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-[11.5px] font-black uppercase tracking-wider transition-all border border-transparent text-left cursor-pointer ${
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-bold tracking-tight transition-all border text-left cursor-pointer ${
                     isSelected
                       ? theme === 'light'
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10'
-                        : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/20'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/20'
+                        : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30 shadow-sm shadow-indigo-500/10'
                       : theme === 'light'
-                        ? 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
-                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        ? 'text-slate-600 border-transparent hover:bg-slate-100 hover:text-slate-900'
+                        : 'text-slate-400 border-transparent hover:bg-white/5 hover:text-slate-200'
                   }`}
                 >
-                  <Icon className={`w-4.5 h-4.5 shrink-0 ${isSelected ? '' : 'text-slate-450'}`} />
-                  <span>{item.label}</span>
+                  <Icon className={`w-4 h-4 shrink-0 transition-colors ${isSelected ? (theme === 'light' ? 'text-white' : 'text-indigo-400') : 'text-slate-400'}`} />
+                  <span className="truncate">{item.label}</span>
                 </button>
               );
             })}
@@ -2900,15 +2906,15 @@ function MainApp() {
         </div>
 
         {/* Bottom Section */}
-        <div className="space-y-4">
+        <div className="space-y-2.5 pt-2">
           
           {/* Theme switcher */}
-          <div className={`p-1 rounded-2xl border flex items-center transition-all ${
-            theme === 'light' ? 'bg-slate-100/80 border-slate-200' : 'bg-white/3 border-white/5'
+          <div className={`p-0.5 rounded-xl border flex items-center transition-all ${
+            theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-white/5 border-white/5'
           }`}>
             <button
               onClick={() => handleThemeModify('light')}
-              className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
+              className={`flex-1 py-1 rounded-lg text-[9.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                 theme === 'light'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -2918,7 +2924,7 @@ function MainApp() {
             </button>
             <button
               onClick={() => handleThemeModify('dark')}
-              className={`flex-1 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
+              className={`flex-1 py-1 rounded-lg text-[9.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                 theme === 'dark'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-slate-500 hover:text-indigo-400'
@@ -2929,11 +2935,11 @@ function MainApp() {
           </div>
 
           {/* Active User Level Info */}
-          <div className={`p-3 rounded-2xl border flex items-center justify-between gap-2.5 ${
-            theme === 'light' ? 'bg-slate-50 border-slate-200/60' : 'bg-white/3 border-white/5'
+          <div className={`p-2 rounded-xl border flex items-center justify-between gap-2 ${
+            theme === 'light' ? 'bg-slate-50 border-slate-200/60' : 'bg-white/5 border-white/5'
           }`}>
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className={`w-8.5 h-8.5 rounded-xl flex items-center justify-center font-black text-[11px] shrink-0 select-none ${
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center font-bold text-[10px] shrink-0 select-none ${
                 isVIP 
                   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                   : hasActiveSubscription
@@ -2943,12 +2949,12 @@ function MainApp() {
                 {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
               </div>
               <div className="min-w-0 text-left">
-                <span className={`text-[8px] uppercase font-black tracking-wider block leading-tight ${
+                <span className={`text-[8px] font-bold tracking-tight block leading-tight ${
                   isVIP ? 'text-emerald-400' : hasActiveSubscription ? 'text-indigo-400' : 'text-amber-500'
                 }`}>
                   {isVIP ? 'Membro VIP' : hasActiveSubscription ? 'Assinante' : 'Grátis'}
                 </span>
-                <p className="text-[10px] font-bold truncate leading-tight text-slate-400" title={user.email || ''}>
+                <p className="text-[9.5px] font-bold truncate leading-tight text-slate-400 max-w-[105px]" title={user.email || ''}>
                   {user.email || 'Usuário'}
                 </p>
               </div>
@@ -2956,7 +2962,7 @@ function MainApp() {
 
             <button
               onClick={handleUserLogout}
-              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer border ${
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer border ${
                 theme === 'light'
                   ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-700'
                   : 'bg-rose-500/5 hover:bg-rose-500/15 border-rose-500/10 text-rose-450'

@@ -4,7 +4,7 @@ import { auth, db } from '../firebase';
 import { useLanguage } from '../utils/i18n';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
-import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle } from 'lucide-react';
+import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle, HelpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportPremiumPDF, exportPremiumSpreadsheet } from '../utils/reportGenerator';
 
@@ -21,6 +21,7 @@ interface SettingsPanelProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'warning') => void;
   alertThresholdDays?: number;
   settings?: any;
+  onOpenTutorial?: () => void;
 }
 
 export default function SettingsPanel({
@@ -35,7 +36,8 @@ export default function SettingsPanel({
   transactions,
   showToast,
   alertThresholdDays = 3,
-  settings = null
+  settings = null,
+  onOpenTutorial
 }: SettingsPanelProps) {
   const { t, lang, formatCurrency } = useLanguage();
   const [incStr, setIncStr] = useState<string>(
@@ -733,15 +735,32 @@ export default function SettingsPanel({
           {t('duvidasFuncionamento', 'Dúvidas sobre o funcionamento, faturas ou precisa de suporte técnico? Nosso atendimento via WhatsApp está sempre pronto para te ajudar a manter as finanças sob total controle.')}
         </p>
 
-        <a
-          href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all shadow-md active:translate-y-0.5 cursor-pointer no-underline"
-        >
-          <MessageCircle className="w-4 h-4" />
-          {t('falarSuporteWhatsApp', 'Falar com Suporte no WhatsApp')}
-        </a>
+        <div className="flex flex-col sm:flex-row gap-2.5">
+          {onOpenTutorial && (
+            <button
+              type="button"
+              onClick={onOpenTutorial}
+              className={`flex-1 h-11 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer border ${
+                currentTheme === 'light'
+                  ? 'bg-white border-slate-300 text-slate-800 hover:bg-slate-50'
+                  : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+              }`}
+            >
+              <HelpCircle className="w-4 h-4 text-emerald-400" />
+              Ver Guia & FAQ do App
+            </button>
+          )}
+
+          <a
+            href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all shadow-md active:translate-y-0.5 cursor-pointer no-underline"
+          >
+            <MessageCircle className="w-4 h-4" />
+            {t('falarSuporteWhatsApp', 'Falar com Suporte no WhatsApp')}
+          </a>
+        </div>
       </div>
 
       {/* Action panel for Exportation and Credentials */}

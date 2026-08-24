@@ -1062,36 +1062,10 @@ function MainApp() {
     };
   }, [user]);
 
-  // Determine if we should show the new features update alert (shows for 2 days or until dismissed)
+  // Updates alert disabled on login per user preference
   useEffect(() => {
-    if (user && !isBlocked && !sessionClosedAlert) {
-      const viewTimeKey = `update_alert_first_seen_${user.uid}`;
-      const dismissedKey = `update_alert_dismissed_${user.uid}`;
-      
-      const isDismissed = localStorage.getItem(dismissedKey) === 'true';
-      if (!isDismissed) {
-        let firstSeen = localStorage.getItem(viewTimeKey);
-        if (!firstSeen) {
-          firstSeen = new Date().toISOString();
-          localStorage.setItem(viewTimeKey, firstSeen);
-        }
-        
-        const firstSeenMs = Date.parse(firstSeen);
-        const diffMs = Date.now() - firstSeenMs;
-        const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
-        
-        if (diffMs >= 0 && diffMs < twoDaysMs) {
-          setShowUpdateAlert(true);
-        } else {
-          setShowUpdateAlert(false);
-        }
-      } else {
-        setShowUpdateAlert(false);
-      }
-    } else {
-      setShowUpdateAlert(false);
-    }
-  }, [user, isBlocked, sessionClosedAlert]);
+    setShowUpdateAlert(false);
+  }, []);
 
   // Alert triggers relocated beneath activeMonthTransactions definition for dynamic virtual projection compatibility
 
@@ -4699,6 +4673,7 @@ function MainApp() {
                     showToast={triggerToast}
                     alertThresholdDays={settings?.alertThresholdDays !== undefined ? settings.alertThresholdDays : 3}
                     settings={settings}
+                    onOpenTutorial={() => setIsTutorialOpen(true)}
                   />
                 )}
               </main>

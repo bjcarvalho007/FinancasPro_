@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '../utils/i18n';
 import { 
   X, 
@@ -13,9 +13,11 @@ import {
   DollarSign, 
   LayoutDashboard, 
   Target, 
-  CheckCircle2,
-  Bell,
-  MessageCircle
+  CheckCircle2, 
+  Bell, 
+  MessageCircle,
+  BookOpen,
+  ListOrdered
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -27,89 +29,88 @@ interface OnboardingTutorialProps {
 }
 
 export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: OnboardingTutorialProps) {
-  const { t, lang } = useLanguage();
+  const { t } = useLanguage();
   const [currentStep, setCurrentStep] = useState(0);
-
-  // Automatically open tutorial on first login if not seen yet
-  useEffect(() => {
-    const hasSeen = localStorage.getItem('finançaspro_tutorial_seen_v2');
-    if (!hasSeen) {
-      // Small timeout to let elements slide-in first
-      const timer = setTimeout(() => {
-        onOpen();
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [onOpen]);
+  const [activeView, setActiveView] = useState<'step_by_step' | 'summary'>('step_by_step');
 
   const handleFinish = () => {
     localStorage.setItem('finançaspro_tutorial_seen_v2', 'true');
     setCurrentStep(0);
     onClose();
-  };  const steps = [
+  };
+
+  const steps = [
     {
-      title: t('boasVindas', 'Boas-vindas ao FinançasPro!'),
-      subtitle: t('cockpitFinanceiro', 'Seu cockpit financeiro premium'),
-      icon: <TrendingUp className="w-10 h-10 text-emerald-400" />,
-      description: t('descBoasVindas', 'Esqueça planilhas confusas ou sistemas corporativos burocráticos. O FinançasPro foi feito para pessoas que valorizam precisão e um visual impecável. Vamos te guiar rapidamente sobre como funciona sua nova gestão de caixa inteligente.'),
+      title: 'Boas-vindas ao FinançasPro',
+      subtitle: 'O que o aplicativo faz por você',
+      icon: <TrendingUp className="w-9 h-9 text-emerald-400" />,
+      description: 'O FinançasPro é o seu gerenciador financeiro inteligente. Ele calcula em tempo real a sobra de caixa prevista para o seu mês, projeta contas futuras automaticamente e ajuda você a ter total previsibilidade e paz financeira sem complicação de planilhas.',
       color: "from-emerald-500/20 to-teal-500/5",
-      badge: t('inicio', 'Início')
+      badge: 'Início',
+      tip: 'O sistema calcula automaticamente a sua sobra real de dinheiro somando suas rendas e subtraindo todas as suas contas fixas, gastos e parcelas do mês.'
     },
     {
-      title: `📌 ${t('contasRecorrentesTitulo', 'Contas Recorrentes (Contas/Fixos)')}`,
-      subtitle: t('prevejaFuturo', 'Preveja o futuro sem falhas'),
-      icon: <Calendar className="w-10 h-10 text-indigo-400" />,
-      description: t('descContasFixasTutorial', 'Aqui ficam suas contas fixas (aluguel, condomínio, internet, assinaturas). O nosso motor projeta essas contas automaticamente para todos os meses futuros! Basta cadastrá-las uma única vez e elas aparecerão todo mês aguardando seu clique de quitação.'),
-      color: "from-indigo-500/20 to-indigo-600/5",
-      badge: `${t('passo', 'Passo')} 1 ${t('de', 'de')} 7`
-    },
-    {
-      title: `📊 ${t('gastosCotidianoTitulo', 'Gastos do Cotidiano (Variados)')}`,
-      subtitle: t('paraOndeVaiDinheiro', 'Para onde está indo o dinheiro?'),
-      icon: <Receipt className="w-10 h-10 text-amber-500" />,
-      description: t('descGastosVariadosTutorial', 'São as suas despesas variáveis que acontecem apenas no mês atual (restaurantes, transporte, farmácia, lazer). Registre esses gastos rápidos para mapear furos de orçamento e entender seu padrão de consumo mensal sem mistérios.'),
-      color: "from-amber-500/20 to-orange-500/5",
-      badge: `${t('passo', 'Passo')} 2 ${t('de', 'de')} 7`
-    },
-    {
-      title: `💳 ${t('comprasParceladasTitulo', 'Compras Parceladas (Parcelados)')}`,
-      subtitle: t('inteligenciaFutura', 'Inteligência futura em parcelas'),
-      icon: <CreditCard className="w-10 h-10 text-sky-400" />,
-      description: t('descParceladosTutorial', 'Ideal para quando você parcela uma compra no cartão de crédito. Você insere o valor total e o histórico de parcelados monitora quanto ainda resta pagar nos devedores e o peso acumulado disso no seu saldo disponível de longo prazo.'),
-      color: "from-sky-500/20 to-blue-500/5",
-      badge: `${t('passo', 'Passo')} 3 ${t('de', 'de')} 7`
-    },
-    {
-      title: `💵 ${t('rendasSaldoSobras', 'Rendas, Saldo e Sobras')}`,
-      subtitle: t('calculoExatoBolso', 'O cálculo exato do seu bolso'),
-      icon: <DollarSign className="w-10 h-10 text-emerald-400" />,
-      description: t('descRendasTutorial', 'No botão \'Ganhos\', configure seu Salário/Renda padrão, as sobras do mês anterior (Saldo Inicial) e eventuais rendimentos Extras. O FinançasPro abate todas as suas contas cadastradas de forma cumulativa, te dando a sobra exata estimada para poupar livremente.'),
+      title: 'Passo 1: Ganhos, Salário e Saldo',
+      subtitle: 'Defina o seu ponto de partida',
+      icon: <DollarSign className="w-9 h-9 text-emerald-400" />,
+      description: 'No botão "Ganhos" (no topo da tela), informe sua Renda/Salário mensal e o Saldo Inicial (dinheiro que sobrou do mês anterior ou está na conta). Você também pode registrar rendimentos Extras sempre que receber valores pontuais.',
       color: "from-teal-500/20 to-green-500/5",
-      badge: `${t('passo', 'Passo')} 4 ${t('de', 'de')} 7`
+      badge: 'Passo 1 de 7',
+      tip: 'Configure seu salário uma vez e o sistema manterá sua renda projetada mensalmente para calcular sua sobra líquida com precisão.'
     },
     {
-      title: `💎 ${t('dashboardMetasReais', 'Dashboard & Metas Reais')}`,
-      subtitle: t('governancaCaixa', 'Governança de caixa e metas'),
-      icon: <LayoutDashboard className="w-10 h-10 text-violet-400" />,
-      description: t('descDashboardMetasTutorial', 'Na aba \'Dashboard\', consulte sua nota de controle e ganhe orientações automáticas de como policiar seus limites. Use a aba de \'Metas\' para criar objetivos de poupança (metas de investimento, cofrinhos) e adicione fundos conforme economiza para realizar seus sonhos passo a passo.'),
+      title: 'Passo 2: Contas Fixas Recorrentes',
+      subtitle: 'Projeção automática para meses futuros',
+      icon: <Calendar className="w-9 h-9 text-indigo-400" />,
+      description: 'Cadastre suas despesas que se repetem todo mês (aluguel, condomínio, luz, internet, assinaturas). Você só precisa cadastrar uma única vez: o sistema replica essas contas automaticamente para todos os meses futuros aguardando sua quitação.',
+      color: "from-indigo-500/20 to-indigo-600/5",
+      badge: 'Passo 2 de 7',
+      tip: 'Quando pagar a conta no mês, basta marcar o botão de quitação (Pagar). As contas dos meses futuros continuam abertas e calculadas.'
+    },
+    {
+      title: 'Passo 3: Gastos Variáveis do Dia a Dia',
+      subtitle: 'Controle de consumo mensal',
+      icon: <Receipt className="w-9 h-9 text-amber-500" />,
+      description: 'Registre os gastos avulsos do mês atual (alimentação, supermercado, combustível, farmácia, lazer). Esses gastos pertencem apenas ao mês em que foram lançados e ajudam você a enxergar com clareza para onde seu dinheiro foi.',
+      color: "from-amber-500/20 to-orange-500/5",
+      badge: 'Passo 3 de 7',
+      tip: 'Categorize seus gastos variáveis para identificar facilmente quais categorias estão consumindo a maior fatia da sua renda.'
+    },
+    {
+      title: 'Passo 4: Compras Parceladas e Cartão',
+      subtitle: 'Previsibilidade sem sustos na fatura',
+      icon: <CreditCard className="w-9 h-9 text-sky-400" />,
+      description: 'Ao fazer compras parceladas no cartão de crédito, cadastre o valor da parcela e a quantidade total. O FinançasPro agenda automaticamente cada mês futuro, informando o número da parcela (ex: 3/10) e o saldo devedor restante.',
+      color: "from-sky-500/20 to-blue-500/5",
+      badge: 'Passo 4 de 7',
+      tip: 'Se antecipar parcelas ou tiver gastos adicionais no cartão, use a opção de quitar ou adicionar valor extra diretamente na parcela.'
+    },
+    {
+      title: 'Passo 5: Dashboard e Sobra de Caixa',
+      subtitle: 'Seu cockpit financeiro em tempo real',
+      icon: <LayoutDashboard className="w-9 h-9 text-violet-400" />,
+      description: 'No Dashboard, você acompanha o termômetro do seu mês: a "Sobra Estimada de Caixa", o "Total a Pagar Pendente", gráficos de rateio por tipo de gasto e o comparativo percentual das suas despesas.',
       color: "from-violet-500/20 to-fuchsia-500/5",
-      badge: `${t('passo', 'Passo')} 5 ${t('de', 'de')} 7`
+      badge: 'Passo 5 de 7',
+      tip: 'A Sobra Estimada mostra exatamente quanto sobrará após quitar todas as contas previstas do mês atual.'
     },
     {
-      title: `🔔 ${t('lembretesVencimentoTutorial', 'Lembretes de Vencimento')}`,
-      subtitle: t('controleAtivoConfiguravel', 'Controle ativo e configurável'),
-      icon: <Bell className="w-10 h-10 text-rose-450 text-rose-400" />,
-      description: t('descLembretesTutorial', 'Nunca mais atrase suas faturas! O FinançasPro monitora ativamente as datas de vencimento das suas contas pendentes e cria lembretes automáticos na tela. Você escolhe quantos dias de antecedência para os alertas na aba de \'Configurações\' e pode ativar notificações nativas de desktop direto no navegador.'),
-      color: "from-rose-500/20 to-rose-600/5",
-      badge: `${t('passo', 'Passo')} 6 ${t('de', 'de')} 7`
+      title: 'Passo 6: Metas e Cofrinhos',
+      subtitle: 'Economize para realizar objetivos',
+      icon: <Target className="w-9 h-9 text-pink-400" />,
+      description: 'Na aba "Metas", crie objetivos de economia (reserva de emergência, viagens, compras planejadas). Defina o valor alvo e adicione aportes conforme economizar para acompanhar a barra de progresso até a realização.',
+      color: "from-pink-500/20 to-rose-500/5",
+      badge: 'Passo 6 de 7',
+      tip: 'Transforme sobras de caixa em aportes para suas metas e veja seu patrimônio crescer mês a mês.'
     },
     {
-      title: `📞 ${t('suporteCentralAjuda', 'Suporte & Central de Ajuda')}`,
-      subtitle: t('atendimentoWhatsApp', 'Atendimento no WhatsApp'),
-      icon: <MessageCircle className="w-10 h-10 text-emerald-400" />,
-      description: t('descSuporteTutorial', 'Precisa de ajuda com o aplicativo ou quer tirar alguma dúvida? Nós oferecemos suporte humano rápido para você. Além de poder tirar suas dúvidas aqui, você pode falar diretamente com nossa equipe no WhatsApp a qualquer momento acessando a aba \'Ajustes\' no menu de navegação e clicando em \'Falar com Suporte\'.'),
+      title: 'Passo 7: Suporte e Dúvidas Rápidas',
+      subtitle: 'Atendimento humano no WhatsApp',
+      icon: <MessageCircle className="w-9 h-9 text-emerald-400" />,
+      description: 'Sempre que precisar de ajuda, suporte técnico ou tirar dúvidas sobre o funcionamento do FinançasPro, nossa equipe está disponível diretamente no WhatsApp para te atender com agilidade.',
       color: "from-emerald-500/20 to-teal-500/10",
-      badge: `${t('passo', 'Passo')} 7 ${t('de', 'de')} 7`
+      badge: 'Passo 7 de 7',
+      tip: 'Clique no botão abaixo para iniciar uma conversa direta com nossa equipe de suporte no WhatsApp.'
     }
   ];
 
@@ -129,7 +130,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
 
   return (
     <>
-      {/* Floating Action Button - Always available to user to trigger description review */}
+      {/* Floating FAQ Action Button */}
       <div className="fixed bottom-20 right-6 z-45">
         <motion.button
           whileHover={{ scale: 1.05 }}
@@ -137,14 +138,14 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
           onClick={onOpen}
           className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all cursor-pointer border ${
             theme === 'light'
-              ? 'bg-slate-900 border-slate-800 text-white shadow-slate-900/10'
-              : 'bg-[#0f1524]/95 border-emerald-500/20 text-emerald-400 shadow-emerald-500/5 hover:border-emerald-500/40 hover:text-emerald-300 font-bold'
+              ? 'bg-slate-900 border-slate-800 text-white shadow-slate-900/15 hover:bg-slate-800'
+              : 'bg-[#0f1524]/95 border-emerald-500/30 text-emerald-400 shadow-emerald-500/10 hover:border-emerald-400 hover:text-emerald-300 font-bold'
           }`}
-          title="Ver Tutorial do Aplicativo"
+          title="FAQ & Como Funciona o FinançasPro"
         >
           <div className="relative">
-            <HelpCircle className="w-5 h-5 text-emerald-400" />
-            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <HelpCircle className="w-5.5 h-5.5 text-emerald-400" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping opacity-75" />
           </div>
         </motion.button>
       </div>
@@ -152,7 +153,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       <AnimatePresence>
         {isOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            {/* Backdrop filter - forced absolute with z-10 underneath card */}
+            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -161,182 +162,303 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
               className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-10"
             />
 
-            {/* Modal Onboarding container - forced z-20 for overlay clarity */}
+            {/* Modal Onboarding container */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ type: "spring", duration: 0.4 }}
-              className={`w-full max-w-lg rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden z-20 border ${
+              transition={{ type: "spring", duration: 0.35 }}
+              className={`w-full max-w-xl rounded-3xl p-6 md:p-7 shadow-2xl relative overflow-hidden z-20 border ${
                 theme === 'light'
                   ? 'bg-white border-slate-200 text-slate-900'
                   : 'bg-[#0f1524] border-white/10 text-white'
               }`}
             >
-              {/* Animated corner decorations */}
-              <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-12 -left-12 w-32 h-32 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
+              {/* Background ambient lighting */}
+              <div className="absolute -top-12 -right-12 w-36 h-36 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-12 -left-12 w-36 h-36 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
 
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4 relative z-10">
-                <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full ${
-                  theme === 'light' ? 'bg-slate-100 text-slate-500' : 'bg-white/5 text-slate-400'
-                }`}>
-                  {steps[currentStep].badge}
-                </span>
-                
-                <button
-                  onClick={handleFinish}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
-                    theme === 'light' ? 'bg-slate-100 text-slate-400 hover:text-slate-700' : 'bg-white/5 text-slate-400 hover:text-white'
-                  }`}
-                  title="Pular guia rápido"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Active Step Content Slider */}
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentStep}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.22 }}
-                  className="space-y-6 min-h-[290px] flex flex-col justify-between"
-                >
+              {/* Top Navigation Bar: Title & View Switcher */}
+              <div className="flex items-center justify-between pb-3.5 border-b border-slate-200/80 dark:border-white/10 relative z-10">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-500 shrink-0">
+                    <HelpCircle className="w-4.5 h-4.5" />
+                  </div>
                   <div>
-                    {/* Visual Icon Container with backdrop blend */}
-                    <div className="flex items-center gap-4 mb-5">
-                      <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${steps[currentStep].color} border border-white/5 flex items-center justify-center shrink-0`}>
-                        {steps[currentStep].icon}
-                      </div>
-                      <div>
-                        <h3 className={`font-display font-black text-lg md:text-xl tracking-tight leading-tight ${
-                          theme === 'light' ? 'text-slate-900 font-bold' : 'text-slate-50'
-                        }`}>
-                          {steps[currentStep].title}
-                        </h3>
-                        <p className="text-xs text-emerald-400 font-bold tracking-wide mt-0.5 uppercase">
-                          {steps[currentStep].subtitle}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Step detailed text description */}
-                    <p className={`text-sm tracking-normal leading-relaxed font-normal ${
-                      theme === 'light' ? 'text-slate-600' : 'text-slate-300'
-                    }`}>
-                      {steps[currentStep].description}
+                    <h3 className="font-display font-black text-sm md:text-base leading-tight">
+                      FAQ & Como Funciona
+                    </h3>
+                    <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">
+                      Guia Oficial FinançasPro
                     </p>
                   </div>
-
-                  {/* Feature tips callout block on specific views */}
-                  {currentStep === 1 && (
-                    <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
-                      theme === 'light' ? 'bg-indigo-50/50 border-indigo-100 text-indigo-750' : 'bg-indigo-950/15 border-indigo-500/10 text-indigo-300'
-                    }`}>
-                      💡 <strong>{t('dicaLabel', 'Dica')}:</strong> {t('tipSuperDicaGanhos', 'Ganhos e faturas fixados ajudam você a ver se terá dinheiro no fim do mês mesmo antes de pagar qualquer uma de suas contas!')}
-                    </div>
-                  )}
-
-                  {currentStep === 3 && (
-                    <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
-                      theme === 'light' ? 'bg-sky-50/50 border-sky-100 text-sky-750' : 'bg-sky-950/15 border-sky-500/10 text-sky-300'
-                    }`}>
-                      💡 <strong>{t('gestaoCartao', 'Gestão de Cartão')}:</strong> {t('tipGestaoCartao', 'Acompanhando as parcelas que restam você reduz gastos desnecessários que engessam seu saldo pros próximos meses.')}
-                    </div>
-                  )}
-
-                  {currentStep === 4 && (
-                    <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
-                      theme === 'light' ? 'bg-emerald-50/50 border-emerald-100 text-emerald-750' : 'bg-emerald-950/15 border-emerald-500/10 text-emerald-300'
-                    }`}>
-                      💡 <strong>{t('sobraLiquida', 'Sobra Líquida')}:</strong> {t('tipSobraLiquida', 'Sempre reabasteça as sobras acumuladas de meses passados informando o valor em Saldo Inicial. Isso assegura a precisão do seu montante!')}
-                    </div>
-                  )}
-
-                  {currentStep === 6 && (
-                    <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
-                      theme === 'light' ? 'bg-rose-50/50 border-rose-100 text-rose-750' : 'bg-rose-950/15 border-rose-500/10 text-rose-300'
-                    }`}>
-                      💡 <strong>{t('notificacoesDispositivo', 'Notificações no Dispositivo')}:</strong> {t('tipNotificacoesDispositivo', 'Ative a autorização de notificações nas Configurações para que o sistema te lembre das datas mesmo se o app estiver fechado ou em segundo plano.')}
-                    </div>
-                  )}
-
-                  {currentStep === steps.length - 1 && (
-                    <div className="space-y-3">
-                      <a
-                        href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all shadow-md hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
-                      >
-                        <MessageCircle className="w-4.5 h-4.5" />
-                        {t('chamarNoWhatsApp', 'Chamar no WhatsApp')}
-                      </a>
-
-                      <div className={`p-3.5 rounded-2xl text-[11px] leading-snug border ${
-                        theme === 'light' ? 'bg-violet-50/50 border-violet-100 text-violet-750' : 'bg-violet-950/15 border-violet-500/10 text-violet-300'
-                      } flex items-center gap-2 font-medium`}>
-                        <Sparkles className="w-4 h-4 text-violet-400 animate-pulse shrink-0" />
-                        <span>{t('onboardingCompleto', 'Seu onboarding está completo! Pronto para usufruir de ferramentas financeiras premium.')}</span>
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-
-              {/* Footer controls & indicators */}
-              <div className="mt-8 pt-4 border-t border-white/5 flex items-center justify-between relative z-10">
-                {/* Dots Indicator */}
-                <div className="flex gap-1.5">
-                  {steps.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setCurrentStep(i)}
-                      className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                        i === currentStep 
-                          ? 'w-5 bg-emerald-400' 
-                          : `w-1.5 ${theme === 'light' ? 'bg-slate-200 hover:bg-slate-350' : 'bg-white/10 hover:bg-white/20'}`
-                      }`}
-                      title={`Ir para o slide ${i + 1}`}
-                    />
-                  ))}
                 </div>
 
-                {/* Back and Next navigation buttons */}
-                <div className="flex gap-2.5">
-                  {currentStep > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <div className="flex p-0.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5">
                     <button
-                      onClick={prevStep}
-                      className={`h-10 px-4 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer border ${
-                        theme === 'light'
-                          ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
-                          : 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10'
+                      onClick={() => setActiveView('step_by_step')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        activeView === 'step_by_step'
+                          ? 'bg-emerald-500 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                       }`}
                     >
-                      <ChevronLeft className="w-4 h-4" /> {t('anterior', 'Anterior')}
+                      <ListOrdered className="w-3 h-3" /> Passo a Passo
                     </button>
-                  )}
+                    <button
+                      onClick={() => setActiveView('summary')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        activeView === 'summary'
+                          ? 'bg-emerald-500 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                      }`}
+                    >
+                      <BookOpen className="w-3 h-3" /> Resumo
+                    </button>
+                  </div>
 
                   <button
-                    onClick={nextStep}
-                    className="h-10 px-5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 hover:-translate-y-0.5 transition-all flex items-center gap-1 cursor-pointer font-display"
+                    onClick={handleFinish}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                      theme === 'light' ? 'bg-slate-100 text-slate-500 hover:text-slate-900' : 'bg-white/5 text-slate-400 hover:text-white'
+                    }`}
+                    title="Fechar"
                   >
-                    {currentStep === steps.length - 1 ? (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" /> {t('concluido', 'Concluído')}
-                      </>
-                    ) : (
-                      <>
-                        {t('avancar', 'Avançar')} <ChevronRight className="w-4 h-4" />
-                      </>
-                    )}
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
+
+              {/* View 1: Step-by-Step Interactive Guide */}
+              {activeView === 'step_by_step' && (
+                <div className="pt-4">
+                  {/* Step Badge */}
+                  <div className="flex items-center justify-between mb-3">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                      theme === 'light' ? 'bg-slate-100 text-slate-600' : 'bg-white/10 text-emerald-400'
+                    }`}>
+                      {steps[currentStep].badge}
+                    </span>
+
+                    {/* Step jump indicator */}
+                    <div className="flex gap-1">
+                      {steps.map((_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setCurrentStep(i)}
+                          className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                            i === currentStep 
+                              ? 'w-5 bg-emerald-500' 
+                              : `w-1.5 ${theme === 'light' ? 'bg-slate-200 hover:bg-slate-400' : 'bg-white/15 hover:bg-white/30'}`
+                          }`}
+                          title={`Ir para passo ${i + 1}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Active Step Content */}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentStep}
+                      initial={{ opacity: 0, x: 15 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -15 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-4 min-h-[260px] flex flex-col justify-between"
+                    >
+                      <div>
+                        {/* Title block */}
+                        <div className="flex items-center gap-3.5 mb-3">
+                          <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${steps[currentStep].color} border border-slate-200/60 dark:border-white/10 flex items-center justify-center shrink-0 shadow-sm`}>
+                            {steps[currentStep].icon}
+                          </div>
+                          <div>
+                            <h3 className="font-display font-black text-base md:text-lg tracking-tight leading-snug">
+                              {steps[currentStep].title}
+                            </h3>
+                            <p className="text-xs text-emerald-500 font-bold tracking-wide mt-0.5">
+                              {steps[currentStep].subtitle}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Description */}
+                        <p className={`text-xs md:text-sm leading-relaxed ${
+                          theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                        }`}>
+                          {steps[currentStep].description}
+                        </p>
+                      </div>
+
+                      {/* Practical Tip Callout */}
+                      {steps[currentStep].tip && (
+                        <div className={`p-3 rounded-xl text-[11px] leading-relaxed border flex items-start gap-2 ${
+                          theme === 'light' 
+                            ? 'bg-emerald-50/60 border-emerald-200/80 text-emerald-900' 
+                            : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                        }`}>
+                          <span className="text-sm shrink-0">💡</span>
+                          <div>
+                            <strong>Dica Prática:</strong> {steps[currentStep].tip}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Final step WhatsApp link */}
+                      {currentStep === steps.length - 1 && (
+                        <div className="space-y-2 pt-1">
+                          <a
+                            href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
+                          >
+                            <MessageCircle className="w-4.5 h-4.5" />
+                            Falar com Suporte no WhatsApp
+                          </a>
+                        </div>
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+
+                  {/* Navigation Buttons */}
+                  <div className="mt-5 pt-3.5 border-t border-slate-200/80 dark:border-white/10 flex items-center justify-between">
+                    <button
+                      onClick={prevStep}
+                      disabled={currentStep === 0}
+                      className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border ${
+                        currentStep === 0
+                          ? 'opacity-40 cursor-not-allowed border-transparent'
+                          : theme === 'light'
+                            ? 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer'
+                            : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 cursor-pointer'
+                      }`}
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+                    </button>
+
+                    <button
+                      onClick={nextStep}
+                      className="h-9 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-500/10 flex items-center gap-1 cursor-pointer transition-all"
+                    >
+                      {currentStep === steps.length - 1 ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Concluir Guia
+                        </>
+                      ) : (
+                        <>
+                          Próximo <ChevronRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* View 2: Quick Concise Summary of What the App Does */}
+              {activeView === 'summary' && (
+                <div className="pt-4 space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                  <div className={`p-3.5 rounded-2xl border ${
+                    theme === 'light' ? 'bg-emerald-50/50 border-emerald-200/80 text-emerald-950' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                  }`}>
+                    <h4 className="text-xs font-bold flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-emerald-500 shrink-0" />
+                      O que o FinançasPro faz por você?
+                    </h4>
+                    <p className="text-[11px] leading-relaxed mt-1">
+                      O aplicativo calcula sua <strong>Sobra Real de Caixa</strong> no final do mês antes mesmo de você pagar todas as faturas, projetando contas recorrentes para todos os meses futuros sem retrabalho.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                      theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-white/5 border-white/5 text-slate-200'
+                    }`}>
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
+                        1
+                      </div>
+                      <div className="text-[11.5px] leading-normal">
+                        <strong className="text-emerald-500 block">Rendas & Ganhos:</strong>
+                        Cadastre seu salário e saldo inicial no botão <strong>Ganhos</strong> no topo para ter a base de cálculo exata.
+                      </div>
+                    </div>
+
+                    <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                      theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-white/5 border-white/5 text-slate-200'
+                    }`}>
+                      <div className="w-7 h-7 rounded-lg bg-indigo-500/15 text-indigo-500 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
+                        2
+                      </div>
+                      <div className="text-[11.5px] leading-normal">
+                        <strong className="text-indigo-500 block">Contas Fixas Recorrentes:</strong>
+                        Lance contas mensais (aluguel, internet, luz) uma única vez. O app projeta automaticamente para todos os meses futuros.
+                      </div>
+                    </div>
+
+                    <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                      theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-white/5 border-white/5 text-slate-200'
+                    }`}>
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
+                        3
+                      </div>
+                      <div className="text-[11.5px] leading-normal">
+                        <strong className="text-amber-500 block">Gastos Variáveis do Dia a Dia:</strong>
+                        Lance compras de mercado, transporte e lazer para saber exatamente onde seu dinheiro está sendo gasto no mês.
+                      </div>
+                    </div>
+
+                    <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                      theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-white/5 border-white/5 text-slate-200'
+                    }`}>
+                      <div className="w-7 h-7 rounded-lg bg-sky-500/15 text-sky-500 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
+                        4
+                      </div>
+                      <div className="text-[11.5px] leading-normal">
+                        <strong className="text-sky-500 block">Parcelados & Cartão:</strong>
+                        Controle compras divididas com previsão automática do número de parcelas restantes e do saldo devedor.
+                      </div>
+                    </div>
+
+                    <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                      theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-white/5 border-white/5 text-slate-200'
+                    }`}>
+                      <div className="w-7 h-7 rounded-lg bg-violet-500/15 text-violet-500 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
+                        5
+                      </div>
+                      <div className="text-[11.5px] leading-normal">
+                        <strong className="text-violet-500 block">Dashboard & Sobra Estimada:</strong>
+                        Acompanhe o rateio visual de despesas, sua nota de controle e quanto vai sobrar na conta no final do mês.
+                      </div>
+                    </div>
+
+                    <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                      theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-white/5 border-white/5 text-slate-200'
+                    }`}>
+                      <div className="w-7 h-7 rounded-lg bg-pink-500/15 text-pink-500 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
+                        6
+                      </div>
+                      <div className="text-[11.5px] leading-normal">
+                        <strong className="text-pink-500 block">Metas & Poupança:</strong>
+                        Crie objetivos financeiros com prazos e acompanhe seus aportes até a realização de cada meta.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <a
+                      href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full h-10 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Falar com Suporte no WhatsApp
+                    </a>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
@@ -344,3 +466,4 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
     </>
   );
 }
+

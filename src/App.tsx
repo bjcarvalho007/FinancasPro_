@@ -2393,7 +2393,7 @@ function MainApp() {
             </h3>
           </div>
           <div className={`text-[10px] ${theme === 'light' ? 'text-emerald-650' : 'text-emerald-400/80'} font-extrabold uppercase tracking-wider`}>
-            {t('doTotalDe', 'Do total de')} {formatCurrency(totalInflowsSum)}
+            Total de entrada: {formatCurrency(totalInflowsSum)}
           </div>
         </motion.div>
 
@@ -3304,35 +3304,6 @@ function MainApp() {
             </button>
           )}
 
-          {/* User profile details (hidden on small mobile, visible sm+) */}
-          <div className={`hidden md:flex items-center gap-2.5 h-9.5 px-3 rounded-xl border ${
-            theme === 'light' ? 'bg-slate-50 border-slate-200/80 text-slate-700' : 'bg-white/5 border-white/10 text-slate-300'
-          }`}>
-            <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-[10px] shrink-0 select-none ${
-              isVIP 
-                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                : hasActiveSubscription
-                ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30'
-                : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-            }`}>
-              {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
-            </div>
-            <div className="min-w-0 text-left leading-none">
-              <span className={`text-[8px] uppercase font-black tracking-wider block leading-tight ${
-                isVIP 
-                  ? 'text-emerald-400' 
-                  : hasActiveSubscription
-                  ? 'text-indigo-400'
-                  : 'text-amber-500'
-              }`}>
-                {isVIP ? t('membroVIP') : hasActiveSubscription ? t('assinantePRO') : t('contaGratis')}
-              </span>
-              <p className="text-[11px] font-semibold truncate max-w-[120px] leading-tight mt-0.5" title={user.email || ''}>
-                {user.email || 'Conectado'}
-              </p>
-            </div>
-          </div>
-
           {/* Button: Ganhos */}
           <button
             onClick={handleOpenIncome}
@@ -3696,7 +3667,7 @@ function MainApp() {
                     {formatCurrency(leftoverCash)}
                   </h3>
                   <span className={`text-[10px] ${theme === 'light' ? 'text-emerald-600 font-bold' : 'text-emerald-400/80'} block font-bold uppercase tracking-wider mt-1.5`}>
-                    Do total disponível de {formatCurrency(totalInflowsSum)}
+                    Total de entrada: {formatCurrency(totalInflowsSum)}
                   </span>
                 </div>
                 <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${

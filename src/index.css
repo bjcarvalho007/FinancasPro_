@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -10,25 +10,9 @@
   --radius-2xl: 32px;
 }
 
-/* Global Bold Typography Enforcement - Todo o sistema em Negrito */
-*, ::before, ::after {
-  font-weight: 700 !important;
-}
-
-body, html, #root,
-p, span, div, a, label, li, td, th, table, small, b, strong, em, i,
-h1, h2, h3, h4, h5, h6,
-input, button, select, textarea, optgroup, option,
-text, tspan {
-  font-weight: 700 !important;
-}
-
-::placeholder {
-  font-weight: 600 !important;
-}
-
-.font-black, .font-extrabold {
-  font-weight: 800 !important;
+/* Base Typography: Natural Weight Hierarchy */
+body, html {
+  font-weight: 400;
 }
 
 /* Light Theme High Contrast Rule: Garante que no modo claro nenhum texto fique apagado, transparente ou ilegível */

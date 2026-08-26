@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Transaction, Category } from '../types';
 import { useLanguage } from '../utils/i18n';
 import { 
@@ -66,7 +66,10 @@ export default function DashboardAnalytics({
   const [showIntelligentAlertsModal, setShowIntelligentAlertsModal] = useState(false);
 
   const isLight = currentTheme === 'light';
-  const todayStr = '2026-05-29'; // Dynamic reference baseline for overdue liabilities
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
 
   // Variables for extra earnings detail dashboard section
   const extraHistory = settings?.extraEarnings || [];
@@ -220,7 +223,20 @@ export default function DashboardAnalytics({
     : 45;
   const adimplenciaScoreMonth = Math.min(100, Math.max(0, Math.round(paidInMonthRatio)));
 
-  const overdueMonthTransactions = listActive.filter(t => (t.paid_amount || 0) < t.amount && t.due && t.due < todayStr);
+  const overdueMonthTransactions = listActive.filter(t => {
+    if ((t.paid_amount || 0) >= t.amount || !t.due) return false;
+    const cleanDue = t.due.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDue)) {
+      return cleanDue < todayStr;
+    }
+    const dayMatch = cleanDue.match(/\d+/);
+    if (dayMatch) {
+      const todayDay = new Date().getDate();
+      const dueDay = parseInt(dayMatch[0], 10);
+      return dueDay < todayDay;
+    }
+    return false;
+  });
   const pontualidadeScoreMonth = Math.max(15, Math.min(100, 100 - overdueMonthTransactions.length * 25));
 
   // Nota de controle do mês

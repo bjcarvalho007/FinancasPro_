@@ -117,6 +117,18 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 // Local storage user cache helpers for instant UI loading
+export const formatDisplayDueDate = (dueStr?: string): string => {
+  if (!dueStr) return 'Sem data';
+  const clean = dueStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    const [year, month, day] = clean.split('-');
+    return `${day}/${month}/${year}`;
+  }
+  if (clean.toLowerCase().startsWith('dia')) return clean;
+  if (/^\d{1,2}$/.test(clean)) return `Dia ${clean}`;
+  return clean;
+};
+
 const saveLocalUserCache = (uid: string, key: string, data: any) => {
   try {
     if (data === null || data === undefined) {
@@ -1245,6 +1257,14 @@ function MainApp() {
       inferredMasterId = docId;
     }
 
+    let assignedMonthKey = editingTransaction ? editingTransaction.monthKey : currentMonthKey;
+    if (data.due && /^\d{4}-\d{2}-\d{2}$/.test(data.due.trim())) {
+      const selectedMonthKey = data.due.trim().substring(0, 7);
+      if (!editingTransaction) {
+        assignedMonthKey = selectedMonthKey;
+      }
+    }
+
     const newTx: any = {
       id: docId,
       userId: user.uid,
@@ -1253,7 +1273,7 @@ function MainApp() {
       type: data.type,
       cat: data.cat,
       due: data.due,
-      monthKey: editingTransaction ? editingTransaction.monthKey : currentMonthKey,
+      monthKey: assignedMonthKey,
       paid_amount: fallbackPaid,
       paid_at: fallbackPaidAt || '',
       createdAt: editingTransaction?.createdAt || new Date().toISOString(),
@@ -2114,28 +2134,43 @@ function MainApp() {
       const remainingDeficit = itemAmount - (item.paid_amount || 0);
 
       if (remainingDeficit > 0 && item.due) {
-        const dayMatch = item.due.match(/\d+/);
-        if (dayMatch) {
-          const dueDay = parseInt(dayMatch[0], 10);
-          
-          // Ensure valid day matching month bounds to prevent rollover errors
-          const currentYear = calendarDate.getFullYear();
-          const currentMonth = calendarDate.getMonth();
-          const maxDays = new Date(currentYear, currentMonth + 1, 0).getDate();
-          const safeDueDay = Math.min(Math.max(1, dueDay), maxDays);
+        let diffInDays = 0;
+        let isOverdue = false;
+        let isWithinUpcomingThreshold = false;
 
-          const dueDate = new Date(currentYear, currentMonth, safeDueDay);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(item.due.trim())) {
+          const parts = item.due.trim().split('-');
+          const dueYear = parseInt(parts[0], 10);
+          const dueMonth = parseInt(parts[1], 10) - 1;
+          const dueDay = parseInt(parts[2], 10);
+          const dueDate = new Date(dueYear, dueMonth, dueDay);
           dueDate.setHours(0, 0, 0, 0);
 
           const diffInMs = dueDate.getTime() - today.getTime();
-          const diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
+          diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
+          isOverdue = diffInDays < 0;
+          isWithinUpcomingThreshold = diffInDays >= 0 && diffInDays <= thresholdDays;
+        } else {
+          const dayMatch = item.due.match(/\d+/);
+          if (dayMatch) {
+            const dueDay = parseInt(dayMatch[0], 10);
+            const currentYear = calendarDate.getFullYear();
+            const currentMonth = calendarDate.getMonth();
+            const maxDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const safeDueDay = Math.min(Math.max(1, dueDay), maxDays);
 
-          const isOverdue = diffInDays < 0;
-          const isWithinUpcomingThreshold = diffInDays >= 0 && diffInDays <= thresholdDays;
+            const dueDate = new Date(currentYear, currentMonth, safeDueDay);
+            dueDate.setHours(0, 0, 0, 0);
 
-          if (isOverdue || isWithinUpcomingThreshold) {
-            expiring.push({ item, diffInDays, isOverdue });
+            const diffInMs = dueDate.getTime() - today.getTime();
+            diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
+            isOverdue = diffInDays < 0;
+            isWithinUpcomingThreshold = diffInDays >= 0 && diffInDays <= thresholdDays;
           }
+        }
+
+        if (isOverdue || isWithinUpcomingThreshold) {
+          expiring.push({ item, diffInDays, isOverdue });
         }
       }
     });
@@ -2182,11 +2217,12 @@ function MainApp() {
       }
 
       const { item, diffInDays, isOverdue } = expiring[0];
+      const formattedDue = formatDisplayDueDate(item.due);
       
       const title = isOverdue ? '🚨 CONTA ATRASADA' : '⚠️ ATENÇÃO - VENCIMENTO';
       const desc = isOverdue
-        ? `A despesa "${item.name}" está em ATRASO desde o dia ${item.due} deste mês. Regularize para evitar multas!`
-        : `A despesa "${item.name}" está agendada para vencer no dia ${item.due}. Regularize para manter em dia o seu índice de sobras estimadas!`;
+        ? `A despesa "${item.name}" está em ATRASO desde ${formattedDue}. Regularize para evitar multas!`
+        : `A despesa "${item.name}" está agendada para ${formattedDue}. Regularize para manter em dia o seu índice de sobras estimadas!`;
 
       setFloatingAlert({
         id: item.id,
@@ -2208,7 +2244,7 @@ function MainApp() {
             if (expiring.length === 1) {
               notificationTitle = isOverdue ? '🚨 CONTA EM ATRASO' : '⚠️ ATENÇÃO - VENCIMENTO';
               const pendingVal = item.amount ? ` (R$ ${Number(item.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : '';
-              notificationBody = `A despesa "${item.name}"${pendingVal} vence no dia ${item.due}. Toque para regularizar.`;
+              notificationBody = `A despesa "${item.name}"${pendingVal} com data ${formattedDue}. Toque para regularizar.`;
             } else {
               const overdueCount = expiring.filter(e => e.isOverdue).length;
               notificationTitle = overdueCount > 0 
@@ -2217,7 +2253,7 @@ function MainApp() {
 
               const listSummary = expiring.slice(0, 5).map(e => {
                 const valStr = e.item.amount ? ` - R$ ${Number(e.item.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
-                const st = e.isOverdue ? ' [ATRASADA]' : ` (Dia ${e.item.due})`;
+                const st = e.isOverdue ? ' [ATRASADA]' : ` (${formatDisplayDueDate(e.item.due)})`;
                 return `• ${e.item.name}${valStr}${st}`;
               });
 
@@ -2268,6 +2304,11 @@ function MainApp() {
 
     const parseDueDay = (dueStr: string): number => {
       if (!dueStr) return 99;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr.trim())) {
+        const parts = dueStr.trim().split('-');
+        const day = parseInt(parts[2], 10);
+        return isNaN(day) ? 99 : day;
+      }
       const num = parseInt(dueStr.replace(/\D/g, ''), 10);
       return isNaN(num) ? 99 : num;
     };
@@ -3101,7 +3142,7 @@ function MainApp() {
                             {item.name}
                           </h4>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Vencimento: <strong className="text-slate-800 dark:text-slate-200">Dia {item.due}</strong>
+                            Vencimento: <strong className="text-slate-800 dark:text-slate-200">{formatDisplayDueDate(item.due)}</strong>
                           </p>
                         </div>
 
@@ -3936,7 +3977,7 @@ function MainApp() {
                                     }`}>
                                       {isPaid 
                                         ? tx.paid_at ? `Pago no dia ${tx.paid_at}` : 'Pago (Liquidado)'
-                                        : `Aguardando • Vencimento: ${tx.due || 'Sem data'}`
+                                        : `Aguardando • ${tx.type === 'fixos' ? 'Vencimento' : 'Data'}: ${formatDisplayDueDate(tx.due)}`
                                       }
                                     </span>
                                   </div>
@@ -3989,7 +4030,7 @@ function MainApp() {
                                       )}
                                     </h4>
                                     <p className="text-[11.5px] text-slate-500 mt-1 uppercase font-semibold tracking-wider flex flex-wrap items-center gap-1">
-                                      <span>{tx.due || 'Sem vencimento'} • {categoryObj.label}</span>
+                                      <span>{formatDisplayDueDate(tx.due)} • {categoryObj.label}</span>
                                       {tx.establishment && (
                                         <span className="text-indigo-400 font-bold ml-1">🏢 {tx.establishment}</span>
                                       )}
@@ -4043,7 +4084,7 @@ function MainApp() {
                                   }`}>
                                     {isPaid 
                                       ? tx.paid_at ? `Pago no dia ${tx.paid_at}` : 'Pago (Liquidado)'
-                                      : `Aguardando Pagamento • Vencimento: ${tx.due || 'Sem data'}`
+                                      : `Aguardando Pagamento • ${tx.type === 'fixos' ? 'Vencimento' : 'Data'}: ${formatDisplayDueDate(tx.due)}`
                                     }
                                   </span>
                                 </div>
@@ -4728,7 +4769,7 @@ function MainApp() {
                                 {tx.name}
                               </h5>
                               <p className="text-[10px] text-slate-450 mt-1 uppercase font-semibold">
-                                Vencimento: {tx.due || 'Sem vencimento'} • {categoryObj.label}
+                                {tx.type === 'fixos' ? 'Vencimento' : 'Data'}: {formatDisplayDueDate(tx.due)} • {categoryObj.label}
                               </p>
                               {tx.paid_amount > 0 && (
                                 <p className="text-[9.5px] text-amber-500 font-semibold mt-0.5">

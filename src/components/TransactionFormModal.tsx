@@ -158,6 +158,57 @@ export default function TransactionFormModal({
     pressStartPosRef.current = null;
   };
 
+  const getTodayISO = (): string => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getYesterdayISO = (): string => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const normalizeToISODate = (val?: string): string => {
+    if (!val) return getTodayISO();
+    const clean = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(clean)) {
+      const [d, m, y] = clean.split('/');
+      return `${y}-${m}-${d}`;
+    }
+    const dayMatch = clean.match(/\d+/);
+    if (dayMatch) {
+      const d = new Date();
+      const day = parseInt(dayMatch[0], 10);
+      const dayStr = String(Math.min(31, Math.max(1, day))).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      return `${d.getFullYear()}-${month}-${dayStr}`;
+    }
+    return getTodayISO();
+  };
+
+  const formatFriendlyDate = (isoStr: string): string => {
+    if (!isoStr) return '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(isoStr)) return isoStr;
+    const [year, month, day] = isoStr.split('-');
+    const today = getTodayISO();
+    const yesterday = getYesterdayISO();
+    if (isoStr === today) {
+      return `${day}/${month}/${year} (Hoje)`;
+    }
+    if (isoStr === yesterday) {
+      return `${day}/${month}/${year} (Ontem)`;
+    }
+    return `${day}/${month}/${year}`;
+  };
+
   const justOpenedRef = useRef<boolean>(true);
 
   useEffect(() => {
@@ -169,7 +220,7 @@ export default function TransactionFormModal({
         setAmountStr(formatMoney(initialData.type === 'parcelas' ? (initialData.total_parcelado || initialData.amount) : initialData.amount));
         setType(initialData.type);
         setCat(initialData.cat);
-        setDue(initialData.due || '');
+        setDue(normalizeToISODate(initialData.due));
         setEstablishment(initialData.establishment || '');
         setInstallmentsCount(initialData.installmentsCount ? String(initialData.installmentsCount) : '');
         setInstallmentAmountStr(initialData.type === 'parcelas' ? formatMoney(initialData.amount || 0) : '');
@@ -178,7 +229,7 @@ export default function TransactionFormModal({
         setAmountStr('');
         setType(defaultType);
         setCat('moradia');
-        setDue('');
+        setDue(getTodayISO());
         setEstablishment('');
         setInstallmentsCount('');
         setInstallmentAmountStr('');
@@ -464,7 +515,7 @@ export default function TransactionFormModal({
             </div>
 
             {/* Split row: Amount and Due date */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
                   <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> {type === 'parcelas' ? t('valorTotalParcelado', 'Valor Total Parcelado') : t('valor', 'Valor')}
@@ -481,17 +532,54 @@ export default function TransactionFormModal({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5" /> {t('vencimento', 'Data de Vencimento')}
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{type === 'fixos' ? t('vencimento', 'Data de Vencimento') : 'Data do Gasto'}</span>
+                  </label>
+                  {due && (
+                    <span className="text-[10px] font-semibold text-emerald-400 truncate max-w-[120px]">
+                      {formatFriendlyDate(due)}
+                    </span>
+                  )}
+                </div>
+                
                 <input
                   id="modal-due-input"
-                  type="text"
-                  placeholder="Ex: Dia 10 ou 10/05"
+                  type="date"
                   value={due}
                   onChange={(e) => setDue(e.target.value)}
-                  className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3.5 rounded-xl transition-all font-medium"
+                  className="w-full bg-slate-950/50 border border-white/5 hover:border-indigo-500/40 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3 rounded-xl transition-all font-medium [color-scheme:dark] cursor-pointer"
                 />
+
+                {/* Quick Date Shortcuts */}
+                <div className="flex items-center gap-1.5 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setDue(getTodayISO())}
+                    className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold tracking-wide transition-all cursor-pointer border ${
+                      due === getTodayISO()
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-slate-200'
+                    }`}
+                  >
+                    ✨ Hoje
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDue(getYesterdayISO())}
+                    className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold tracking-wide transition-all cursor-pointer border ${
+                      due === getYesterdayISO()
+                        ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-sm'
+                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-slate-200'
+                    }`}
+                  >
+                    ⏳ Ontem
+                  </button>
+                  <span className="text-[9.5px] text-slate-400 ml-auto truncate">
+                    {due === getTodayISO() ? 'Padrão: Hoje' : 'Data alterada'}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

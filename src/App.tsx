@@ -2379,7 +2379,7 @@ function MainApp() {
             </h3>
           </div>
           <div className={`text-[11px] ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400/80'} font-bold uppercase tracking-wider mt-4`}>
-            {t('sobreDisponivelDe', 'Sobra disponível de')} {formatCurrency(totalInflowsSum)}
+            Total de entrada: {formatCurrency(totalInflowsSum)}
           </div>
         </motion.div>
 
@@ -4819,6 +4819,7 @@ function MainApp() {
         onCreateCategory={handleCreateCustomCategory}
         onDeleteCategory={handleDeleteCategory}
         defaultType={(activeTab === 'fixos' || activeTab === 'variaveis' || activeTab === 'parcelas') ? activeTab : 'fixos'}
+        theme={theme}
       />
 
       {/* Sub-Modal confirmation download for Payments */}

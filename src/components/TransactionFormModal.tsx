@@ -49,6 +49,7 @@ interface TransactionFormModalProps {
   onCreateCategory: (icon: string, label: string) => void;
   onDeleteCategory?: (category: Category) => void;
   defaultType?: 'fixos' | 'variaveis' | 'parcelas';
+  theme?: 'dark' | 'light';
 }
 
 export default function TransactionFormModal({
@@ -59,8 +60,10 @@ export default function TransactionFormModal({
   categoriesList,
   onCreateCategory,
   onDeleteCategory,
-  defaultType = 'fixos'
+  defaultType = 'fixos',
+  theme = 'dark'
 }: TransactionFormModalProps) {
+  const isLight = theme === 'light';
   const { t, formatCurrency } = useLanguage();
   const [name, setName] = useState<string>('');
   const [amountStr, setAmountStr] = useState<string>('');
@@ -353,7 +356,7 @@ export default function TransactionFormModal({
             if (Date.now() - lastCatSelectedTimeRef.current < 400) return;
             onClose();
           }}
-          className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+          className={`fixed inset-0 ${isLight ? 'bg-slate-900/40 backdrop-blur-xs' : 'bg-slate-950/80 backdrop-blur-md'}`}
         />
 
         {/* Modal Window */}
@@ -363,16 +366,24 @@ export default function TransactionFormModal({
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: "spring", duration: 0.4 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-[#0f1524] border border-white/10 w-full max-w-lg rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-visible max-h-[90vh] overflow-y-auto z-10"
+          className={`${
+            isLight
+              ? 'bg-white border-slate-200 text-slate-900 shadow-2xl shadow-slate-900/10'
+              : 'bg-[#0f1524] border-white/10 text-white shadow-2xl'
+          } border w-full max-w-lg rounded-3xl p-6 md:p-8 relative overflow-visible max-h-[90vh] overflow-y-auto z-10`}
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-display font-extrabold text-lg text-white">
+            <h3 className={`font-display font-extrabold text-lg ${isLight ? 'text-slate-900' : 'text-white'}`}>
               {initialData ? `✏️ ${t('editarTransacao', 'Editar Lançamento')}` : `💸 ${t('novaTransacao', 'Novo Lançamento')}`}
             </h3>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full border border-white/5 bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+              className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
+                isLight 
+                  ? 'border-slate-200 bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200' 
+                  : 'border-white/5 bg-white/5 text-slate-400 hover:text-white'
+              }`}
             >
               <X className="w-4 h-4" />
             </button>
@@ -382,9 +393,11 @@ export default function TransactionFormModal({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-3.5 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-250 text-xs flex items-center gap-2.5"
+              className={`p-3.5 mb-4 rounded-xl border text-xs flex items-center gap-2.5 ${
+                isLight ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-rose-500/10 border-rose-500/25 text-rose-250'
+              }`}
             >
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
               <span className="font-semibold">{error}</span>
             </motion.div>
           )}
@@ -392,8 +405,8 @@ export default function TransactionFormModal({
           <div className="space-y-4">
             {/* Description input */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                <Landmark className="w-3.5 h-3.5" /> {t('descricao', 'Descrição do Gastos / Receita')}
+              <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                <Landmark className="w-3.5 h-3.5 text-indigo-500" /> {t('descricao', 'Descrição do Gastos / Receita')}
               </label>
               <input
                 id="modal-desc-input"
@@ -401,20 +414,28 @@ export default function TransactionFormModal({
                 placeholder={t('placeholderDesc', 'Ex: Aluguel, Supermercado, Freelance')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3.5 rounded-xl transition-all font-medium"
+                className={`w-full border focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm px-4 py-3.5 rounded-xl transition-all font-medium ${
+                  isLight 
+                    ? 'bg-slate-50/80 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white' 
+                    : 'bg-slate-950/50 border-white/5 text-slate-100 placeholder:text-slate-500'
+                }`}
               />
             </div>
 
             {/* Transaction type selector */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5" /> {t('tipoConta', 'Tipo de Fluxo Financeiro')}
+              <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                <Layers className="w-3.5 h-3.5 text-indigo-500" /> {t('tipoConta', 'Tipo de Fluxo Financeiro')}
               </label>
               <select
                 id="modal-type-select"
                 value={type}
                 onChange={(e) => setType(e.target.value as any)}
-                className="w-full bg-slate-950/60 border border-white/5 focus:border-indigo-500 focus:outline-none text-slate-200 text-sm px-4 py-3.5 rounded-xl transition-all cursor-pointer font-semibold"
+                className={`w-full border focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm px-4 py-3.5 rounded-xl transition-all cursor-pointer font-semibold ${
+                  isLight
+                    ? 'bg-slate-50/80 border-slate-200 text-slate-900 focus:bg-white'
+                    : 'bg-slate-950/60 border-white/5 text-slate-200'
+                }`}
               >
                 <option value="fixos">📌 {t('contaFixa', 'Gasto Fixo (Se repete mensalmente)')}</option>
                 <option value="variaveis">📊 {t('gastoVariavelTipo', 'Gasto Variável (Apenas neste mês)')}</option>
@@ -424,7 +445,7 @@ export default function TransactionFormModal({
 
             {/* Optional Establishment Info */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+              <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
                 🏢 {t('estabelecimento', 'Estabelecimento / Beneficiário (Opcional)')}
               </label>
               <input
@@ -433,7 +454,11 @@ export default function TransactionFormModal({
                 placeholder="Ex: Amazon, Mercado Livre, etc."
                 value={establishment}
                 onChange={(e) => setEstablishment(e.target.value)}
-                className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3.5 rounded-xl transition-all font-medium"
+                className={`w-full border focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm px-4 py-3.5 rounded-xl transition-all font-medium ${
+                  isLight 
+                    ? 'bg-slate-50/80 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white' 
+                    : 'bg-slate-950/50 border-white/5 text-slate-100 placeholder:text-slate-500'
+                }`}
               />
             </div>
 
@@ -446,7 +471,7 @@ export default function TransactionFormModal({
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                    <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
                       🔢 {t('numParcelas', 'Quantidade de Parcelas')}
                     </label>
                     <input
@@ -456,11 +481,15 @@ export default function TransactionFormModal({
                       placeholder="Ex: 5, 10, 12, etc."
                       value={installmentsCount}
                       onChange={(e) => setInstallmentsCount(e.target.value)}
-                      className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold"
+                      className={`w-full border focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold ${
+                        isLight 
+                          ? 'bg-slate-50/80 border-slate-200 text-slate-900 focus:bg-white' 
+                          : 'bg-slate-950/50 border-white/5 text-slate-100'
+                      }`}
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-yellow-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 font-bold">
+                    <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${isLight ? 'text-amber-700' : 'text-yellow-400'}`}>
                       💡 {t('valorParcelaDesteMes', 'Valor da Parcela deste Mês')}
                     </label>
                     <input
@@ -478,9 +507,13 @@ export default function TransactionFormModal({
                         const valFloat = parseFloat(numeric) / 100;
                         setInstallmentAmountStr(formatMoney(valFloat));
                       }}
-                      className="w-full bg-slate-950/50 border border-yellow-500/20 focus:border-yellow-500 focus:outline-none focus:ring-1 focus:ring-yellow-500 text-yellow-400 text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold"
+                      className={`w-full border focus:outline-none focus:ring-2 text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold ${
+                        isLight 
+                          ? 'bg-amber-50/40 border-amber-300 text-amber-800 focus:border-amber-500 focus:ring-amber-500/20 focus:bg-white' 
+                          : 'bg-slate-950/50 border-yellow-500/20 focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-yellow-400'
+                      }`}
                     />
-                    <p className="text-[9px] text-slate-400 mt-1">
+                    <p className={`text-[9px] mt-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                       {t('sistemaUsaraValorSobra', 'O sistema usará este valor para calcular a sobra do mês.')}
                     </p>
                   </div>
@@ -490,24 +523,34 @@ export default function TransactionFormModal({
 
             {/* Custom Interactive Category Selector Trigger */}
             <div className="relative">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">📁 {t('categoria', 'Categoria')}</span>
-                <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Clique p/ abrir tela cheia</span>
+              <label className="block text-[10px] font-bold uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                <span className={`flex items-center gap-1.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>📁 {t('categoria', 'Categoria')}</span>
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${isLight ? 'text-indigo-600' : 'text-indigo-400'}`}>Clique p/ abrir tela cheia</span>
               </label>
               
               <div
                 id="modal-cat-trigger"
                 onClick={() => setShowCatDropdown(true)}
-                className="w-full bg-slate-950/50 border border-indigo-500/30 hover:border-indigo-400 text-slate-200 text-sm px-4 py-3 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-slate-900/60 transition-all shadow-inner group"
+                className={`w-full border rounded-2xl flex items-center justify-between cursor-pointer transition-all px-4 py-3 group ${
+                  isLight 
+                    ? 'bg-slate-50/80 border-slate-200 hover:border-indigo-400 hover:bg-white text-slate-800 shadow-xs' 
+                    : 'bg-slate-950/50 border-indigo-500/30 hover:border-indigo-400 hover:bg-slate-900/60 text-slate-200 shadow-inner'
+                }`}
               >
                 <span className="font-semibold flex items-center gap-3">
-                  <span className="text-2xl p-1.5 rounded-xl bg-slate-900 border border-white/10 shadow-sm">{activeCategoryObject?.icon || '📦'}</span> 
+                  <span className={`text-2xl p-1.5 rounded-xl border shadow-xs ${
+                    isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-white/10'
+                  }`}>{activeCategoryObject?.icon || '📦'}</span> 
                   <div>
-                    <span className="text-white font-extrabold block text-sm">{activeCategoryObject?.label || 'Outros'}</span>
-                    <span className="text-[10px] text-slate-400 font-medium">Toque para selecionar ou ver todas em tela cheia</span>
+                    <span className={`font-extrabold block text-sm ${isLight ? 'text-slate-900' : 'text-white'}`}>{activeCategoryObject?.label || 'Outros'}</span>
+                    <span className={`text-[10px] font-medium ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Toque para selecionar ou ver todas em tela cheia</span>
                   </div>
                 </span>
-                <div className="flex items-center gap-1.5 bg-indigo-600/20 group-hover:bg-indigo-600 px-3 py-1.5 rounded-xl text-indigo-300 group-hover:text-white text-xs font-bold transition-all border border-indigo-500/30">
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                  isLight 
+                    ? 'bg-indigo-50 group-hover:bg-indigo-600 text-indigo-700 group-hover:text-white border-indigo-200' 
+                    : 'bg-indigo-600/20 group-hover:bg-indigo-600 text-indigo-300 group-hover:text-white border-indigo-500/30'
+                }`}>
                   <span>Ver Categorias</span>
                   <span className="text-xs">→</span>
                 </div>
@@ -517,8 +560,8 @@ export default function TransactionFormModal({
             {/* Split row: Amount and Due date */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> {type === 'parcelas' ? t('valorTotalParcelado', 'Valor Total Parcelado') : t('valor', 'Valor')}
+                <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                  <DollarSign className={`w-3.5 h-3.5 ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`} /> {type === 'parcelas' ? t('valorTotalParcelado', 'Valor Total Parcelado') : t('valor', 'Valor')}
                 </label>
                 <input
                   id="modal-amount-input"
@@ -527,18 +570,22 @@ export default function TransactionFormModal({
                   placeholder="R$ 0,00"
                   value={amountStr}
                   onChange={(e) => handleAmountInput(e.target.value)}
-                  className="w-full bg-slate-950/50 border border-white/5 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold"
+                  className={`w-full border focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm px-4 py-3.5 rounded-xl transition-all font-mono font-bold ${
+                    isLight 
+                      ? 'bg-slate-50/80 border-slate-200 text-slate-900 placeholder:text-slate-400 focus:bg-white' 
+                      : 'bg-slate-950/50 border-white/5 text-slate-100 placeholder:text-slate-500'
+                  }`}
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                  <label className={`block text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                    <Calendar className={`w-3.5 h-3.5 ${isLight ? 'text-indigo-600' : 'text-indigo-400'}`} />
                     <span>{type === 'fixos' ? t('vencimento', 'Data de Vencimento') : 'Data do Gasto'}</span>
                   </label>
                   {due && (
-                    <span className="text-[10px] font-semibold text-emerald-400 truncate max-w-[120px]">
+                    <span className={`text-[10px] font-bold truncate max-w-[120px] ${isLight ? 'text-emerald-700' : 'text-emerald-400'}`}>
                       {formatFriendlyDate(due)}
                     </span>
                   )}
@@ -549,7 +596,11 @@ export default function TransactionFormModal({
                   type="date"
                   value={due}
                   onChange={(e) => setDue(e.target.value)}
-                  className="w-full bg-slate-950/50 border border-white/5 hover:border-indigo-500/40 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-100 text-sm px-4 py-3 rounded-xl transition-all font-medium [color-scheme:dark] cursor-pointer"
+                  className={`w-full border hover:border-indigo-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm px-4 py-3 rounded-xl transition-all font-medium cursor-pointer ${
+                    isLight 
+                      ? 'bg-slate-50/80 border-slate-200 text-slate-900 [color-scheme:light] focus:bg-white' 
+                      : 'bg-slate-950/50 border-white/5 text-slate-100 [color-scheme:dark]'
+                  }`}
                 />
 
                 {/* Quick Date Shortcuts */}
@@ -559,8 +610,8 @@ export default function TransactionFormModal({
                     onClick={() => setDue(getTodayISO())}
                     className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold tracking-wide transition-all cursor-pointer border ${
                       due === getTodayISO()
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
-                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-slate-200'
+                        ? isLight ? 'bg-emerald-100 text-emerald-800 border-emerald-300 shadow-xs' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                        : isLight ? 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-slate-200'
                     }`}
                   >
                     ✨ Hoje
@@ -570,13 +621,13 @@ export default function TransactionFormModal({
                     onClick={() => setDue(getYesterdayISO())}
                     className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold tracking-wide transition-all cursor-pointer border ${
                       due === getYesterdayISO()
-                        ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-sm'
-                        : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-slate-200'
+                        ? isLight ? 'bg-indigo-100 text-indigo-800 border-indigo-300 shadow-xs' : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-sm'
+                        : isLight ? 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10 hover:text-slate-200'
                     }`}
                   >
                     ⏳ Ontem
                   </button>
-                  <span className="text-[9.5px] text-slate-400 ml-auto truncate">
+                  <span className={`text-[9.5px] ml-auto truncate ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                     {due === getTodayISO() ? 'Padrão: Hoje' : 'Data alterada'}
                   </span>
                 </div>
@@ -595,7 +646,11 @@ export default function TransactionFormModal({
             </button>
             <button
               onClick={onClose}
-              className="px-6 py-3.5 rounded-2xl border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 text-xs font-bold transition-all text-center cursor-pointer"
+              className={`px-6 py-3.5 rounded-2xl border text-xs font-bold transition-all text-center cursor-pointer ${
+                isLight 
+                  ? 'border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100' 
+                  : 'border-white/10 text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
             >
               {t('cancelar', 'Cancelar')}
             </button>
@@ -611,10 +666,14 @@ export default function TransactionFormModal({
           exit={{ opacity: 0, scale: 0.97, y: 15 }}
           transition={{ duration: 0.2 }}
           onClick={(e) => e.stopPropagation()}
-          className="fixed inset-0 z-[120] bg-[#0b0f19] flex flex-col p-4 sm:p-6 text-white overflow-hidden select-none"
+          className={`fixed inset-0 z-[120] flex flex-col p-4 sm:p-6 overflow-hidden select-none ${
+            isLight ? 'bg-slate-50 text-slate-900' : 'bg-[#0b0f19] text-white'
+          }`}
         >
           {/* Header with prominent Voltar button */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-3 gap-3 shrink-0">
+          <div className={`flex items-center justify-between border-b pb-4 mb-3 gap-3 shrink-0 ${
+            isLight ? 'border-slate-200' : 'border-white/10'
+          }`}>
             <button
               type="button"
               onClick={(e) => {
@@ -623,17 +682,23 @@ export default function TransactionFormModal({
                 setCatSearch('');
                 setShowAddCustomCat(false);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-white font-bold text-xs shadow-lg transition-all cursor-pointer group"
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border font-bold text-xs shadow-md transition-all cursor-pointer group ${
+                isLight 
+                  ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800' 
+                  : 'bg-slate-900 hover:bg-slate-800 border-white/15 text-white'
+              }`}
             >
-              <ArrowLeft className="w-4 h-4 text-indigo-400 group-hover:-translate-x-1 transition-transform" />
+              <ArrowLeft className="w-4 h-4 text-indigo-500 group-hover:-translate-x-1 transition-transform" />
               <span>Voltar ao Formulário</span>
             </button>
 
             <div className="text-right">
-              <h3 className="text-base sm:text-lg font-black uppercase tracking-wider text-white flex items-center justify-end gap-2">
+              <h3 className={`text-base sm:text-lg font-black uppercase tracking-wider flex items-center justify-end gap-2 ${
+                isLight ? 'text-slate-900' : 'text-white'
+              }`}>
                 <span>📁 Central de Categorias</span>
               </h3>
-              <p className="text-[11px] text-slate-400 hidden sm:block">
+              <p className={`text-[11px] hidden sm:block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                 Escolha uma categoria para sua movimentação ou crie uma nova
               </p>
             </div>
@@ -644,19 +709,23 @@ export default function TransactionFormModal({
             {/* Search Input & Action Button */}
             <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between shrink-0">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                <Search className={`w-4 h-4 absolute left-3.5 top-3.5 ${isLight ? 'text-slate-400' : 'text-slate-400'}`} />
                 <input
                   type="text"
                   placeholder="Pesquisar categoria por nome (ex: futebol, mercado, academia...)"
                   value={catSearch}
                   onChange={(e) => setCatSearch(e.target.value)}
-                  className="w-full bg-slate-900/90 border border-white/10 text-xs pl-10 pr-4 py-3 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner"
+                  className={`w-full border text-xs pl-10 pr-4 py-3 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${
+                    isLight 
+                      ? 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 shadow-xs' 
+                      : 'bg-slate-900/90 border-white/10 text-white placeholder-slate-500 shadow-inner'
+                  }`}
                 />
                 {catSearch && (
                   <button
                     type="button"
                     onClick={() => setCatSearch('')}
-                    className="absolute right-3.5 top-3.5 text-slate-500 hover:text-white"
+                    className={`absolute right-3.5 top-3.5 ${isLight ? 'text-slate-400 hover:text-slate-700' : 'text-slate-500 hover:text-white'}`}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -675,7 +744,9 @@ export default function TransactionFormModal({
 
             {/* Categories Grid Area (Full Height Scrollable) */}
             <div className="flex-1 overflow-y-auto pr-1">
-              <div className="flex items-center justify-between mb-3 text-[10px] uppercase font-extrabold tracking-wider text-slate-400 px-1">
+              <div className={`flex items-center justify-between mb-3 text-[10px] uppercase font-extrabold tracking-wider px-1 ${
+                isLight ? 'text-slate-500' : 'text-slate-400'
+              }`}>
                 <span>Todas as Categorias ({filteredCategories.length})</span>
                 <span>💡 Pressione & segure p/ apagar</span>
               </div>
@@ -687,12 +758,22 @@ export default function TransactionFormModal({
                     e.stopPropagation();
                     setShowAddCustomCat(true);
                   }}
-                  className="p-4 rounded-2xl bg-slate-900/40 border-2 border-dashed border-indigo-500/30 hover:border-indigo-400 hover:bg-indigo-600/10 text-indigo-300 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[110px] group shadow-sm"
+                  className={`p-4 rounded-2xl border-2 border-dashed text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[110px] group shadow-xs ${
+                    isLight 
+                      ? 'bg-white border-indigo-300 hover:border-indigo-500 hover:bg-indigo-50 text-indigo-700' 
+                      : 'bg-slate-900/40 border-indigo-500/30 hover:border-indigo-400 hover:bg-indigo-600/10 text-indigo-300'
+                  }`}
                 >
-                  <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
-                    <Plus className="w-5 h-5 text-indigo-400" />
+                  <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform ${
+                    isLight 
+                      ? 'bg-indigo-50 border-indigo-200 text-indigo-600' 
+                      : 'bg-indigo-600/20 border-indigo-500/30 text-indigo-400'
+                  }`}>
+                    <Plus className="w-5 h-5" />
                   </div>
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-300">
+                  <span className={`text-xs font-extrabold uppercase tracking-wider ${
+                    isLight ? 'text-indigo-700' : 'text-indigo-300'
+                  }`}>
                     Criar Nova
                   </span>
                 </div>
@@ -718,12 +799,16 @@ export default function TransactionFormModal({
                       onTouchEnd={(e) => handlePressEnd(item, e)}
                       className={`group relative p-4 rounded-2xl text-center cursor-pointer transition-all border select-none min-h-[110px] flex flex-col items-center justify-center ${
                         isSelected
-                          ? 'bg-indigo-600/30 border-2 border-indigo-400 text-white shadow-xl shadow-indigo-600/25 scale-[1.02]'
-                          : 'bg-slate-900/60 border-white/10 text-slate-200 hover:bg-slate-800/80 hover:border-white/20'
+                          ? isLight 
+                            ? 'bg-indigo-50 border-2 border-indigo-600 text-indigo-950 shadow-md scale-[1.02]' 
+                            : 'bg-indigo-600/30 border-2 border-indigo-400 text-white shadow-xl shadow-indigo-600/25 scale-[1.02]'
+                          : isLight 
+                            ? 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300 shadow-xs' 
+                            : 'bg-slate-900/60 border-white/10 text-slate-200 hover:bg-slate-800/80 hover:border-white/20'
                       }`}
                     >
                       {isSelected && (
-                        <span className="absolute top-2 left-2 bg-indigo-500 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-md">
+                        <span className="absolute top-2 left-2 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
                           <Check className="w-3 h-3" /> Atual
                         </span>
                       )}
@@ -738,13 +823,17 @@ export default function TransactionFormModal({
                             handlePressCancel();
                             setCategoryToDelete(item);
                           }}
-                          className="absolute top-2 right-2 p-1.5 rounded-xl bg-slate-950/80 hover:bg-rose-600 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer border border-white/10"
+                          className={`absolute top-2 right-2 p-1.5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer border ${
+                            isLight 
+                              ? 'bg-white hover:bg-rose-600 hover:text-white text-slate-500 border-slate-200 shadow-sm' 
+                              : 'bg-slate-950/80 hover:bg-rose-600 text-slate-400 hover:text-white border-white/10'
+                          }`}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
 
-                      <span className="text-3xl sm:text-4xl mb-2 transition-transform group-hover:scale-110 drop-shadow-md">
+                      <span className="text-3xl sm:text-4xl mb-2 transition-transform group-hover:scale-110 drop-shadow-xs">
                         {item.icon}
                       </span>
                       <span className="text-xs uppercase font-extrabold tracking-wider truncate max-w-full px-1">
@@ -767,10 +856,14 @@ export default function TransactionFormModal({
           exit={{ opacity: 0, scale: 0.98, y: 15 }}
           transition={{ duration: 0.2 }}
           onClick={(e) => e.stopPropagation()}
-          className="fixed inset-0 z-[130] bg-[#0b0f19] flex flex-col p-4 sm:p-6 text-white overflow-hidden select-none"
+          className={`fixed inset-0 z-[130] flex flex-col p-4 sm:p-6 overflow-hidden select-none ${
+            isLight ? 'bg-slate-50 text-slate-900' : 'bg-[#0b0f19] text-white'
+          }`}
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4 gap-3 shrink-0">
+          <div className={`flex items-center justify-between border-b pb-4 mb-4 gap-3 shrink-0 ${
+            isLight ? 'border-slate-200' : 'border-white/10'
+          }`}>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -778,9 +871,13 @@ export default function TransactionFormModal({
                   e.stopPropagation();
                   setShowAddCustomCat(false);
                 }}
-                className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-white/15 text-white font-bold text-xs shadow-lg transition-all cursor-pointer group"
+                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-2xl border font-bold text-xs shadow-md transition-all cursor-pointer group ${
+                  isLight 
+                    ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800' 
+                    : 'bg-slate-900 hover:bg-slate-800 border-white/15 text-white'
+                }`}
               >
-                <ArrowLeft className="w-4 h-4 text-indigo-400 group-hover:-translate-x-1 transition-transform" />
+                <ArrowLeft className="w-4 h-4 text-indigo-500 group-hover:-translate-x-1 transition-transform" />
                 <span>Voltar pras Categorias</span>
               </button>
 
@@ -791,18 +888,24 @@ export default function TransactionFormModal({
                   setShowAddCustomCat(false);
                   setShowCatDropdown(false);
                 }}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-semibold text-xs transition-all cursor-pointer"
+                className={`hidden sm:flex items-center gap-1.5 px-3 py-2.5 rounded-2xl border font-semibold text-xs transition-all cursor-pointer ${
+                  isLight 
+                    ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700' 
+                    : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
+                }`}
               >
                 <span>Voltar ao Formulário</span>
               </button>
             </div>
 
             <div className="text-right">
-              <h3 className="text-base sm:text-lg font-black uppercase tracking-wider text-white flex items-center justify-end gap-2">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
+              <h3 className={`text-base sm:text-lg font-black uppercase tracking-wider flex items-center justify-end gap-2 ${
+                isLight ? 'text-slate-900' : 'text-white'
+              }`}>
+                <Sparkles className="w-5 h-5 text-indigo-500" />
                 <span>Criar Nova Categoria</span>
               </h3>
-              <p className="text-[11px] text-slate-400 hidden sm:block">
+              <p className={`text-[11px] hidden sm:block ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
                 Personalize o nome e ícone para usar em seus lançamentos
               </p>
             </div>
@@ -811,22 +914,32 @@ export default function TransactionFormModal({
           {/* Main Content Area */}
           <div className="flex-1 min-h-0 flex flex-col max-w-3xl w-full mx-auto space-y-5 overflow-y-auto pr-1 pb-6">
             {/* Live Preview Card */}
-            <div className="p-5 rounded-3xl bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-950 border border-indigo-500/30 flex items-center justify-between shadow-xl">
+            <div className={`p-5 rounded-3xl border flex items-center justify-between shadow-md ${
+              isLight 
+                ? 'bg-white border-indigo-200 text-slate-900' 
+                : 'bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-950 border-indigo-500/30 text-white'
+            }`}>
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-600/20 border-2 border-indigo-400/50 flex items-center justify-center text-3xl shadow-inner">
+                <div className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center text-3xl shadow-xs ${
+                  isLight ? 'bg-indigo-50 border-indigo-200' : 'bg-indigo-600/20 border-indigo-400/50'
+                }`}>
                   {customCatIcon || '📦'}
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase tracking-widest font-extrabold text-indigo-400 block mb-0.5">
+                  <span className={`text-[10px] uppercase tracking-widest font-extrabold block mb-0.5 ${
+                    isLight ? 'text-indigo-600' : 'text-indigo-400'
+                  }`}>
                     Pré-visualização da Categoria
                   </span>
-                  <h4 className="text-lg font-bold text-white leading-tight">
+                  <h4 className={`text-lg font-bold leading-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
                     {customCatName.trim() || 'Nome da Categoria'}
                   </h4>
                 </div>
               </div>
 
-              <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold">
+              <div className={`hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border ${
+                isLight ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'
+              }`}>
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Personalizada</span>
               </div>
@@ -834,7 +947,9 @@ export default function TransactionFormModal({
 
             {/* Input Name */}
             <div className="space-y-2">
-              <label className="text-xs font-extrabold uppercase tracking-wider text-slate-300 block">
+              <label className={`text-xs font-extrabold uppercase tracking-wider block ${
+                isLight ? 'text-slate-700' : 'text-slate-300'
+              }`}>
                 1. Nome da Categoria:
               </label>
               <div className="relative">
@@ -843,13 +958,17 @@ export default function TransactionFormModal({
                   placeholder="Ex: Futebol, Studio Pilates, Pet Shop, Barbeiro..."
                   value={customCatName}
                   onChange={(e) => setCustomCatName(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/20 text-sm sm:text-base px-4 py-3.5 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-inner"
+                  className={`w-full border text-sm sm:text-base px-4 py-3.5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all ${
+                    isLight 
+                      ? 'bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 shadow-xs' 
+                      : 'bg-slate-900 border-white/20 text-white placeholder-slate-500 shadow-inner'
+                  }`}
                 />
                 {customCatName && (
                   <button
                     type="button"
                     onClick={() => setCustomCatName('')}
-                    className="absolute right-3.5 top-3.5 text-slate-400 hover:text-white"
+                    className={`absolute right-3.5 top-3.5 ${isLight ? 'text-slate-400 hover:text-slate-700' : 'text-slate-400 hover:text-white'}`}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -859,9 +978,11 @@ export default function TransactionFormModal({
 
             {/* Quick Suggestions */}
             <div className="space-y-2">
-              <label className="text-xs font-extrabold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+              <label className={`text-xs font-extrabold uppercase tracking-wider flex items-center justify-between ${
+                isLight ? 'text-slate-700' : 'text-slate-300'
+              }`}>
                 <span>2. Sugestões de Categorias Populares:</span>
-                <span className="text-[10px] text-indigo-400 font-normal">Toque para preencher rápido</span>
+                <span className={`text-[10px] font-normal ${isLight ? 'text-indigo-600' : 'text-indigo-400'}`}>Toque para preencher rápido</span>
               </label>
               <div className="flex flex-wrap gap-2 max-h-[130px] overflow-y-auto p-1">
                 {PRESET_SUGGESTIONS.map((preset, idx) => (
@@ -875,7 +996,9 @@ export default function TransactionFormModal({
                     className={`px-3 py-2 rounded-xl border text-xs font-medium flex items-center gap-2 transition-all cursor-pointer ${
                       customCatName === preset.label
                         ? 'bg-indigo-600 border-indigo-400 text-white shadow-md'
-                        : 'bg-slate-900 hover:bg-slate-800 border-white/10 text-slate-300'
+                        : isLight 
+                          ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-xs' 
+                          : 'bg-slate-900 hover:bg-slate-800 border-white/10 text-slate-300'
                     }`}
                   >
                     <span className="text-sm">{preset.icon}</span>
@@ -887,10 +1010,14 @@ export default function TransactionFormModal({
 
             {/* Emoji Selector */}
             <div className="space-y-2">
-              <label className="text-xs font-extrabold uppercase tracking-wider text-slate-300 block">
+              <label className={`text-xs font-extrabold uppercase tracking-wider block ${
+                isLight ? 'text-slate-700' : 'text-slate-300'
+              }`}>
                 3. Escolha o Ícone (Emoji):
               </label>
-              <div className="grid grid-cols-6 sm:grid-cols-10 md:grid-cols-12 gap-2 max-h-[180px] overflow-y-auto p-3 rounded-2xl bg-slate-900/80 border border-white/10">
+              <div className={`grid grid-cols-6 sm:grid-cols-10 md:grid-cols-12 gap-2 max-h-[180px] overflow-y-auto p-3 rounded-2xl border ${
+                isLight ? 'bg-white border-slate-200 shadow-xs' : 'bg-slate-900/80 border-white/10'
+              }`}>
                 {EMOJI_OPTIONS.map((emoji, idx) => (
                   <button
                     key={idx}
@@ -899,7 +1026,7 @@ export default function TransactionFormModal({
                     className={`h-10 w-10 flex items-center justify-center rounded-xl text-xl transition-all cursor-pointer ${
                       customCatIcon === emoji
                         ? 'bg-indigo-600 text-white scale-110 shadow-lg ring-2 ring-indigo-400'
-                        : 'hover:bg-white/10 text-slate-200'
+                        : isLight ? 'hover:bg-slate-100 text-slate-800' : 'hover:bg-white/10 text-slate-200'
                     }`}
                   >
                     {emoji}
@@ -910,13 +1037,19 @@ export default function TransactionFormModal({
           </div>
 
           {/* Footer Actions */}
-          <div className="border-t border-white/10 pt-4 mt-auto flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 max-w-3xl w-full mx-auto">
+          <div className={`border-t pt-4 mt-auto flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 max-w-3xl w-full mx-auto ${
+            isLight ? 'border-slate-200' : 'border-white/10'
+          }`}>
             <button
               type="button"
               onClick={() => {
                 setShowAddCustomCat(false);
               }}
-              className="w-full sm:w-auto px-5 py-3 rounded-2xl border border-white/15 text-slate-300 hover:text-white hover:bg-white/5 font-bold text-xs transition-all cursor-pointer"
+              className={`w-full sm:w-auto px-5 py-3 rounded-2xl border font-bold text-xs transition-all cursor-pointer ${
+                isLight 
+                  ? 'border-slate-200 text-slate-700 hover:bg-slate-100' 
+                  : 'border-white/15 text-slate-300 hover:text-white hover:bg-white/5'
+              }`}
             >
               Cancelar / Voltar
             </button>
@@ -928,7 +1061,9 @@ export default function TransactionFormModal({
               className={`w-full sm:w-auto px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-xl cursor-pointer ${
                 customCatName.trim()
                   ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 active:scale-95'
-                  : 'bg-slate-800 text-slate-500 border border-white/5 cursor-not-allowed'
+                  : isLight 
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed' 
+                    : 'bg-slate-800 text-slate-500 border border-white/5 cursor-not-allowed'
               }`}
             >
               <Check className="w-4 h-4" />
@@ -940,29 +1075,43 @@ export default function TransactionFormModal({
 
       {/* Confirmation Modal for Category Deletion */}
       {categoryToDelete && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs select-none">
+        <div className={`fixed inset-0 z-[130] flex items-center justify-center p-4 backdrop-blur-xs select-none ${
+          isLight ? 'bg-slate-900/40' : 'bg-slate-950/80'
+        }`}>
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="bg-[#0f1524] border border-white/10 p-6 rounded-3xl max-w-xs w-full shadow-2xl space-y-4 text-center relative z-[131]"
+            className={`p-6 rounded-3xl max-w-xs w-full shadow-2xl space-y-4 text-center relative z-[131] border ${
+              isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-[#0f1524] border-white/10 text-white'
+            }`}
           >
-            <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto text-3xl shadow-inner">
+            <div className={`w-14 h-14 rounded-2xl border flex items-center justify-center mx-auto text-3xl shadow-xs ${
+              isLight ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-rose-500/10 border-rose-500/20 text-rose-400 shadow-inner'
+            }`}>
               {categoryToDelete.icon || '🗑️'}
             </div>
             <div>
-              <h4 className="text-sm font-extrabold text-white uppercase tracking-wider">
+              <h4 className={`text-sm font-extrabold uppercase tracking-wider ${
+                isLight ? 'text-slate-900' : 'text-white'
+              }`}>
                 Excluir Categoria?
               </h4>
-              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                Tem certeza que deseja apagar a categoria <strong className="text-white">"{categoryToDelete.label}"</strong>?
+              <p className={`text-xs mt-1.5 leading-relaxed ${
+                isLight ? 'text-slate-600' : 'text-slate-400'
+              }`}>
+                Tem certeza que deseja apagar a categoria <strong className={isLight ? 'text-slate-900 font-bold' : 'text-white'}>"{categoryToDelete.label}"</strong>?
               </p>
             </div>
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setCategoryToDelete(null)}
-                className="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 text-xs font-bold transition-colors cursor-pointer"
+                className={`flex-1 py-3 rounded-xl border text-xs font-bold transition-colors cursor-pointer ${
+                  isLight 
+                    ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700' 
+                    : 'bg-slate-900 hover:bg-slate-800 border-white/10 text-slate-300'
+                }`}
               >
                 Cancelar
               </button>

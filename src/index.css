@@ -15,77 +15,170 @@ body, html {
   font-weight: 400;
 }
 
-/* Light Theme High Contrast Rule: Garante que no modo claro nenhum texto fique apagado, transparente ou ilegível */
+/* ==========================================================================
+   LIGHT THEME DESIGN SYSTEM: HIGH CONTRAST, GORGEOUS ELEVATION & SHARP LEGIBILITY
+   Mantém o Dark Mode intacto e transforma o Light Mode em uma interface premium,
+   límpida e com contraste estrito para todas as letras e cores do sistema.
+   ========================================================================== */
+
 .theme-light,
 .theme-light body,
 [data-theme="light"],
-.theme-light * {
+html.theme-light {
   color-scheme: light;
+  background-color: #f8fafc;
+  color: #0f172a;
 }
 
+/* Typography Hierarchy in Light Mode */
+.theme-light h1,
+.theme-light h2,
+.theme-light h3,
+.theme-light h4,
+.theme-light h5,
+.theme-light h6 {
+  color: #0f172a;
+}
+
+/* Base text on surfaces */
+.theme-light .text-slate-100,
+.theme-light .text-slate-200,
+.theme-light .text-slate-300,
+.theme-light .text-gray-100,
+.theme-light .text-gray-200,
+.theme-light .text-gray-300 {
+  color: #1e293b !important; /* slate-800: máxima legibilidade */
+}
+
+/* Secondary descriptions, subtitles and labels */
 .theme-light .text-slate-400,
 .theme-light .text-slate-450,
+.theme-light .text-gray-400 {
+  color: #475569 !important; /* slate-600: contraste acima de 5.8:1 no fundo claro (WCAG AAA) */
+}
+
+/* Subtle captions and helpers */
 .theme-light .text-slate-500,
-.theme-light .text-gray-400,
+.theme-light .text-slate-505,
 .theme-light .text-gray-500 {
-  color: #334155 !important; /* slate-700 / alto contraste e ótima legibilidade */
+  color: #64748b !important; /* slate-500: nítido e legível */
 }
 
-.theme-light .text-slate-300,
-.theme-light .text-slate-350,
-.theme-light .text-gray-300 {
-  color: #1e293b !important; /* slate-800 */
-}
-
-.theme-light .text-slate-200,
-.theme-light .text-slate-100,
-.theme-light .text-white {
+/* Default headings / strong elements that had text-white */
+.theme-light div:not([class*="bg-indigo-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-pink-"]):not([class*="bg-amber-"]):not([class*="bg-slate-9"]):not([class*="bg-slate-8"]):not([class*="bg-black"]):not([class*="bg-gradient-"]) > .text-white,
+.theme-light span:not([class*="bg-indigo-"]):not([class*="bg-emerald-"]):not([class*="bg-rose-"]):not([class*="bg-pink-"]):not([class*="bg-amber-"]):not([class*="bg-slate-9"]):not([class*="bg-slate-8"]):not([class*="bg-black"]):not([class*="bg-gradient-"]).text-white,
+.theme-light p.text-white,
+.theme-light h1.text-white,
+.theme-light h2.text-white,
+.theme-light h3.text-white,
+.theme-light h4.text-white,
+.theme-light h5.text-white,
+.theme-light h6.text-white {
   color: #0f172a !important; /* slate-900 */
 }
 
-/* Exceções necessárias para botões com fundo escuro/colorido no modo claro */
+/* CRITICAL: Elementos com fundos sólidos ou gradientes DEVEM SEMPRE manter texto branco puro */
+.theme-light button[class*="bg-indigo"],
+.theme-light button[class*="bg-emerald"],
+.theme-light button[class*="bg-rose"],
+.theme-light button[class*="bg-pink"],
+.theme-light button[class*="bg-amber"],
+.theme-light button[class*="bg-teal"],
+.theme-light button[class*="bg-slate-900"],
+.theme-light button[class*="bg-slate-850"],
+.theme-light button[class*="bg-slate-800"],
+.theme-light [class*="bg-gradient-to-r"],
 .theme-light .bg-indigo-600,
-.theme-light .bg-indigo-600 *,
+.theme-light .bg-indigo-500,
 .theme-light .bg-emerald-600,
-.theme-light .bg-emerald-600 *,
+.theme-light .bg-emerald-500,
 .theme-light .bg-rose-600,
-.theme-light .bg-rose-600 *,
-.theme-light .bg-slate-900,
-.theme-light .bg-slate-900 *,
-.theme-light .bg-slate-800,
-.theme-light .bg-slate-800 *,
-.theme-light .bg-gradient-to-r,
-.theme-light .bg-gradient-to-r *,
-.theme-light button[class*="bg-indigo-600"],
-.theme-light button[class*="bg-indigo-600"] * {
+.theme-light .bg-rose-500,
+.theme-light .bg-amber-600,
+.theme-light .bg-amber-500,
+.theme-light .badge-solid-white {
   color: #ffffff !important;
 }
 
-/* Manter cores de acento vivas e contrastadas no modo claro */
+.theme-light button[class*="bg-indigo"] *,
+.theme-light button[class*="bg-emerald"] *,
+.theme-light button[class*="bg-rose"] *,
+.theme-light button[class*="bg-pink"] *,
+.theme-light button[class*="bg-amber"] *,
+.theme-light button[class*="bg-teal"] *,
+.theme-light button[class*="bg-slate-900"] *,
+.theme-light button[class*="bg-slate-850"] *,
+.theme-light button[class*="bg-slate-800"] *,
+.theme-light [class*="bg-gradient-to-r"] * {
+  color: #ffffff !important;
+}
+
+/* Manter cores de acento vivas, ricas e de fácil visualização no modo claro */
 .theme-light .text-emerald-400,
-.theme-light .text-emerald-450 {
-  color: #047857 !important; /* emerald-700 */
+.theme-light .text-emerald-450,
+.theme-light .text-emerald-500 {
+  color: #047857 !important; /* emerald-700: verde rico e nítido */
 }
 
 .theme-light .text-rose-400,
 .theme-light .text-rose-450,
 .theme-light .text-rose-500 {
-  color: #be123c !important; /* rose-700 */
+  color: #be123c !important; /* rose-700: vermelho vivo e nítido */
 }
 
 .theme-light .text-indigo-400,
 .theme-light .text-indigo-300 {
-  color: #4338ca !important; /* indigo-700 */
+  color: #4338ca !important; /* indigo-700: azul índigo real */
 }
 
 .theme-light .text-amber-400,
 .theme-light .text-amber-500 {
-  color: #b45309 !important; /* amber-700 */
+  color: #b45309 !important; /* amber-700: dourado/âmbar escuro visível */
 }
 
 .theme-light .text-sky-400,
 .theme-light .text-cyan-400 {
-  color: #0369a1 !important; /* sky-700 */
+  color: #0369a1 !important; /* sky-700: ciano visível */
+}
+
+.theme-light .text-violet-400,
+.theme-light .text-purple-400 {
+  color: #6d28d9 !important; /* violet-700 */
+}
+
+/* Glass Panels no modo claro viram cartões brancos limpos e elegantes */
+.theme-light .glass-panel,
+[data-theme="light"] .glass-panel {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.04) !important;
+  color: #0f172a !important;
+}
+
+.theme-light .glass-panel-light,
+[data-theme="light"] .glass-panel-light {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04) !important;
+}
+
+/* Inputs and Forms in Light Mode */
+.theme-light input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.theme-light select,
+.theme-light textarea {
+  color-scheme: light;
+}
+
+/* Scrollbars no modo claro */
+.theme-light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.theme-light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* Custom Scrollbar */

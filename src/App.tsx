@@ -369,7 +369,7 @@ function MainApp() {
     return !!(user && user.email && VIP_EMAILS.includes(user.email.toLowerCase().trim()));
   }, [user, VIP_EMAILS]);
 
-  const ADMIN_EMAILS = useMemo(() => ['bjcarvalho07@gmail.com', 'bjcarvalho007@gmail.com'], []);
+  const ADMIN_EMAILS = useMemo(() => ['bjcarvalho07@gmail.com'], []);
 
   const isAdmin = useMemo(() => {
     return !!(user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim()));
@@ -4663,7 +4663,7 @@ function MainApp() {
                     <AdminPanel
                       currentTheme={theme}
                       showToast={triggerToast}
-                      adminEmail={user?.email || 'bjcarvalho07@gmail.com'}
+                      adminEmail={user?.email || ''}
                     />
                   ) : (
                     <div className={`p-8 sm:p-12 rounded-3xl border text-center space-y-4 my-8 max-w-xl mx-auto shadow-2xl ${

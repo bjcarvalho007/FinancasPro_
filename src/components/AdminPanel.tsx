@@ -35,7 +35,6 @@ const ALLOWED_ADMIN_EMAILS = ['bjcarvalho07@gmail.com'];
 
 const KNOWN_VIP_EMAILS = [
   'bjcarvalho07@gmail.com',
-  'bjcarvalho007@gmail.com',
   'msouzacintia600@gmail.com',
   'teste@gmail.com',
   'irakellygaby1@icloud.com'

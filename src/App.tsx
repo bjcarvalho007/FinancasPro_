@@ -357,7 +357,13 @@ function MainApp() {
 
   const monthsPortuguese = monthsList;
 
-  const VIP_EMAILS = useMemo(() => ['bjcarvalho07@gmail.com', 'msouzacintia600@gmail.com', 'teste@gmail.com', 'bjcarvalho007@gmail.com'], []);
+  const VIP_EMAILS = useMemo(() => [
+    'bjcarvalho07@gmail.com', 
+    'msouzacintia600@gmail.com', 
+    'teste@gmail.com', 
+    'bjcarvalho007@gmail.com',
+    'irakellygaby1@icloud.com'
+  ], []);
 
   const isVIP = useMemo(() => {
     return !!(user && user.email && VIP_EMAILS.includes(user.email.toLowerCase().trim()));
@@ -857,17 +863,18 @@ function MainApp() {
     const unsubUserProfile = onSnapshot(userRef, (docSnap) => {
       let profileData = docSnap.exists() ? docSnap.data() : null;
 
-      // Auto-liberação de 30 dias adicionais para o usuário irakellygaby1@icloud.com (renovado até 08/08/2026, após o vencimento em 09/07/2026)
+      // Auto-liberação de acesso PRO garantido para a assinante irakellygaby1@icloud.com
       if (user && user.email && user.email.toLowerCase().trim() === 'irakellygaby1@icloud.com') {
-        const targetExpiry = new Date('2026-08-08T23:29:39Z'); // Renovado por mais 30 dias (de 09/07/2026 para 08/08/2026)
+        const targetExpiry = new Date('2030-12-31T23:59:59Z');
         const currentExpiryStr = profileData?.dataVencimento;
-        const hasValidSub = profileData?.assinante === true && currentExpiryStr && Date.parse(currentExpiryStr) >= targetExpiry.getTime();
+        const hasValidSub = profileData?.assinante === true && currentExpiryStr && Date.parse(currentExpiryStr) >= new Date('2027-01-01').getTime();
 
         if (!hasValidSub) {
           setDoc(userRef, {
             assinante: true,
             dataVencimento: targetExpiry.toISOString(),
             paymentStatus: 'approved',
+            paymentSystem: 'MercadoPago',
             updatedAt: new Date().toISOString()
           }, { merge: true }).catch(err => {
             console.error("Erro ao auto-liberar acesso pro irakellygaby1@icloud.com:", err);

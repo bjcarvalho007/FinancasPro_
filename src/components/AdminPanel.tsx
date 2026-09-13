@@ -33,6 +33,14 @@ interface AdminPanelProps {
 
 const ALLOWED_ADMIN_EMAILS = ['bjcarvalho07@gmail.com', 'bjcarvalho007@gmail.com'];
 
+const KNOWN_VIP_EMAILS = [
+  'bjcarvalho07@gmail.com',
+  'bjcarvalho007@gmail.com',
+  'msouzacintia600@gmail.com',
+  'teste@gmail.com',
+  'irakellygaby1@icloud.com'
+];
+
 export default function AdminPanel({
   currentTheme,
   showToast,
@@ -162,7 +170,274 @@ export default function AdminPanel({
     }
   }, [selectedUserForLogs]);
 
-  // Stream all users from Firestore
+  // Helper to parse any date format (Firestore Timestamp, ISO, Brazilian DD/MM/YYYY, or timestamp number)
+  const parseDateToMs = (val: any): number | null => {
+    if (!val) return null;
+    if (typeof val === 'number') {
+      return isNaN(val) ? null : val;
+    }
+    if (typeof val === 'object') {
+      if (typeof val.toDate === 'function') {
+        try { return val.toDate().getTime(); } catch { /* ignore */ }
+      }
+      if (typeof val.seconds === 'number') {
+        return val.seconds * 1000;
+      }
+    }
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed) return null;
+
+      // Check Brazilian format: DD/MM/YYYY or DD/MM/YYYY HH:mm:ss
+      const brMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (brMatch) {
+        const day = parseInt(brMatch[1], 10);
+        const month = parseInt(brMatch[2], 10) - 1;
+        const year = parseInt(brMatch[3], 10);
+        const d = new Date(year, month, day, 23, 59, 59);
+        return isNaN(d.getTime()) ? null : d.getTime();
+      }
+
+      const parsed = Date.parse(trimmed);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return null;
+  };
+
+  // Helper calculation for days remaining
+  const calculateDaysRemaining = (dataVencimento?: any) => {
+    if (!dataVencimento) return null;
+    const expiryMs = parseDateToMs(dataVencimento);
+    if (!expiryMs) return null;
+    const diffMs = expiryMs - Date.now();
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  };
+
+  // Check if user has active Pro access
+  const isUserPro = (u: UserProfileData): boolean => {
+    const emailLower = (u.email || '').toLowerCase().trim();
+    if (KNOWN_VIP_EMAILS.includes(emailLower)) return true;
+
+    const days = calculateDaysRemaining(u.dataVencimento);
+    const approvedStatuses = ['approved', 'paid', 'approved_admin', 'vip_access', 'active'];
+    const hasApprovedStatus = approvedStatuses.includes((u.paymentStatus || '').toLowerCase().trim());
+    const isFlaggedAssinante = u.assinante === true || String(u.assinante).toLowerCase() === 'true';
+
+    // 1. If flagged as assinante or has approved payment status
+    if (isFlaggedAssinante || hasApprovedStatus) {
+      // If days is null (lifetime/not set) or positive (future), it's active PRO
+      if (days === null || days > 0) return true;
+    }
+
+    // 2. If has future expiry date and a payment trace
+    if (days !== null && days > 0 && (u.paymentId || u.paymentApprovedAt || u.dataAquisicao)) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Check if user was a paid/Pro subscriber but their period has expired
+  const isUserPaymentExpired = (u: UserProfileData): boolean => {
+    if (isUserPro(u)) return false;
+    const approvedStatuses = ['approved', 'paid', 'approved_admin', 'vip_access'];
+    const hasApprovedStatus = approvedStatuses.includes((u.paymentStatus || '').toLowerCase().trim());
+    const isFlaggedAssinante = u.assinante === true || String(u.assinante).toLowerCase() === 'true';
+    const days = calculateDaysRemaining(u.dataVencimento);
+
+    return (hasApprovedStatus || isFlaggedAssinante) && days !== null && days <= 0;
+  };
+
+  // Helper to process snapshots from users and tokens_pagos
+  const processSnapshots = (usersSnap: any, tokensSnap: any) => {
+    const tokensByEmail = new Map<string, any>();
+    const tokensByUserId = new Map<string, any>();
+
+    if (tokensSnap && !tokensSnap.empty) {
+      tokensSnap.forEach((docSnap: any) => {
+        const tData = docSnap.data();
+        const tokenKey = docSnap.id;
+        const email = (tData.email || '').toLowerCase().trim();
+        const userId = tData.userId;
+        const item = { ...tData, token: tData.token || tokenKey };
+        if (email) tokensByEmail.set(email, item);
+        if (userId) tokensByUserId.set(userId, item);
+      });
+    }
+
+    const emailMap = new Map<string, UserProfileData & { allUids: string[] }>();
+
+    usersSnap.forEach((docSnap: any) => {
+      const data = docSnap.data();
+      const rawEmail = data.email || 'Sem e-mail';
+      const emailKey = rawEmail.toLowerCase().trim();
+
+      // Normalize date fields
+      let vencimentoStr = '';
+      if (data.dataVencimento) {
+        if (typeof data.dataVencimento === 'string') vencimentoStr = data.dataVencimento;
+        else if (typeof data.dataVencimento?.toDate === 'function') vencimentoStr = data.dataVencimento.toDate().toISOString();
+        else if (typeof data.dataVencimento?.seconds === 'number') vencimentoStr = new Date(data.dataVencimento.seconds * 1000).toISOString();
+      }
+
+      let createdStr = '';
+      if (data.createdAt) {
+        if (typeof data.createdAt === 'string') createdStr = data.createdAt;
+        else if (typeof data.createdAt?.toDate === 'function') createdStr = data.createdAt.toDate().toISOString();
+        else if (typeof data.createdAt?.seconds === 'number') createdStr = new Date(data.createdAt.seconds * 1000).toISOString();
+      }
+
+      let lastLoginStr = '';
+      if (data.lastLoginAt) {
+        if (typeof data.lastLoginAt === 'string') lastLoginStr = data.lastLoginAt;
+        else if (typeof data.lastLoginAt?.toDate === 'function') lastLoginStr = data.lastLoginAt.toDate().toISOString();
+        else if (typeof data.lastLoginAt?.seconds === 'number') lastLoginStr = new Date(data.lastLoginAt.seconds * 1000).toISOString();
+      }
+
+      const isSub = data.assinante === true || String(data.assinante).toLowerCase() === 'true' || data.isPro === true || data.plan === 'pro';
+
+      const currentItem: UserProfileData & { allUids: string[] } = {
+        uid: docSnap.id,
+        allUids: [docSnap.id],
+        email: rawEmail,
+        username: data.username || data.displayName || '',
+        displayName: data.displayName || '',
+        createdAt: createdStr,
+        lastLoginAt: lastLoginStr,
+        assinante: isSub,
+        dataVencimento: vencimentoStr,
+        paymentStatus: data.paymentStatus || '',
+        paymentSystem: data.paymentSystem || '',
+        paymentId: data.paymentId || data.token || '',
+        paymentApprovedAt: data.paymentApprovedAt || data.dataAquisicao || '',
+        dataAquisicao: data.dataAquisicao || data.paymentApprovedAt || ''
+      };
+
+      if (emailKey === 'sem e-mail' || !emailKey) {
+        emailMap.set(`nouid_${docSnap.id}`, currentItem);
+      } else if (!emailMap.has(emailKey)) {
+        emailMap.set(emailKey, currentItem);
+      } else {
+        const existing = emailMap.get(emailKey)!;
+        if (!existing.allUids.includes(docSnap.id)) {
+          existing.allUids.push(docSnap.id);
+        }
+
+        // Never overwrite a paid account with an unpaid one; keep assinante if true in ANY doc
+        if (currentItem.assinante) {
+          existing.assinante = true;
+        }
+
+        const approvedStatuses = ['approved', 'paid', 'approved_admin', 'vip_access', 'active'];
+        if (currentItem.paymentStatus && approvedStatuses.includes(currentItem.paymentStatus.toLowerCase())) {
+          existing.paymentStatus = currentItem.paymentStatus;
+        } else if (!existing.paymentStatus && currentItem.paymentStatus) {
+          existing.paymentStatus = currentItem.paymentStatus;
+        }
+
+        // Pick whichever expiration date is furthest in the future
+        const existingMs = parseDateToMs(existing.dataVencimento) || 0;
+        const currentMs = parseDateToMs(currentItem.dataVencimento) || 0;
+        if (currentMs > existingMs) {
+          existing.dataVencimento = currentItem.dataVencimento;
+        }
+
+        if (!existing.paymentId && currentItem.paymentId) existing.paymentId = currentItem.paymentId;
+        if (!existing.paymentSystem && currentItem.paymentSystem) existing.paymentSystem = currentItem.paymentSystem;
+        if (!existing.paymentApprovedAt && currentItem.paymentApprovedAt) existing.paymentApprovedAt = currentItem.paymentApprovedAt;
+        if (!existing.dataAquisicao && currentItem.dataAquisicao) existing.dataAquisicao = currentItem.dataAquisicao;
+        if (!existing.username && currentItem.username) existing.username = currentItem.username;
+        if (!existing.displayName && currentItem.displayName) existing.displayName = currentItem.displayName;
+
+        const existingLoginMs = parseDateToMs(existing.lastLoginAt) || 0;
+        const currentLoginMs = parseDateToMs(currentItem.lastLoginAt) || 0;
+        if (currentLoginMs > existingLoginMs) {
+          existing.lastLoginAt = currentItem.lastLoginAt;
+        }
+
+        const existingCreatedMs = parseDateToMs(existing.createdAt) || 0;
+        const currentCreatedMs = parseDateToMs(currentItem.createdAt) || 0;
+        if (currentCreatedMs > 0 && (existingCreatedMs === 0 || currentCreatedMs < existingCreatedMs)) {
+          existing.createdAt = currentItem.createdAt;
+        }
+      }
+    });
+
+    // Cross-reference with tokens_pagos to detect paid users
+    emailMap.forEach((user, emailKey) => {
+      let matchedToken = tokensByEmail.get(emailKey);
+      if (!matchedToken && user.allUids) {
+        for (const uid of user.allUids) {
+          if (tokensByUserId.has(uid)) {
+            matchedToken = tokensByUserId.get(uid);
+            break;
+          }
+        }
+      }
+
+      if (matchedToken) {
+        user.assinante = true;
+        if (!user.paymentStatus || !['approved', 'paid', 'approved_admin', 'vip_access'].includes(user.paymentStatus.toLowerCase())) {
+          user.paymentStatus = 'approved';
+        }
+        if (!user.paymentSystem) user.paymentSystem = matchedToken.paymentSystem || 'MercadoPago';
+        if (!user.paymentId) user.paymentId = matchedToken.token || '';
+        if (!user.paymentApprovedAt) user.paymentApprovedAt = matchedToken.usedAt || matchedToken.createdAt || '';
+        if (!user.dataAquisicao) user.dataAquisicao = matchedToken.createdAt || matchedToken.usedAt || '';
+
+        const currentExpMs = parseDateToMs(user.dataVencimento);
+        if (!currentExpMs || currentExpMs < Date.now()) {
+          const tokenDateMs = parseDateToMs(matchedToken.usedAt || matchedToken.createdAt) || Date.now();
+          const estExpiry = new Date(tokenDateMs + 30 * 24 * 60 * 60 * 1000);
+          if (estExpiry.getTime() > Date.now()) {
+            user.dataVencimento = estExpiry.toISOString();
+          }
+        }
+      }
+    });
+
+    const users = Array.from(emailMap.values());
+
+    // Ensure all known VIP accounts are properly represented as VIP Pro
+    KNOWN_VIP_EMAILS.forEach((vipEmail) => {
+      const key = vipEmail.toLowerCase().trim();
+      const existing = emailMap.get(key);
+      if (existing) {
+        existing.assinante = true;
+        existing.paymentStatus = existing.paymentStatus || 'vip_access';
+        existing.paymentSystem = existing.paymentSystem || 'Acesso VIP';
+        const expMs = parseDateToMs(existing.dataVencimento);
+        if (!expMs || expMs < Date.now()) {
+          existing.dataVencimento = new Date('2030-12-31T23:59:59Z').toISOString();
+        }
+      } else {
+        users.push({
+          uid: `vip_${key.replace(/[^a-z0-9]/g, '_')}`,
+          allUids: [`vip_${key.replace(/[^a-z0-9]/g, '_')}`],
+          email: vipEmail,
+          username: vipEmail.split('@')[0],
+          displayName: vipEmail.split('@')[0],
+          createdAt: new Date().toISOString(),
+          lastLoginAt: '',
+          assinante: true,
+          dataVencimento: new Date('2030-12-31T23:59:59Z').toISOString(),
+          paymentStatus: 'vip_access',
+          paymentSystem: 'Acesso VIP'
+        });
+      }
+    });
+
+    users.sort((a, b) => {
+      const dateA = a.createdAt ? parseDateToMs(a.createdAt) || 0 : 0;
+      const dateB = b.createdAt ? parseDateToMs(b.createdAt) || 0 : 0;
+      return dateB - dateA;
+    });
+
+    setUsersList(users);
+    setLoading(false);
+  };
+
+  // Stream all users and paid tokens from Firestore
   useEffect(() => {
     if (!isAuthorized) {
       setLoading(false);
@@ -170,110 +445,17 @@ export default function AdminPanel({
     }
 
     setLoading(true);
+    let latestUsersSnap: any = null;
+    let latestTokensSnap: any = null;
+
     const usersRef = collection(db, 'users');
-    const unsubscribe = onSnapshot(
+    const tokensRef = collection(db, 'tokens_pagos');
+
+    const unsubUsers = onSnapshot(
       usersRef,
-      (snapshot) => {
-        const emailMap = new Map<string, UserProfileData & { allUids: string[] }>();
-
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          const rawEmail = data.email || 'Sem e-mail';
-          const emailKey = rawEmail.toLowerCase().trim();
-
-          const currentItem: UserProfileData & { allUids: string[] } = {
-            uid: docSnap.id,
-            allUids: [docSnap.id],
-            email: rawEmail,
-            username: data.username || data.displayName || '',
-            displayName: data.displayName || '',
-            createdAt: data.createdAt || '',
-            lastLoginAt: data.lastLoginAt || '',
-            assinante: data.assinante === true,
-            dataVencimento: data.dataVencimento || '',
-            paymentStatus: data.paymentStatus || '',
-            paymentSystem: data.paymentSystem || '',
-            paymentId: data.paymentId || '',
-            paymentApprovedAt: data.paymentApprovedAt || data.dataAquisicao || '',
-            dataAquisicao: data.dataAquisicao || data.paymentApprovedAt || ''
-          };
-
-          if (emailKey === 'sem e-mail' || !emailKey) {
-            emailMap.set(`nouid_${docSnap.id}`, currentItem);
-          } else if (!emailMap.has(emailKey)) {
-            emailMap.set(emailKey, currentItem);
-          } else {
-            const existing = emailMap.get(emailKey)!;
-            if (!existing.allUids.includes(docSnap.id)) {
-              existing.allUids.push(docSnap.id);
-            }
-
-            const existingExp = existing.dataVencimento ? Date.parse(existing.dataVencimento) : 0;
-            const currentExp = currentItem.dataVencimento ? Date.parse(currentItem.dataVencimento) : 0;
-            const existingIsPrem = existing.assinante && existingExp > Date.now();
-            const currentIsPrem = currentItem.assinante && currentExp > Date.now();
-
-            let replace = false;
-            if (currentIsPrem && !existingIsPrem) {
-              replace = true;
-            } else if (currentIsPrem === existingIsPrem) {
-              const existingTime = Math.max(
-                existing.createdAt ? Date.parse(existing.createdAt) || 0 : 0,
-                existing.lastLoginAt ? Date.parse(existing.lastLoginAt) || 0 : 0
-              );
-              const currentTime = Math.max(
-                currentItem.createdAt ? Date.parse(currentItem.createdAt) || 0 : 0,
-                currentItem.lastLoginAt ? Date.parse(currentItem.lastLoginAt) || 0 : 0
-              );
-              if (currentTime > existingTime) {
-                replace = true;
-              }
-            }
-
-            if (replace) {
-              const uids = existing.allUids;
-              emailMap.set(emailKey, { ...currentItem, allUids: uids });
-            } else {
-              if (!existing.username && currentItem.username) existing.username = currentItem.username;
-              if (!existing.dataVencimento && currentItem.dataVencimento) existing.dataVencimento = currentItem.dataVencimento;
-              if (!existing.paymentApprovedAt && currentItem.paymentApprovedAt) existing.paymentApprovedAt = currentItem.paymentApprovedAt;
-              if (!existing.dataAquisicao && currentItem.dataAquisicao) existing.dataAquisicao = currentItem.dataAquisicao;
-            }
-          }
-        });
-
-        const users = Array.from(emailMap.values());
-
-        // Garantir exibição de e-mails VIPs configurados mesmo que ainda não tenham documento Firestore
-        const KNOWN_VIP_EMAILS = ['msouzacintia600@gmail.com', 'teste@gmail.com'];
-        KNOWN_VIP_EMAILS.forEach((vipEmail) => {
-          const key = vipEmail.toLowerCase().trim();
-          if (!emailMap.has(key)) {
-            users.push({
-              uid: `vip_${key.replace(/[^a-z0-9]/g, '_')}`,
-              allUids: [`vip_${key.replace(/[^a-z0-9]/g, '_')}`],
-              email: vipEmail,
-              username: vipEmail.split('@')[0],
-              displayName: vipEmail.split('@')[0],
-              createdAt: new Date().toISOString(),
-              lastLoginAt: '',
-              assinante: true,
-              dataVencimento: new Date('2030-12-31T23:59:59Z').toISOString(),
-              paymentStatus: 'vip_access',
-              paymentSystem: 'Acesso VIP'
-            });
-          }
-        });
-
-        // Ordenar por data de criação / login mais recente
-        users.sort((a, b) => {
-          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return dateB - dateA;
-        });
-
-        setUsersList(users);
-        setLoading(false);
+      (usersSnap) => {
+        latestUsersSnap = usersSnap;
+        processSnapshots(latestUsersSnap, latestTokensSnap);
       },
       (error) => {
         console.error('Erro ao carregar lista de usuários no Admin:', error);
@@ -282,23 +464,51 @@ export default function AdminPanel({
       }
     );
 
-    return () => unsubscribe();
-  }, []);
+    const unsubTokens = onSnapshot(
+      tokensRef,
+      (tokensSnap) => {
+        latestTokensSnap = tokensSnap;
+        if (latestUsersSnap) {
+          processSnapshots(latestUsersSnap, latestTokensSnap);
+        }
+      },
+      (err) => {
+        console.warn('Aviso: tokens_pagos listener opcional:', err);
+      }
+    );
 
-  // Helper calculation for days remaining
-  const calculateDaysRemaining = (dataVencimento?: string) => {
-    if (!dataVencimento) return null;
-    const expiryMs = Date.parse(dataVencimento);
-    if (isNaN(expiryMs)) return null;
-    const diffMs = expiryMs - Date.now();
-    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    return () => {
+      unsubUsers();
+      unsubTokens();
+    };
+  }, [isAuthorized]);
+
+  // Manual live refresh function directly from Firestore server
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      const usersRef = collection(db, 'users');
+      const tokensRef = collection(db, 'tokens_pagos');
+      const [usersSnap, tokensSnap] = await Promise.all([
+        getDocs(usersRef),
+        getDocs(tokensRef).catch(() => null)
+      ]);
+      processSnapshots(usersSnap, tokensSnap);
+      showToast('Dados de usuários e pagamentos atualizados com sucesso!', 'success');
+    } catch (err) {
+      console.error('Erro ao recarregar dados do Admin:', err);
+      showToast('Erro ao buscar dados atualizados do servidor.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Helper to format ISO date to readable PT-BR string
   const formatDateTime = (isoStr?: string) => {
     if (!isoStr) return null;
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return null;
+    const ms = parseDateToMs(isoStr);
+    if (!ms) return null;
+    const d = new Date(ms);
     const dateFormatted = d.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -320,8 +530,8 @@ export default function AdminPanel({
         if (formatted) return { type: 'premium', label: 'Adquirido em', value: formatted };
       }
       if (u.dataVencimento) {
-        const expTime = Date.parse(u.dataVencimento);
-        if (!isNaN(expTime)) {
+        const expTime = parseDateToMs(u.dataVencimento);
+        if (expTime) {
           const estimatedAcq = new Date(expTime - 30 * 24 * 60 * 60 * 1000);
           return {
             type: 'premium',
@@ -357,11 +567,11 @@ export default function AdminPanel({
 
     usersList.forEach((u) => {
       const days = calculateDaysRemaining(u.dataVencimento);
-      const isPremium = u.assinante && days !== null && days > 0;
+      const isPremium = isUserPro(u);
       
       if (isPremium) {
         premiumCount++;
-        if (days <= 5) {
+        if (days !== null && days <= 5) {
           expiringSoonCount++;
         }
       } else {
@@ -385,12 +595,12 @@ export default function AdminPanel({
   // Helper to extract timestamp ms for latest login
   const getLastLoginTimeMs = (u: UserProfileData) => {
     if (u.lastLoginAt) {
-      const t = Date.parse(u.lastLoginAt);
-      if (!isNaN(t)) return t;
+      const t = parseDateToMs(u.lastLoginAt);
+      if (t) return t;
     }
     if (u.createdAt) {
-      const t = Date.parse(u.createdAt);
-      if (!isNaN(t)) return t;
+      const t = parseDateToMs(u.createdAt);
+      if (t) return t;
     }
     return 0;
   };
@@ -406,7 +616,7 @@ export default function AdminPanel({
         (u.uid && u.uid.toLowerCase().includes(searchLower));
 
       const days = calculateDaysRemaining(u.dataVencimento);
-      const isPremium = u.assinante && days !== null && days > 0;
+      const isPremium = isUserPro(u);
 
       if (!matchesSearch) return false;
 
@@ -516,8 +726,8 @@ export default function AdminPanel({
       // Se já tem data de vencimento válida no futuro, soma aos dias existentes, senão soma a partir de hoje
       let baseDate = new Date();
       if (userDoc.dataVencimento) {
-        const existingMs = Date.parse(userDoc.dataVencimento);
-        if (!isNaN(existingMs) && existingMs > Date.now()) {
+        const existingMs = parseDateToMs(userDoc.dataVencimento);
+        if (existingMs && existingMs > Date.now()) {
           baseDate = new Date(existingMs);
         }
       }
@@ -539,6 +749,22 @@ export default function AdminPanel({
             dataAquisicao: userDoc.dataAquisicao || userDoc.paymentApprovedAt || nowIso,
             updatedAt: nowIso
           }, { merge: true })
+        )
+      );
+
+      // Instant UI update
+      setUsersList((prev) =>
+        prev.map((item) =>
+          item.email.toLowerCase().trim() === userDoc.email.toLowerCase().trim()
+            ? {
+                ...item,
+                assinante: true,
+                dataVencimento: newExpiryStr,
+                paymentStatus: 'approved_admin',
+                paymentSystem: 'AdminManual',
+                paymentApprovedAt: item.paymentApprovedAt || nowIso
+              }
+            : item
         )
       );
 
@@ -564,6 +790,21 @@ export default function AdminPanel({
           }, { merge: true })
         )
       );
+
+      // Instant UI update
+      setUsersList((prev) =>
+        prev.map((item) =>
+          item.email.toLowerCase().trim() === userDoc.email.toLowerCase().trim()
+            ? {
+                ...item,
+                assinante: false,
+                dataVencimento: nowIso,
+                paymentStatus: 'revoked_admin'
+              }
+            : item
+        )
+      );
+
       showToast(`Acesso Premium revogado para ${userDoc.email}.`, 'warning');
     } catch (err) {
       console.error('Erro ao revogar acesso:', err);
@@ -612,6 +853,21 @@ export default function AdminPanel({
             paymentSystem: 'AdminManual',
             updatedAt: nowIso
           }, { merge: true })
+        )
+      );
+
+      // Instant UI update
+      setUsersList((prev) =>
+        prev.map((item) =>
+          item.email.toLowerCase().trim() === editingUser.email.toLowerCase().trim()
+            ? {
+                ...item,
+                assinante: isFuture,
+                dataVencimento: targetExpiry.toISOString(),
+                paymentStatus: isFuture ? 'approved_admin' : 'expired_admin',
+                paymentSystem: 'AdminManual'
+              }
+            : item
         )
       );
 
@@ -675,14 +931,13 @@ export default function AdminPanel({
 
           <div className="shrink-0 flex items-center gap-2">
             <button
-              onClick={() => {
-                setLoading(true);
-                setTimeout(() => setLoading(false), 500);
-              }}
-              className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md"
+              onClick={handleRefresh}
+              disabled={loading}
+              className="px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md disabled:opacity-50"
+              title="Sincronizar e recarregar dados do banco de dados em tempo real"
             >
               <RefreshCw className={`w-4 h-4 text-indigo-300 ${loading ? 'animate-spin' : ''}`} />
-              <span>Atualizar</span>
+              <span>{loading ? 'Atualizando...' : 'Atualizar'}</span>
             </button>
           </div>
         </div>
@@ -861,13 +1116,14 @@ export default function AdminPanel({
         ) : (
           filteredUsers.map((u) => {
             const daysRemaining = calculateDaysRemaining(u.dataVencimento);
-            const isPremiumActive = u.assinante && daysRemaining !== null && daysRemaining > 0;
-            const isExpiringSoon = isPremiumActive && daysRemaining <= 5;
+            const isPremiumActive = isUserPro(u);
+            const isExpiredPro = isUserPaymentExpired(u);
+            const isExpiringSoon = isPremiumActive && daysRemaining !== null && daysRemaining <= 5;
 
             // Effective expiration date for Free / Trial accounts (explicit dataVencimento or createdAt + 5 days)
-            const effectiveFreeVencimento = u.dataVencimento || (u.createdAt ? new Date(Date.parse(u.createdAt) + 5 * 24 * 60 * 60 * 1000).toISOString() : null);
+            const effectiveFreeVencimento = u.dataVencimento || (u.createdAt ? new Date((parseDateToMs(u.createdAt) || Date.now()) + 5 * 24 * 60 * 60 * 1000).toISOString() : null);
             const freeDaysRemaining = calculateDaysRemaining(effectiveFreeVencimento || undefined);
-            const isFreeTrialActive = !isPremiumActive && freeDaysRemaining !== null && freeDaysRemaining > 0;
+            const isFreeTrialActive = !isPremiumActive && !isExpiredPro && freeDaysRemaining !== null && freeDaysRemaining > 0;
 
             return (
               <div
@@ -883,11 +1139,13 @@ export default function AdminPanel({
                   <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-base font-black shrink-0 border ${
                     isPremiumActive
                       ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                      : isFreeTrialActive
+                      : isExpiredPro
                       ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                      : isFreeTrialActive
+                      ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400'
                       : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
                   }`}>
-                    {isPremiumActive ? '👑' : isFreeTrialActive ? '⏳' : '👤'}
+                    {isPremiumActive ? '👑' : isExpiredPro ? '⚠️' : isFreeTrialActive ? '⏳' : '👤'}
                   </div>
 
                   <div className="min-w-0 space-y-1">
@@ -906,10 +1164,15 @@ export default function AdminPanel({
                           <Sparkles className="w-3 h-3" />
                           {isExpiringSoon ? 'Vencendo em breve' : 'Assinante Premium'}
                         </span>
+                      ) : isExpiredPro ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" />
+                          Assinatura Paga (Expirada)
+                        </span>
                       ) : (
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
                           isFreeTrialActive
-                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 animate-pulse'
+                            ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30 animate-pulse'
                             : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
                         }`}>
                           {isFreeTrialActive ? `Trial Ativo (${freeDaysRemaining}d restante${freeDaysRemaining > 1 ? 's' : ''})` : 'Gratuito / Trial Expirado'}
@@ -959,18 +1222,18 @@ export default function AdminPanel({
                         );
                       })()}
 
-                      {/* 2. Vencimento Date */}
+                      {/* 2. Vencimento Date for Premium */}
                       {isPremiumActive && u.dataVencimento && (
                         <span className="flex items-center gap-1 text-slate-300">
                           <Clock className="w-3 h-3 text-amber-400 shrink-0" />
                           Vencimento:{' '}
                           <strong className="text-white">
-                            {new Date(u.dataVencimento).toLocaleDateString('pt-BR')}
+                            {formatDateTime(u.dataVencimento) || u.dataVencimento}
                           </strong>
                         </span>
                       )}
 
-                      {/* 3. Days Remaining */}
+                      {/* 3. Days Remaining for Premium */}
                       {daysRemaining !== null && isPremiumActive && (
                         <span className={`font-extrabold ${
                           daysRemaining <= 5 ? 'text-amber-400 animate-pulse' : 'text-emerald-400'
@@ -979,7 +1242,16 @@ export default function AdminPanel({
                         </span>
                       )}
 
-                      {!isPremiumActive && (
+                      {/* Expired Pro notice */}
+                      {isExpiredPro && (
+                        <span className="flex items-center gap-1 text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                          <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                          Venceu em: {u.dataVencimento ? (formatDateTime(u.dataVencimento) || u.dataVencimento) : 'Expirado'}
+                        </span>
+                      )}
+
+                      {/* Free / Trial Accounts */}
+                      {!isPremiumActive && !isExpiredPro && (
                         <>
                           {effectiveFreeVencimento ? (
                             <>
@@ -987,7 +1259,7 @@ export default function AdminPanel({
                                 <Clock className="w-3 h-3 text-amber-400 shrink-0" />
                                 {freeDaysRemaining !== null && freeDaysRemaining > 0 ? 'Vencimento do Teste: ' : 'Venceu o teste em: '}
                                 <strong className={freeDaysRemaining !== null && freeDaysRemaining <= 0 ? 'text-rose-400 font-bold' : 'text-amber-300 font-bold'}>
-                                  {new Date(effectiveFreeVencimento).toLocaleDateString('pt-BR')}
+                                  {formatDateTime(effectiveFreeVencimento) || effectiveFreeVencimento}
                                 </strong>
                               </span>
 
@@ -997,7 +1269,7 @@ export default function AdminPanel({
                                 </span>
                               ) : (
                                 <span className="text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
-                                  ❌ Expirou em {new Date(effectiveFreeVencimento).toLocaleDateString('pt-BR')}
+                                  ❌ Expirou em {formatDateTime(effectiveFreeVencimento) || effectiveFreeVencimento}
                                 </span>
                               )}
                             </>

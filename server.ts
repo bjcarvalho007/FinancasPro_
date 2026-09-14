@@ -426,36 +426,70 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
     }
 
     if (userExpiringBills.length > 0) {
-      // Key for daily morning digest (at 8:00 AM)
-      const dailyAlertKey = `push_daily_alert_${userId}_${br.dateStr}`;
+      // Keys for daily morning (08:00) and midday (12:00) alerts in Brasília timezone
+      const morningAlertKey = `push_morning_alert_${userId}_${br.dateStr}`;
+      const middayAlertKey = `push_midday_alert_${userId}_${br.dateStr}`;
       const batchSignature = userExpiringBills.map(b => b.id).sort().join("_");
       const immediateBatchKey = `push_batch_${userId}_${br.dateStr}_${batchSignature}`;
 
-      const alreadySentDaily = notifiedAlerts[dailyAlertKey];
+      const alreadySentMorning = notifiedAlerts[morningAlertKey];
+      const alreadySentMidday = notifiedAlerts[middayAlertKey];
       const alreadySentBatch = notifiedAlerts[immediateBatchKey];
+
+      // Determine schedule slots:
+      // Morning slot: from 08:00 to 11:59
+      const isMorningSlot = br.hour >= 8 && br.hour < 12;
+      // Midday slot: from 12:00 onwards
+      const isMiddaySlot = br.hour >= 12;
+
+      const isMorningTrigger = isMorningSlot && !alreadySentMorning;
+      const isMiddayTrigger = isMiddaySlot && !alreadySentMidday;
 
       // Send condition:
       // 1. If forceNow is true (manual test or immediate sync button)
-      // 2. OR if Brasília time is >= 08:00 and daily morning alert was not yet sent today
-      // 3. OR if a completely new batch was detected that hasn't been notified today
-      const shouldSend = forceNow || (br.hour >= 8 && !alreadySentDaily) || !alreadySentBatch;
+      // 2. OR scheduled morning trigger (08:00-11:59) not yet sent today
+      // 3. OR scheduled midday trigger (12:00+) not yet sent today
+      // 4. OR if a completely new batch was detected that hasn't been notified today
+      const shouldSend = forceNow || isMorningTrigger || isMiddayTrigger || !alreadySentBatch;
 
       if (shouldSend) {
-        console.log(`🚀 [BACKGROUND PUSH] Despachando notificação para o usuário ${userId} (${userExpiringBills.length} contas)...`);
+        console.log(`🚀 [BACKGROUND PUSH] Despachando notificação para o usuário ${userId} (${userExpiringBills.length} contas) [Manhã: ${isMorningTrigger}, Meio-Dia: ${isMiddayTrigger}, Forçado: ${forceNow}]...`);
+
+        const isMidday = isMiddayTrigger || (br.hour >= 12 && !isMorningTrigger);
+        const isMorning = !isMidday && (isMorningTrigger || br.hour < 12);
+
+        let greetingPrefix = "Lembrete Financeiro";
+        if (isMidday) {
+          greetingPrefix = "☀️ Lembrete do Meio-Dia (12h)";
+        } else if (isMorning) {
+          greetingPrefix = "🌅 Lembrete da Manhã (08h)";
+        }
 
         let pushTitle = '';
         let pushBody = '';
 
         if (userExpiringBills.length === 1) {
           const b = userExpiringBills[0];
-          pushTitle = b.isOverdue ? "🚨 CONTA EM ATRASO - FinançasPro" : "⚠️ ATENÇÃO - VENCIMENTO HOJE/BREVE";
           const valStr = b.remaining > 0 ? ` (R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})` : '';
-          pushBody = `A despesa "${b.name}"${valStr} vence no dia ${b.due}. Toque para regularizar.`;
+          if (b.isOverdue) {
+            pushTitle = "🚨 CONTA EM ATRASO - FinançasPro";
+            pushBody = `Atenção: A despesa "${b.name}"${valStr} está atrasada (vencimento: ${b.due}). Toque para regularizar.`;
+          } else if (isMidday) {
+            pushTitle = "☀️ Lembrete do Meio-Dia - FinançasPro";
+            pushBody = `${greetingPrefix}: A despesa "${b.name}"${valStr} vence no dia ${b.due}. Não se esqueça de pagar.`;
+          } else {
+            pushTitle = "🌅 Lembrete da Manhã - FinançasPro";
+            pushBody = `${greetingPrefix}: A despesa "${b.name}"${valStr} vence no dia ${b.due}. Toque para regularizar.`;
+          }
         } else {
           const overdueCount = userExpiringBills.filter(b => b.isOverdue).length;
-          pushTitle = overdueCount > 0
-            ? `🚨 ATENÇÃO - ${userExpiringBills.length} CONTAS (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`
-            : `⚠️ ATENÇÃO - VENCIMENTO DE ${userExpiringBills.length} CONTAS`;
+          if (overdueCount > 0) {
+            pushTitle = `🚨 ATENÇÃO - ${userExpiringBills.length} CONTAS (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`;
+          } else if (isMidday) {
+            pushTitle = `☀️ Meio-Dia: ${userExpiringBills.length} Contas para Pagar`;
+          } else {
+            pushTitle = `🌅 Manhã: ${userExpiringBills.length} Contas para Pagar`;
+          }
 
           const listSummary = userExpiringBills.slice(0, 4).map(b => {
             const valStr = b.remaining > 0 ? ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : '';
@@ -467,7 +501,7 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
             listSummary.push(`... e mais ${userExpiringBills.length - 4} conta(s).`);
           }
 
-          pushBody = `Lembrete das 08h: Você tem ${userExpiringBills.length} contas pendentes:\n` + listSummary.join('\n');
+          pushBody = `${greetingPrefix}: Você tem ${userExpiringBills.length} contas pendentes:\n` + listSummary.join('\n');
         }
 
         const messagePayload = JSON.stringify({
@@ -502,18 +536,32 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
           } catch (e) {}
         }
 
-        if (br.hour >= 8) {
-          markLocalAlertNotified(dailyAlertKey);
+        if (isMorningSlot || isMorningTrigger) {
+          markLocalAlertNotified(morningAlertKey);
+        }
+        if (isMiddaySlot || isMiddayTrigger) {
+          markLocalAlertNotified(middayAlertKey);
         }
         markLocalAlertNotified(immediateBatchKey);
 
         try {
           const db = admin.firestore();
-          await db.collection("notified_alerts").doc(dailyAlertKey).set({
-            userId,
-            count: userExpiringBills.length,
-            dispatchedAt: new Date().toISOString()
-          });
+          if (isMorningSlot || isMorningTrigger) {
+            await db.collection("notified_alerts").doc(morningAlertKey).set({
+              userId,
+              slot: "morning",
+              count: userExpiringBills.length,
+              dispatchedAt: new Date().toISOString()
+            });
+          }
+          if (isMiddaySlot || isMiddayTrigger) {
+            await db.collection("notified_alerts").doc(middayAlertKey).set({
+              userId,
+              slot: "midday",
+              count: userExpiringBills.length,
+              dispatchedAt: new Date().toISOString()
+            });
+          }
         } catch (e) {}
 
         totalDispatched += sentCount;
@@ -1231,16 +1279,56 @@ app.post("/api/push/sync-bills", async (req, res) => {
 app.post("/api/push/test-background", async (req, res) => {
   try {
     await ensureVapidKeys();
-    const { userId, delaySeconds = 10 } = req.body;
+    const { userId, delaySeconds = 10, subscription, bills } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
 
-    const allSubs = getLocalSubscriptions();
-    const userSubs = allSubs[userId] || [];
+    // Save client-provided subscription immediately if sent
+    if (subscription) {
+      saveLocalSubscription(userId, subscription);
+    }
+    if (bills && Array.isArray(bills)) {
+      saveLocalUserBills(userId, bills);
+    }
+
+    let allSubs = getLocalSubscriptions();
+    let userSubs = allSubs[userId] || [];
+
+    // Fallback: check Firestore if not in local memory/file
+    if (userSubs.length === 0) {
+      try {
+        const db = admin.firestore();
+        const snap = await db.collection("push_subscriptions").where("userId", "==", userId).get();
+        if (!snap.empty) {
+          snap.forEach(d => {
+            const data = d.data();
+            if (data?.subscription) {
+              saveLocalSubscription(userId, data.subscription);
+            }
+          });
+          allSubs = getLocalSubscriptions();
+          userSubs = allSubs[userId] || [];
+        }
+      } catch (e) {}
+    }
+
+    // Additional fallback: if user registered subscription under another ID or previous session
+    if (userSubs.length === 0) {
+      const allUserKeys = Object.keys(allSubs);
+      for (const k of allUserKeys) {
+        if (allSubs[k] && allSubs[k].length > 0) {
+          userSubs = allSubs[k];
+          saveLocalSubscription(userId, userSubs[0]);
+          break;
+        }
+      }
+    }
 
     if (userSubs.length === 0) {
-      return res.status(400).json({ error: "Nenhum dispositivo cadastrado para este usuário. Ative as notificações primeiro." });
+      return res.status(400).json({ 
+        error: "Nenhum dispositivo cadastrado para este usuário. Toque em 'Permitir' quando o navegador solicitar ou abra o FinançasPro em uma nova aba/instalado para registrar seu aparelho." 
+      });
     }
 
     const delay = Math.max(2, Math.min(60, Number(delaySeconds) || 10));
@@ -1285,14 +1373,19 @@ app.get("/api/push/status/:userId", (req, res) => {
     const userSubs = allSubs[userId] || [];
     const allBills = getLocalUserBills();
     const userBills = allBills[userId] || [];
+    const notifiedAlerts = getLocalNotifiedAlerts();
     const br = getBrasiliaDate();
+    const morningKey = `push_morning_alert_${userId}_${br.dateStr}`;
+    const middayKey = `push_midday_alert_${userId}_${br.dateStr}`;
 
     res.json({
       userId,
       isSubscribed: userSubs.length > 0,
       deviceCount: userSubs.length,
       billsCount: userBills.length,
-      scheduledHour: "08:00",
+      scheduledHours: ["08:00 (Manhã)", "12:00 (Meio-Dia)"],
+      morningSentToday: !!notifiedAlerts[morningKey],
+      middaySentToday: !!notifiedAlerts[middayKey],
       currentBrasiliaTime: `${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}`,
       currentBrasiliaDate: br.dateStr
     });
@@ -1304,9 +1397,15 @@ app.get("/api/push/status/:userId", (req, res) => {
 // API route: Immediately trigger notification check for a user (bypassing time constraint)
 app.post("/api/push/trigger-now", async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { userId, subscription, bills } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
+    }
+    if (subscription) {
+      saveLocalSubscription(userId, subscription);
+    }
+    if (bills && Array.isArray(bills)) {
+      saveLocalUserBills(userId, bills);
     }
     const result = await runBackgroundPushNotificationChecker(true, userId);
     res.json({ success: true, result });

@@ -118,6 +118,87 @@ export default function SettingsPanel({
     }
   }, []);
 
+  const ensureDevicePushSubscription = async (): Promise<PushSubscription | null> => {
+    if (isInIframe) {
+      showToast('Para ativar notificações no celular ou computador, abra o app em uma aba própria!', 'warning');
+      window.open(window.location.href, '_blank');
+      return null;
+    }
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      showToast('Notificações não são suportadas neste navegador ou dispositivo.', 'warning');
+      return null;
+    }
+
+    let perm = Notification.permission;
+    if (perm === 'default') {
+      try {
+        perm = await Notification.requestPermission();
+      } catch (e) {}
+    }
+
+    if (perm !== 'granted') {
+      showToast('Permissão de notificações não concedida. Toque no ícone de configurações ou cadeado na barra de endereço do navegador para permitir.', 'warning');
+      return null;
+    }
+
+    try {
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register('/sw.js');
+      }
+      await navigator.serviceWorker.ready;
+
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const keyRes = await fetch('/api/push/vapid-public-key');
+        if (!keyRes.ok) throw new Error('Falha ao buscar chave pública VAPID');
+        const { publicKey } = await keyRes.json();
+        if (!publicKey || publicKey.length < 65) throw new Error('Chave VAPID inválida');
+
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey)
+        });
+      }
+
+      if (auth.currentUser && sub) {
+        // 1. Send subscription to Express API for background OS push
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: auth.currentUser.uid,
+            subscription: sub,
+            bills: transactions || []
+          })
+        }).catch(() => {});
+
+        // 2. Backup to Firestore
+        try {
+          const cleanEndpoint = sub.endpoint
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .substring(sub.endpoint.length - 60);
+          const subId = `sub_${auth.currentUser.uid}_${cleanEndpoint}`;
+
+          await setDoc(doc(db, 'push_subscriptions', subId), {
+            id: subId,
+            userId: auth.currentUser.uid,
+            subscription: JSON.stringify(sub),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        } catch (e) {}
+      }
+
+      setIsPushSubscribed(true);
+      return sub;
+    } catch (err: any) {
+      console.warn('Erro ao obter assinatura push:', err);
+      return null;
+    }
+  };
+
   const togglePushSubscription = async () => {
     if (isInIframe) {
       showToast('Para ativar notificações no celular ou computador, abra o app em uma aba própria!', 'warning');
@@ -128,81 +209,23 @@ export default function SettingsPanel({
     if (!isPushSupported) return;
     setPushLoading(true);
     try {
-      let reg = await navigator.serviceWorker.getRegistration();
-      if (!reg) {
-        reg = await navigator.serviceWorker.register('/sw.js');
-      }
-      await navigator.serviceWorker.ready;
-
       if (isPushSubscribed) {
-        const sub = await reg.pushManager.getSubscription();
-        if (sub) {
-          await sub.unsubscribe();
+        let reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) {
+            await sub.unsubscribe();
+          }
         }
         setIsPushSubscribed(false);
         showToast('Inscrição do Web Push removida para este dispositivo.', 'success');
         loadServerStatus();
       } else {
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-          showToast('Permissão de notificações não concedida pelo navegador.', 'warning');
-          setPushLoading(false);
-          return;
-        }
-
-        const keyRes = await fetch('/api/push/vapid-public-key');
-        if (!keyRes.ok) {
-          throw new Error('Falha ao buscar chave VAPID');
-        }
-        const { publicKey } = await keyRes.json();
-        if (!publicKey || publicKey.length < 65) {
-          throw new Error('Chave VAPID inválida no servidor');
-        }
-
-        let sub = await reg.pushManager.getSubscription();
+        const sub = await ensureDevicePushSubscription();
         if (sub) {
-          try {
-            await sub.unsubscribe();
-          } catch (e) {}
+          showToast('Dispositivo conectado com sucesso! Varreduras automáticas às 08:00 (Manhã) e 12:00 (Meio-Dia).', 'success');
+          loadServerStatus();
         }
-        
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey)
-        });
-
-        if (auth.currentUser) {
-          // 1. Send subscription to Express API for background OS push
-          await fetch('/api/push/subscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: auth.currentUser.uid,
-              subscription: sub,
-              bills: transactions || []
-            })
-          }).catch(() => {});
-
-          // 2. Backup to Firestore
-          try {
-            const cleanEndpoint = sub.endpoint
-              .replace(/[^a-zA-Z0-9]/g, '_')
-              .substring(sub.endpoint.length - 60);
-            const subId = `sub_${auth.currentUser.uid}_${cleanEndpoint}`;
-
-            await setDoc(doc(db, 'push_subscriptions', subId), {
-              id: subId,
-              userId: auth.currentUser.uid,
-              subscription: JSON.stringify(sub),
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            });
-          } catch (e) {}
-        }
-
-        setIsPushSubscribed(true);
-        showToast('Dispositivo conectado com sucesso! Alertas programados para as 08:00.', 'success');
-        loadServerStatus();
       }
     } catch (err) {
       console.error('Erro ao alternar Web Push:', err);
@@ -217,17 +240,23 @@ export default function SettingsPanel({
     setPushLoading(true);
     try {
       showToast('Disparando verificação e alerta imediato no servidor...', 'warning');
+      const sub = await ensureDevicePushSubscription();
+
       const res = await fetch('/api/push/trigger-now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: auth.currentUser.uid })
+        body: JSON.stringify({ 
+          userId: auth.currentUser.uid,
+          subscription: sub,
+          bills: transactions || []
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Falha ao disparar.');
       if (data.result && data.result.sent > 0) {
         showToast(`✅ Alerta enviado para ${data.result.sent} dispositivo(s)!`, 'success');
       } else {
-        showToast('ℹ️ Nenhuma fatura a vencer ou dispositivo ainda não sincronizado.', 'warning');
+        showToast('ℹ️ Varredura executada! Nenhuma conta a vencer ou pendente no momento.', 'warning');
       }
       loadServerStatus();
     } catch (err: any) {
@@ -241,10 +270,18 @@ export default function SettingsPanel({
     if (!auth.currentUser) return;
     setPushLoading(true);
     try {
+      // Always guarantee the device is subscribed and the subscription is sent to the server
+      const sub = await ensureDevicePushSubscription();
+
       const res = await fetch('/api/push/test-background', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: auth.currentUser.uid, delaySeconds })
+        body: JSON.stringify({ 
+          userId: auth.currentUser.uid, 
+          delaySeconds,
+          subscription: sub,
+          bills: transactions || []
+        })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -263,6 +300,7 @@ export default function SettingsPanel({
           setBackgroundTestCountdown(remaining);
         }
       }, 1000);
+      loadServerStatus();
     } catch (err: any) {
       showToast(err.message || 'Falha ao acionar teste.', 'error');
       setBackgroundTestCountdown(null);
@@ -757,8 +795,8 @@ export default function SettingsPanel({
                   <span className={`w-2 h-2 rounded-full ${isPushSubscribed ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
                   {t('alertasSegundoPlano', 'Alertas em Segundo Plano (PWA)')}
                 </span>
-                <span className="text-[10px] text-slate-500 block leading-normal mt-0.5">
-                  {t('recebaAvisosInstantaneos', 'Receba avisos automáticos de vencimentos às 08:00 mesmo com o app ou navegador fechados.')}
+                <span className="text-[10px] text-slate-400 block leading-normal mt-0.5">
+                  {t('recebaAvisosInstantaneos', 'Varreduras automáticas de vencimentos pela manhã (08:00) e ao meio-dia (12:00) no horário de Brasília.')}
                 </span>
               </div>
               <button
@@ -777,22 +815,35 @@ export default function SettingsPanel({
             </div>
 
             {/* Server Status Badge & Diagnostics */}
-            <div className="p-3 bg-slate-900/70 border border-white/5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-[10px]">
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${isPushSubscribed ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                <span className="text-slate-300">
-                  {isPushSubscribed ? 'Dispositivo conectado ao robô do servidor' : 'Dispositivo desconectado'}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-slate-500">
-                <span>Horário do robô: <strong className="text-slate-300">08:00 (Brasília)</strong></span>
-                {serverPushStatus?.serverTimeBrasilia && (
-                  <span>Agora: <strong className="text-indigo-400">{serverPushStatus.serverTimeBrasilia}</strong></span>
+            <div className="p-3 bg-slate-900/70 border border-white/5 rounded-2xl flex flex-col gap-2 text-[10px]">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${isPushSubscribed ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                  <span className="text-slate-300 font-medium">
+                    {isPushSubscribed ? 'Dispositivo conectado ao robô do servidor' : 'Dispositivo desconectado'}
+                  </span>
+                </div>
+                {serverPushStatus?.currentBrasiliaTime && (
+                  <div className="text-slate-400">
+                    Hora em Brasília: <strong className="text-indigo-400">{serverPushStatus.currentBrasiliaTime}</strong>
+                  </div>
                 )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/5 text-slate-400">
+                <span className="text-slate-500">Horários de varredura:</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 font-bold border border-amber-500/20">
+                  🌅 08:00 (Manhã)
+                  {serverPushStatus?.morningSentToday && <span className="text-emerald-400 text-[9px]">✓ Enviado</span>}
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-300 font-bold border border-sky-500/20">
+                  ☀️ 12:00 (Meio-Dia)
+                  {serverPushStatus?.middaySentToday && <span className="text-emerald-400 text-[9px]">✓ Enviado</span>}
+                </span>
               </div>
             </div>
 
-            {isPushSupported && isPushSubscribed && (
+            {isPushSupported && (
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
                   <button

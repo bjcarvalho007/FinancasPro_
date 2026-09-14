@@ -341,12 +341,16 @@ function MainApp() {
       setShowToast(true);
 
       // Re-register push subscription and sync bills first
-      await silentAutoSubscribe(user, transactions);
+      const sub = await silentAutoSubscribe(user, transactions);
 
       const res = await fetch('/api/push/trigger-now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid })
+        body: JSON.stringify({ 
+          userId: user.uid,
+          subscription: sub,
+          bills: transactions || []
+        })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -373,12 +377,17 @@ function MainApp() {
     if (!user) return;
     try {
       setIsTestingPush(true);
-      await silentAutoSubscribe(user, transactions);
+      const sub = await silentAutoSubscribe(user, transactions);
 
       const res = await fetch('/api/push/test-background', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, delaySeconds })
+        body: JSON.stringify({ 
+          userId: user.uid, 
+          delaySeconds,
+          subscription: sub,
+          bills: transactions || []
+        })
       });
       const data = await res.json();
       if (!res.ok) {

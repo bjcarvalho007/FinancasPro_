@@ -113,7 +113,7 @@ service cloud.firestore {
     function isAdminUser() {
       return isSignedIn() 
         && request.auth.token.email_verified == true 
-        && (request.auth.token.email == 'bjcarvalho07@gmail.com' || request.auth.token.email == 'bjcarvalho007@gmail.com');
+        && request.auth.token.email == 'bjcarvalho07@gmail.com';
     }
 
     // Rules for Collections

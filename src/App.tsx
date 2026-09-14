@@ -62,7 +62,8 @@ import {
   BellOff,
   VolumeX,
   EyeOff,
-  AlertTriangle
+  AlertTriangle,
+  Smartphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LANGUAGES, Language, useLanguage, LanguageProvider } from './utils/i18n';
@@ -261,6 +262,97 @@ function MainApp() {
   const [newUsernameInput, setNewUsernameInput] = useState<string>('');
   const [usernameSaving, setUsernameSaving] = useState<boolean>(false);
   const [sessionClosedAlert, setSessionClosedAlert] = useState<boolean>(false);
+
+  // Native & Background Push Notifications State
+  const [pushPermissionStatus, setPushPermissionStatus] = useState<NotificationPermission | 'unsupported'>('default');
+  const [isPushBannerDismissed, setIsPushBannerDismissed] = useState<boolean>(() => {
+    return localStorage.getItem('financaspro_push_banner_dismissed') === 'true';
+  });
+  const [isTestingPush, setIsTestingPush] = useState<boolean>(false);
+  const [testPushCountdown, setTestPushCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setPushPermissionStatus(Notification.permission);
+    } else {
+      setPushPermissionStatus('unsupported');
+    }
+  }, []);
+
+  const handleRequestPushPermission = async () => {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      setToastMessage('Notificações não são suportadas neste navegador.');
+      setToastType('warning');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setPushPermissionStatus(permission);
+      if (permission === 'granted') {
+        setToastMessage('🔔 Notificações ativadas! Conectando dispositivo...');
+        setToastType('success');
+        setShowToast(true);
+        if (user) {
+          await silentAutoSubscribe(user, activeMonthTransactions);
+        }
+        setToastMessage('✅ Conectado! Você receberá alertas mesmo com o app fechado.');
+        setToastType('success');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 4000);
+      } else {
+        setToastMessage('Permissão de notificações não foi concedida pelo navegador.');
+        setToastType('warning');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 4000);
+      }
+    } catch (e) {
+      setToastMessage('Falha ao ativar notificações.');
+      setToastType('error');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+    }
+  };
+
+  const handleTestBackgroundPush = async (delaySeconds: number = 10) => {
+    if (!user) return;
+    try {
+      setIsTestingPush(true);
+      await silentAutoSubscribe(user, activeMonthTransactions);
+
+      const res = await fetch('/api/push/test-background', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid, delaySeconds })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Falha ao agendar teste.');
+      }
+
+      setTestPushCountdown(delaySeconds);
+      let count = delaySeconds;
+      const interval = setInterval(() => {
+        count--;
+        if (count <= 0) {
+          clearInterval(interval);
+          setTestPushCountdown(null);
+          setIsTestingPush(false);
+        } else {
+          setTestPushCountdown(count);
+        }
+      }, 1000);
+    } catch (err: any) {
+      setIsTestingPush(false);
+      setTestPushCountdown(null);
+      setToastMessage(err.message || 'Erro ao disparar teste em segundo plano.');
+      setToastType('error');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+    }
+  };
   const [prevMonthKey, setPrevMonthKey] = useState(currentMonthKey);
   if (currentMonthKey !== prevMonthKey) {
     setPrevMonthKey(currentMonthKey);
@@ -538,18 +630,46 @@ function MainApp() {
   }, []);
 
   const silentAutoSubscribe = async (currentUser: User, currentBills?: any[]) => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
-    if (Notification.permission !== 'granted') return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return null;
+    if (Notification.permission !== 'granted') return null;
 
     try {
       const reg = await navigator.serviceWorker.ready;
+      
+      const keyResponse = await fetch('/api/push/vapid-public-key');
+      if (!keyResponse.ok) return null;
+      const { publicKey } = await keyResponse.json();
+      if (!publicKey || publicKey.length < 65) {
+        console.warn('Chave VAPID recebida inválida.');
+        return null;
+      }
+
       let sub = await reg.pushManager.getSubscription();
 
+      // Check if existing sub is valid for the current key
+      if (sub) {
+        try {
+          const expectedKeyArray = urlBase64ToUint8Array(publicKey);
+          const rawKey = sub.options.applicationServerKey;
+          let match = false;
+          if (rawKey) {
+            const rawKeyArray = new Uint8Array(rawKey);
+            if (rawKeyArray.length === expectedKeyArray.length) {
+              match = rawKeyArray.every((byte, idx) => byte === expectedKeyArray[idx]);
+            }
+          }
+          if (!match) {
+            console.log('🔄 [PUSH] Chave VAPID atualizada no servidor. Renovando assinatura push local...');
+            await sub.unsubscribe();
+            sub = null;
+          }
+        } catch (subErr) {
+          await sub.unsubscribe().catch(() => {});
+          sub = null;
+        }
+      }
+
       if (!sub) {
-        const keyResponse = await fetch('/api/push/vapid-public-key');
-        if (!keyResponse.ok) return;
-        const { publicKey } = await keyResponse.json();
-        
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicKey)
@@ -581,8 +701,10 @@ function MainApp() {
         updatedAt: new Date().toISOString()
       }).catch(() => {});
       console.log('👷 Auto-inscrição de push do usuário ativa no servidor e Firestore.');
+      return sub;
     } catch (e) {
       console.warn('Falha silenciosa ao atualizar inscrição de push:', e);
+      return null;
     }
   };
 
@@ -2209,6 +2331,27 @@ function MainApp() {
       }).catch(e => console.warn('SW Ready check failed:', e));
     }
 
+    // Sync to Express backend so server can send OS notifications when app is completely closed
+    if (user && activeMonthTransactions.length > 0) {
+      fetch('/api/push/sync-bills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          bills: activeMonthTransactions.map(t => ({
+            id: t.id,
+            name: t.name,
+            due: t.due,
+            amount: t.amount || t.total_parcelado || 0,
+            paid_amount: t.paid_amount || 0,
+            type: t.type,
+            monthKey: t.monthKey,
+            isOverdue: expiring.some(e => e.item.id === t.id && e.isOverdue)
+          }))
+        })
+      }).catch(() => {});
+    }
+
     if (expiring.length > 0) {
       // Auto-display prominent modal on load/sync if not snoozed or disabled
       const neverShowStr = localStorage.getItem('financaspro_bills_never_show');
@@ -3662,6 +3805,96 @@ function MainApp() {
           )}
 
           {/* Render Mobile summary cards */}
+          {/* Alerta / Banner Interativo: Notificações no Celular mesmo com App Fechado */}
+          {user && pushPermissionStatus !== 'granted' && !isPushBannerDismissed && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`p-5 rounded-3xl border transition-all relative overflow-hidden ${
+                theme === 'light'
+                  ? 'bg-gradient-to-r from-emerald-50 to-teal-50/70 border-emerald-200 text-slate-800 shadow-sm'
+                  : 'bg-gradient-to-r from-emerald-950/40 via-teal-950/25 to-slate-900 border border-emerald-500/20 text-white shadow-lg'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('financaspro_push_banner_dismissed', 'true');
+                  setIsPushBannerDismissed(true);
+                }}
+                className={`absolute top-4 right-4 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent ${
+                  theme === 'light' ? 'hover:bg-emerald-100 text-emerald-800' : 'hover:bg-white/10 text-emerald-300'
+                }`}
+                title="Fechar"
+              >
+                ✕
+              </button>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 pr-6">
+                <div className="flex items-start gap-3.5">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                    theme === 'light'
+                      ? 'bg-emerald-100 border-emerald-200 text-emerald-700'
+                      : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                  }`}>
+                    <Bell className="w-5 h-5 text-emerald-400 animate-bounce" />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <h4 className={`font-display font-black text-sm uppercase tracking-wide ${
+                      theme === 'light' ? 'text-emerald-950' : 'text-emerald-300'
+                    }`}>
+                      Alertas no Celular (Mesmo com App Fechado) 🔔
+                    </h4>
+                    <p className={`text-xs font-light leading-relaxed max-w-2xl ${
+                      theme === 'light' ? 'text-slate-700' : 'text-slate-300'
+                    }`}>
+                      Receba avisos sonoros e na barra de notificações do seu celular sobre <strong>próximos vencimentos e contas atrasadas</strong> automaticamente, sem precisar estar com o sistema ou navegador aberto!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleRequestPushPermission}
+                    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border-none hover:scale-[1.02] active:scale-95"
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>Ativar Alertas no Celular</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Banner de Teste com Contagem Regressiva (Permite ao usuário bloquear a tela) */}
+          {testPushCountdown !== null && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="p-5 rounded-3xl bg-amber-500/20 border-2 border-amber-500/50 text-white shadow-2xl relative overflow-hidden"
+            >
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center text-slate-950 font-black text-xl shrink-0 animate-pulse">
+                    {testPushCountdown}s
+                  </div>
+                  <div>
+                    <h4 className="font-display font-black text-base text-amber-300 uppercase tracking-wide">
+                      Bloqueie o celular ou feche o app agora! 📱
+                    </h4>
+                    <p className="text-xs text-slate-200 mt-0.5">
+                      O servidor enviará a notificação em segundo plano em <strong>{testPushCountdown} segundos</strong>. Observe o alerta sonoro e vibratório chegar na tela bloqueada.
+                    </p>
+                  </div>
+                </div>
+                <div className="text-xs text-amber-200 font-mono bg-black/40 px-3 py-1.5 rounded-lg border border-amber-500/30">
+                  Aguardando disparo do servidor...
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {activeTab !== 'dashboard' && activeTab !== 'contas' && activeTab !== 'variaveis' && activeTab !== 'parcelas' && activeTab !== 'fixos' && renderSummaryCardsMobile()}
 
           {/* If on dashboard or transaction list tabs, render the two cards side-by-side above the month selector */}

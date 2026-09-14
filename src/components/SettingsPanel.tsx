@@ -77,6 +77,8 @@ export default function SettingsPanel({
     return outputArray;
   }
 
+  const [backgroundTestCountdown, setBackgroundTestCountdown] = useState<number | null>(null);
+
   // Detect Web Push capabilities and current state on load
   useEffect(() => {
     if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) {
@@ -114,8 +116,18 @@ export default function SettingsPanel({
           throw new Error('Falha ao buscar chave VAPID');
         }
         const { publicKey } = await keyRes.json();
+        if (!publicKey || publicKey.length < 65) {
+          throw new Error('Chave VAPID inválida no servidor');
+        }
+
+        let sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          try {
+            await sub.unsubscribe();
+          } catch (e) {}
+        }
         
-        const sub = await reg.pushManager.subscribe({
+        sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicKey)
         });
@@ -148,11 +160,45 @@ export default function SettingsPanel({
         }
 
         setIsPushSubscribed(true);
-        showToast('Dispositivo inscrito para receber notificações em tempo real!', 'success');
+        showToast('Dispositivo inscrito com sucesso para alertas mesmo com o app fechado!', 'success');
       }
     } catch (err) {
       console.error('Erro ao alternar Web Push:', err);
       showToast('Falha ao configurar Web Push de notificações.', 'error');
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const triggerDelayedBackgroundPush = async (delaySeconds: number = 10) => {
+    if (!auth.currentUser) return;
+    setPushLoading(true);
+    try {
+      const res = await fetch('/api/push/test-background', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: auth.currentUser.uid, delaySeconds })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Falha ao agendar teste.');
+      }
+
+      showToast(`Alerta agendado! Bloqueie a tela ou feche o app agora. Chegará em ${delaySeconds}s.`, 'success');
+      setBackgroundTestCountdown(delaySeconds);
+      let remaining = delaySeconds;
+      const interval = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+          clearInterval(interval);
+          setBackgroundTestCountdown(null);
+        } else {
+          setBackgroundTestCountdown(remaining);
+        }
+      }, 1000);
+    } catch (err: any) {
+      showToast(err.message || 'Falha ao acionar teste.', 'error');
+      setBackgroundTestCountdown(null);
     } finally {
       setPushLoading(false);
     }
@@ -647,19 +693,40 @@ export default function SettingsPanel({
             </div>
 
             {isPushSupported && isPushSubscribed && (
-              <div className="flex gap-2">
-                <button
-                  onClick={triggerTestPush}
-                  disabled={pushLoading}
-                  className="bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 font-bold py-2 px-4 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  {pushLoading ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => triggerDelayedBackgroundPush(10)}
+                    disabled={pushLoading || backgroundTestCountdown !== null}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-950/20 disabled:opacity-50"
+                  >
                     <Smartphone className="w-3.5 h-3.5" />
-                  )}
-                  {t('dispararNotificacaoTeste', 'Disparar Notificação de Teste')}
-                </button>
+                    <span>Testar com App Fechado (Dispara em 10s)</span>
+                  </button>
+                  <button
+                    onClick={triggerTestPush}
+                    disabled={pushLoading}
+                    className="bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    {pushLoading ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>Teste Instantâneo</span>
+                  </button>
+                </div>
+
+                {backgroundTestCountdown !== null && (
+                  <div className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-xl text-[11px] text-amber-200 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 font-black flex items-center justify-center text-xs shrink-0 animate-pulse">
+                      {backgroundTestCountdown}
+                    </span>
+                    <span>
+                      <strong>Bloqueie a tela ou feche o aplicativo agora!</strong> O alerta chegará no seu aparelho em {backgroundTestCountdown}s.
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 

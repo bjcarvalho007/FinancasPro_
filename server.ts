@@ -122,32 +122,32 @@ app.use(express.json({
 }));
 
 // Generate or load persistent VAPID keys ensuring zero-config and persistent push subscriptions
-let vapidPublic = (process.env.VAPID_PUBLIC_KEY || "").trim();
-let vapidPrivate = (process.env.VAPID_PRIVATE_KEY || "").trim();
+let vapidPublic = "";
+let vapidPrivate = "";
 let vapidInitialized = false;
 
 const VAPID_FILE = path.join(process.cwd(), "vapid-keys.json");
 
-async function ensureVapidKeys() {
-  if (vapidInitialized) return;
-
-  // 1. Check environment variables
-  if (vapidPublic && vapidPrivate && !vapidPublic.includes("YOUR") && !vapidPublic.includes("MY") && vapidPublic.length >= 40) {
-    try {
-      webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
-      vapidInitialized = true;
-      console.log("✅ [VAPID] Configurado com sucesso usando chaves do ambiente.");
-      return;
-    } catch (e: any) {
-      console.warn("⚠️ Chaves VAPID do ambiente inválidas, tentando backup local...", e?.message || e);
-    }
+function isValidVapidKey(pubKey?: string, privKey?: string): boolean {
+  if (!pubKey || !privKey) return false;
+  if (pubKey.length < 65 || privKey.length < 30) return false;
+  if (pubKey.includes("YOUR") || pubKey.includes("MY") || pubKey === "pkk" || privKey === "pkv") return false;
+  try {
+    webpush.setVapidDetails("mailto:suporte@financapro.com", pubKey, privKey);
+    return true;
+  } catch (e) {
+    return false;
   }
+}
 
-  // 2. Check local file storage (guarantees persistence across restarts)
+async function ensureVapidKeys() {
+  if (vapidInitialized && isValidVapidKey(vapidPublic, vapidPrivate)) return;
+
+  // 1. Check local file storage first (guarantees persistence across restarts)
   try {
     if (fs.existsSync(VAPID_FILE)) {
       const fileData = JSON.parse(fs.readFileSync(VAPID_FILE, "utf8"));
-      if (fileData && fileData.publicKey && fileData.privateKey) {
+      if (isValidVapidKey(fileData?.publicKey, fileData?.privateKey)) {
         vapidPublic = fileData.publicKey;
         vapidPrivate = fileData.privateKey;
         webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
@@ -157,69 +157,37 @@ async function ensureVapidKeys() {
       }
     }
   } catch (fileErr) {
-    // ignore file read error, will try generating/syncing
+    // continue to env or generation
   }
 
-  // 3. Try Firestore if available
-  try {
-    const db = admin.firestore();
-    const docRef = db.collection("system_config").doc("vapid_keys");
-    const docSnap = await docRef.get();
-
-    if (docSnap.exists) {
-      const data = docSnap.data();
-      if (data && data.publicKey && data.privateKey) {
-        vapidPublic = data.publicKey;
-        vapidPrivate = data.privateKey;
-        webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
-        vapidInitialized = true;
-
-        // Save to local file cache
-        try {
-          fs.writeFileSync(VAPID_FILE, JSON.stringify({ publicKey: vapidPublic, privateKey: vapidPrivate }), "utf8");
-        } catch (e) {}
-
-        console.log("✅ [VAPID] Chaves VAPID persistentes recuperadas do Firestore!");
-        return;
-      }
-    }
-
-    console.log("🔑 [VAPID] Gerando novo par de chaves VAPID único...");
-    const newKeys = webpush.generateVAPIDKeys();
-    vapidPublic = newKeys.publicKey;
-    vapidPrivate = newKeys.privateKey;
+  // 2. Check environment variables if valid
+  const envPub = (process.env.VAPID_PUBLIC_KEY || "").trim();
+  const envPriv = (process.env.VAPID_PRIVATE_KEY || "").trim();
+  if (isValidVapidKey(envPub, envPriv)) {
+    vapidPublic = envPub;
+    vapidPrivate = envPriv;
     webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
     vapidInitialized = true;
-
-    // Save to local file
     try {
-      fs.writeFileSync(VAPID_FILE, JSON.stringify({ publicKey: vapidPublic, privateKey: vapidPrivate }), "utf8");
+      fs.writeFileSync(VAPID_FILE, JSON.stringify({ publicKey: vapidPublic, privateKey: vapidPrivate }, null, 2), "utf8");
     } catch (e) {}
+    console.log("✅ [VAPID] Configurado com sucesso usando chaves válidas do ambiente.");
+    return;
+  }
 
-    // Try saving to Firestore quietly
-    try {
-      await docRef.set({
-        publicKey: vapidPublic,
-        privateKey: vapidPrivate,
-        createdAt: new Date().toISOString()
-      });
-      console.log("✅ [VAPID] Chaves VAPID salvas no Firestore!");
-    } catch (saveErr) {
-      // Ignored silently as local file is active
-    }
-  } catch (err: any) {
-    if (!vapidPublic || !vapidPrivate) {
-      console.log("🔑 [VAPID] Gerando chave VAPID e salvando em arquivo local...");
-      const tempKeys = webpush.generateVAPIDKeys();
-      vapidPublic = tempKeys.publicKey;
-      vapidPrivate = tempKeys.privateKey;
-      webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
-      try {
-        fs.writeFileSync(VAPID_FILE, JSON.stringify({ publicKey: vapidPublic, privateKey: vapidPrivate }), "utf8");
-      } catch (e) {}
-    }
-    vapidInitialized = true;
-    console.log("ℹ️ [VAPID] Modo local ativo (armazenamento persistente em vapid-keys.json).");
+  // 3. Generate fresh pair and store persistently
+  console.log("🔑 [VAPID] Gerando novo par de chaves VAPID único e persistente...");
+  const newKeys = webpush.generateVAPIDKeys();
+  vapidPublic = newKeys.publicKey;
+  vapidPrivate = newKeys.privateKey;
+  webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
+  vapidInitialized = true;
+
+  try {
+    fs.writeFileSync(VAPID_FILE, JSON.stringify({ publicKey: vapidPublic, privateKey: vapidPrivate }, null, 2), "utf8");
+    console.log("✅ [VAPID] Novas chaves VAPID geradas e salvas em vapid-keys.json!");
+  } catch (e) {
+    console.warn("⚠️ Não foi possível salvar vapid-keys.json localmente:", e);
   }
 }
 
@@ -362,10 +330,10 @@ async function runBackgroundPushNotificationChecker() {
 
       const amount = Number(tx.amount) || 0;
       const paid_amount = Number(tx.paid_amount) || 0;
-      if (paid_amount >= amount) continue;
+      if (amount > 0 && paid_amount >= amount) continue;
 
       let isNearDue = false;
-      let isOverdue = false;
+      let isOverdue = !!tx.isOverdue;
 
       const dueStr = String(tx.due).trim();
       if (dueStr.includes("-")) {
@@ -380,16 +348,24 @@ async function runBackgroundPushNotificationChecker() {
           isNearDue = true;
         }
       } else {
-        const dueDay = parseInt(dueStr, 10);
-        if (!isNaN(dueDay)) {
-          const diffDays = dueDay - currentDay;
-          if (diffDays < 0) {
-            isOverdue = true;
-            isNearDue = true;
-          } else if (diffDays <= 3) {
-            isNearDue = true;
+        const dayMatch = dueStr.match(/\d+/);
+        if (dayMatch) {
+          const dueDay = parseInt(dayMatch[0], 10);
+          if (!isNaN(dueDay)) {
+            const diffDays = dueDay - currentDay;
+            if (diffDays < 0) {
+              isOverdue = true;
+              isNearDue = true;
+            } else if (diffDays <= 3) {
+              isNearDue = true;
+            }
           }
         }
+      }
+
+      if (tx.isOverdue) {
+        isOverdue = true;
+        isNearDue = true;
       }
 
       if (isNearDue) {
@@ -397,7 +373,7 @@ async function runBackgroundPushNotificationChecker() {
           id: tx.id || String(Math.random()),
           name: tx.name,
           due: dueStr,
-          remaining: amount - paid_amount,
+          remaining: Math.max(0, amount - paid_amount),
           isOverdue
         });
       }
@@ -418,7 +394,8 @@ async function runBackgroundPushNotificationChecker() {
         if (userExpiringBills.length === 1) {
           const b = userExpiringBills[0];
           pushTitle = b.isOverdue ? "🚨 CONTA EM ATRASO - FinançasPro" : "⚠️ ATENÇÃO - VENCIMENTO";
-          pushBody = `A despesa "${b.name}" (R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}) vence no dia ${b.due}. Toque para regularizar.`;
+          const valStr = b.remaining > 0 ? ` (R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})` : '';
+          pushBody = `A despesa "${b.name}"${valStr} vence no dia ${b.due}. Toque para regularizar.`;
         } else {
           const overdueCount = userExpiringBills.filter(b => b.isOverdue).length;
           pushTitle = overdueCount > 0
@@ -426,7 +403,7 @@ async function runBackgroundPushNotificationChecker() {
             : `⚠️ ATENÇÃO - VENCIMENTO DE ${userExpiringBills.length} CONTAS`;
 
           const listSummary = userExpiringBills.slice(0, 5).map(b => {
-            const valStr = ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+            const valStr = b.remaining > 0 ? ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : '';
             const st = b.isOverdue ? ' [ATRASADA]' : ` (Dia ${b.due})`;
             return `• ${b.name}${valStr}${st}`;
           });
@@ -448,13 +425,26 @@ async function runBackgroundPushNotificationChecker() {
         });
 
         let sentCount = 0;
+        const validSubs: any[] = [];
         for (const sub of subs) {
           try {
             await webpush.sendNotification(sub, messagePayload);
             sentCount++;
+            validSubs.push(sub);
           } catch (subErr: any) {
-            console.warn(`⚠️ Falha ao despachar push de background para dispositivo do usuário ${userId}:`, subErr?.message || subErr);
+            console.warn(`⚠️ Falha ao despachar push de background para dispositivo do usuário ${userId}:`, subErr?.statusCode, subErr?.message || subErr);
+            if (subErr?.statusCode !== 410 && subErr?.statusCode !== 404) {
+              validSubs.push(sub);
+            }
           }
+        }
+
+        if (validSubs.length !== subs.length) {
+          const allSubs = getLocalSubscriptions();
+          allSubs[userId] = validSubs;
+          try {
+            fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(allSubs, null, 2), "utf8");
+          } catch (e) {}
         }
 
         markLocalAlertNotified(alertDateKey);
@@ -1170,6 +1160,56 @@ app.post("/api/push/sync-bills", async (req, res) => {
     runBackgroundPushNotificationChecker().catch((e) => console.warn("Background push check err:", e));
 
     res.json({ success: true, syncedCount: bills.length });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Erro interno" });
+  }
+});
+
+// API route: Schedule a test push with delay to allow user to test with app closed / screen locked
+app.post("/api/push/test-background", async (req, res) => {
+  try {
+    await ensureVapidKeys();
+    const { userId, delaySeconds = 10 } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: "userId é obrigatório." });
+    }
+
+    const allSubs = getLocalSubscriptions();
+    const userSubs = allSubs[userId] || [];
+
+    if (userSubs.length === 0) {
+      return res.status(400).json({ error: "Nenhum dispositivo cadastrado para este usuário. Ative as notificações primeiro." });
+    }
+
+    const delay = Math.max(2, Math.min(60, Number(delaySeconds) || 10));
+    const delayMs = delay * 1000;
+
+    setTimeout(async () => {
+      console.log(`⏰ [TEST BACKGROUND PUSH] Disparando alerta de teste em segundo plano para usuário ${userId} (${userSubs.length} dispositivo(s))...`);
+      const messagePayload = JSON.stringify({
+        title: "🚨 FinançasPro - Alerta em Segundo Plano",
+        body: "Teste de notificação com sistema fechado bem-sucedido! Seus alertas de vencimento estão 100% operacionais.",
+        icon: "/app_icon.png",
+        badge: "/app_icon.png",
+        tag: "financaspro-test-alert",
+        data: { url: "/", action: "OPEN_APP" }
+      });
+
+      for (const sub of userSubs) {
+        try {
+          await webpush.sendNotification(sub, messagePayload);
+          console.log(`✅ [TEST PUSH] Notificação enviada para dispositivo.`);
+        } catch (err: any) {
+          console.warn(`⚠️ [TEST PUSH] Falha ao enviar para dispositivo:`, err?.message || err);
+        }
+      }
+    }, delayMs);
+
+    res.json({
+      success: true,
+      message: `Alerta agendado para daqui a ${delay} segundos! Bloqueie a tela ou feche o aplicativo agora.`,
+      delaySeconds: delay
+    });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "Erro interno" });
   }

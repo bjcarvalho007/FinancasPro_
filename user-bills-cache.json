@@ -1,0 +1,11 @@
+{
+  "test-user": [
+    {
+      "id": "b1",
+      "name": "Aluguel",
+      "due": "Dia 15",
+      "amount": 1500,
+      "paid_amount": 0
+    }
+  ]
+}

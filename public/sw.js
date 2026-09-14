@@ -144,12 +144,15 @@ self.addEventListener('push', (event) => {
 
   const notificationPromise = self.registration.showNotification(payload.title, {
     body: payload.body,
-    icon: payload.icon,
-    badge: payload.badge,
-    data: payload.data,
-    vibrate: [200, 100, 200],
+    icon: payload.icon || '/app_icon.png',
+    badge: payload.badge || '/app_icon.png',
+    tag: payload.tag || 'financaspro-alert',
+    renotify: true,
+    requireInteraction: true,
+    data: payload.data || { url: '/' },
+    vibrate: [300, 100, 300, 100, 300],
     actions: [
-      { action: 'open', title: 'Abrir App' },
+      { action: 'open', title: 'Abrir FinançasPro' },
       { action: 'close', title: 'Fechar' }
     ]
   });

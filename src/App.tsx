@@ -280,8 +280,17 @@ function MainApp() {
   }, []);
 
   const handleRequestPushPermission = async () => {
+    const isInIframe = window.self !== window.top;
+    if (isInIframe) {
+      setToastMessage('⚠️ Para ativar notificações no celular ou computador, abra o app em uma aba própria!');
+      setToastType('warning');
+      setShowToast(true);
+      window.open(window.location.href, '_blank');
+      return;
+    }
+
     if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-      setToastMessage('Notificações não são suportadas neste navegador.');
+      setToastMessage('Notificações não são suportadas neste navegador ou dispositivo.');
       setToastType('warning');
       setShowToast(true);
       setTimeout(() => setShowToast(false), 4000);
@@ -292,18 +301,26 @@ function MainApp() {
       const permission = await Notification.requestPermission();
       setPushPermissionStatus(permission);
       if (permission === 'granted') {
-        setToastMessage('🔔 Notificações ativadas! Conectando dispositivo...');
+        setToastMessage('🔔 Notificações permitidas! Registrando seu dispositivo no servidor...');
         setToastType('success');
         setShowToast(true);
         if (user) {
-          await silentAutoSubscribe(user, activeMonthTransactions);
+          const sub = await silentAutoSubscribe(user, transactions);
+          if (sub) {
+            setToastMessage('✅ Dispositivo registrado com sucesso! Você receberá alertas mesmo com o app fechado.');
+          } else {
+            setToastMessage('⚠️ Permissão concedida. Finalizando sincronização em segundo plano...');
+          }
         }
-        setToastMessage('✅ Conectado! Você receberá alertas mesmo com o app fechado.');
-        setToastType('success');
         setShowToast(true);
-        setTimeout(() => setShowToast(false), 4000);
+        setTimeout(() => setShowToast(false), 4500);
+      } else if (permission === 'denied') {
+        setToastMessage('As notificações foram bloqueadas no navegador. Toque no ícone de configurações/cadeado da barra de endereço para permitir.');
+        setToastType('error');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 5000);
       } else {
-        setToastMessage('Permissão de notificações não foi concedida pelo navegador.');
+        setToastMessage('Permissão de notificações não foi concedida.');
         setToastType('warning');
         setShowToast(true);
         setTimeout(() => setShowToast(false), 4000);
@@ -316,11 +333,47 @@ function MainApp() {
     }
   };
 
+  const handleTriggerPushNow = async () => {
+    if (!user) return;
+    try {
+      setToastMessage('⏳ Verificando contas e disparando notificação imediata...');
+      setToastType('info');
+      setShowToast(true);
+
+      // Re-register push subscription and sync bills first
+      await silentAutoSubscribe(user, transactions);
+
+      const res = await fetch('/api/push/trigger-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Falha ao disparar.');
+      }
+      if (data.result && data.result.sent > 0) {
+        setToastMessage(`✅ Notificação despachada com sucesso para ${data.result.sent} aparelho(s)!`);
+        setToastType('success');
+      } else {
+        setToastMessage('ℹ️ Varredura realizada com sucesso.');
+        setToastType('info');
+      }
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 5000);
+    } catch (err: any) {
+      setToastMessage(err.message || 'Erro ao disparar alerta imediato.');
+      setToastType('error');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+    }
+  };
+
   const handleTestBackgroundPush = async (delaySeconds: number = 10) => {
     if (!user) return;
     try {
       setIsTestingPush(true);
-      await silentAutoSubscribe(user, activeMonthTransactions);
+      await silentAutoSubscribe(user, transactions);
 
       const res = await fetch('/api/push/test-background', {
         method: 'POST',
@@ -331,6 +384,10 @@ function MainApp() {
       if (!res.ok) {
         throw new Error(data.error || 'Falha ao agendar teste.');
       }
+
+      setToastMessage(`⏰ Teste agendado para daqui a ${delaySeconds}s! Bloqueie a tela ou feche o app agora.`);
+      setToastType('info');
+      setShowToast(true);
 
       setTestPushCountdown(delaySeconds);
       let count = delaySeconds;
@@ -630,11 +687,21 @@ function MainApp() {
   }, []);
 
   const silentAutoSubscribe = async (currentUser: User, currentBills?: any[]) => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return null;
-    if (Notification.permission !== 'granted') return null;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      console.warn('[PUSH] Notificações ou PushManager não suportados no ambiente.');
+      return null;
+    }
+    if (Notification.permission !== 'granted') {
+      console.log('[PUSH] Permissão de notificações ainda não concedida:', Notification.permission);
+      return null;
+    }
 
     try {
-      const reg = await navigator.serviceWorker.ready;
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register('/sw.js');
+      }
+      await navigator.serviceWorker.ready;
       
       const keyResponse = await fetch('/api/push/vapid-public-key');
       if (!keyResponse.ok) return null;
@@ -677,29 +744,45 @@ function MainApp() {
       }
 
       // 1. Post subscription and current bills to Express backend for OS background push
-      await fetch('/api/push/subscribe', {
+      const billsToSend = (currentBills && currentBills.length > 0) ? currentBills : transactions;
+      const subscribeRes = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: currentUser.uid,
           subscription: sub,
-          bills: currentBills || []
+          bills: (billsToSend || []).map(t => ({
+            id: t.id,
+            name: t.name,
+            due: t.due,
+            amount: t.amount || t.total_parcelado || 0,
+            paid_amount: t.paid_amount || 0,
+            type: t.type,
+            monthKey: t.monthKey
+          }))
         })
-      }).catch(() => {});
+      });
+
+      if (subscribeRes.ok) {
+        console.log('✅ [PUSH] Inscrição de push registrada no servidor com sucesso.');
+      }
 
       // 2. Backup to Firestore
-      const cleanEndpoint = sub.endpoint
-        .replace(/[^a-zA-Z0-9]/g, '_')
-        .substring(sub.endpoint.length - 60);
-      const subId = `sub_${currentUser.uid}_${cleanEndpoint}`;
+      try {
+        const cleanEndpoint = sub.endpoint
+          .replace(/[^a-zA-Z0-9]/g, '_')
+          .substring(sub.endpoint.length - 60);
+        const subId = `sub_${currentUser.uid}_${cleanEndpoint}`;
 
-      await setDoc(doc(db, 'push_subscriptions', subId), {
-        id: subId,
-        userId: currentUser.uid,
-        subscription: JSON.stringify(sub),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }).catch(() => {});
+        await setDoc(doc(db, 'push_subscriptions', subId), {
+          id: subId,
+          userId: currentUser.uid,
+          subscription: JSON.stringify(sub),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      } catch (e) {}
+
       console.log('👷 Auto-inscrição de push do usuário ativa no servidor e Firestore.');
       return sub;
     } catch (e) {
@@ -716,15 +799,9 @@ function MainApp() {
 
       if (currentUser) {
         if ('Notification' in window) {
+          setPushPermissionStatus(Notification.permission);
           if (Notification.permission === 'granted') {
             silentAutoSubscribe(currentUser);
-          } else if (Notification.permission === 'default') {
-            Notification.requestPermission().then((perm) => {
-              if (perm === 'granted') {
-                console.log('Notificações ativadas pelo usuário!');
-                silentAutoSubscribe(currentUser);
-              }
-            });
           }
         }
       }
@@ -2332,13 +2409,14 @@ function MainApp() {
     }
 
     // Sync to Express backend so server can send OS notifications when app is completely closed
-    if (user && activeMonthTransactions.length > 0) {
+    if (user && transactions.length > 0) {
+      const unpaidTransactions = transactions.filter(t => ((Number(t.amount) || Number(t.total_parcelado) || 0) - (Number(t.paid_amount) || 0)) > 0);
       fetch('/api/push/sync-bills', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.uid,
-          bills: activeMonthTransactions.map(t => ({
+          bills: (unpaidTransactions.length > 0 ? unpaidTransactions : transactions).map(t => ({
             id: t.id,
             name: t.name,
             due: t.due,

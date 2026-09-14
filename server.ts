@@ -262,10 +262,49 @@ function markLocalAlertNotified(alertKey: string) {
   } catch (e) {}
 }
 
+function getBrasiliaDate(): { hour: number; minute: number; dateStr: string; fullDate: Date } {
+  const now = new Date();
+  try {
+    const brFormatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const parts = brFormatter.formatToParts(now);
+    const getPart = (type: string) => parts.find(p => p.type === type)?.value || '00';
+    const year = getPart('year');
+    const month = getPart('month');
+    const day = getPart('day');
+    const hour = parseInt(getPart('hour'), 10);
+    const minute = parseInt(getPart('minute'), 10);
+    return {
+      hour: isNaN(hour) ? now.getUTCHours() - 3 : hour,
+      minute: isNaN(minute) ? now.getUTCMinutes() : minute,
+      dateStr: `${year}-${month}-${day}`,
+      fullDate: now
+    };
+  } catch (e) {
+    const brOffset = -3 * 60; // UTC-3
+    const brTime = new Date(now.getTime() + (brOffset + now.getTimezoneOffset()) * 60000);
+    return {
+      hour: brTime.getHours(),
+      minute: brTime.getMinutes(),
+      dateStr: brTime.toISOString().substring(0, 10),
+      fullDate: now
+    };
+  }
+}
+
 // Background Checker Task for push notifications when browser is closed
-async function runBackgroundPushNotificationChecker() {
+async function runBackgroundPushNotificationChecker(forceNow: boolean = false, targetUserId?: string) {
   await ensureVapidKeys();
-  console.log("⏰ [BACKGROUND SWEEPER] Executando varredura automatizada de vencimentos em segundo plano...");
+  const br = getBrasiliaDate();
+  console.log(`⏰ [BACKGROUND SWEEPER] Varredura em 2º plano (Horário de Brasília: ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}, Data: ${br.dateStr}, Forçar: ${forceNow})...`);
 
   const userSubsMap: { [userId: string]: any[] } = getLocalSubscriptions();
 
@@ -293,18 +332,19 @@ async function runBackgroundPushNotificationChecker() {
     // Firestore admin service account key not provided, using local subscription cache
   }
 
-  const userIds = Object.keys(userSubsMap);
+  const allUserIds = Object.keys(userSubsMap);
+  const userIds = targetUserId ? allUserIds.filter(id => id === targetUserId) : allUserIds;
+
   if (userIds.length === 0) {
     console.log("ℹ️ [BACKGROUND SWEEPER] Nenhuma assinatura de Web Push cadastrada.");
-    return;
+    return { sent: 0, reason: "Nenhuma assinatura de dispositivo registrada." };
   }
 
   const localUserBills = getLocalUserBills();
   const notifiedAlerts = getLocalNotifiedAlerts();
-
   const now = new Date();
-  const currentDay = now.getDate();
-  const todayStr = now.toISOString().substring(0, 10);
+
+  let totalDispatched = 0;
 
   for (const userId of userIds) {
     const subs = userSubsMap[userId];
@@ -328,7 +368,7 @@ async function runBackgroundPushNotificationChecker() {
     for (const tx of userBills) {
       if (!tx || !tx.name || !tx.due) continue;
 
-      const amount = Number(tx.amount) || 0;
+      const amount = Number(tx.amount) || Number(tx.total_parcelado) || 0;
       const paid_amount = Number(tx.paid_amount) || 0;
       if (amount > 0 && paid_amount >= amount) continue;
 
@@ -336,30 +376,36 @@ async function runBackgroundPushNotificationChecker() {
       let isOverdue = !!tx.isOverdue;
 
       const dueStr = String(tx.due).trim();
-      if (dueStr.includes("-")) {
-        const dueParts = dueStr.split("-");
-        const dueDate = new Date(Number(dueParts[0]), Number(dueParts[1]) - 1, Number(dueParts[2]), 12, 0, 0);
-        const diffTime = dueDate.getTime() - now.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      let dueDate: Date | null = null;
+
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
+        const parts = dueStr.split("-").map(Number);
+        dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+      } else {
+        const dayMatch = dueStr.match(/\d+/);
+        if (dayMatch) {
+          const dueDay = parseInt(dayMatch[0], 10);
+          let dueYear = now.getFullYear();
+          let dueMonth = now.getMonth();
+          if (tx.monthKey && /^\d{4}-\d{2}$/.test(tx.monthKey)) {
+            const mParts = tx.monthKey.split("-").map(Number);
+            dueYear = mParts[0];
+            dueMonth = mParts[1] - 1;
+          }
+          const maxDays = new Date(dueYear, dueMonth + 1, 0).getDate();
+          const safeDay = Math.min(Math.max(1, dueDay), maxDays);
+          dueDate = new Date(dueYear, dueMonth, safeDay, 12, 0, 0);
+        }
+      }
+
+      if (dueDate) {
+        const todayNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+        const diffDays = Math.round((dueDate.getTime() - todayNoon.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays < 0) {
           isOverdue = true;
           isNearDue = true;
         } else if (diffDays <= 3) {
           isNearDue = true;
-        }
-      } else {
-        const dayMatch = dueStr.match(/\d+/);
-        if (dayMatch) {
-          const dueDay = parseInt(dayMatch[0], 10);
-          if (!isNaN(dueDay)) {
-            const diffDays = dueDay - currentDay;
-            if (diffDays < 0) {
-              isOverdue = true;
-              isNearDue = true;
-            } else if (diffDays <= 3) {
-              isNearDue = true;
-            }
-          }
         }
       }
 
@@ -380,39 +426,48 @@ async function runBackgroundPushNotificationChecker() {
     }
 
     if (userExpiringBills.length > 0) {
+      // Key for daily morning digest (at 8:00 AM)
+      const dailyAlertKey = `push_daily_alert_${userId}_${br.dateStr}`;
       const batchSignature = userExpiringBills.map(b => b.id).sort().join("_");
-      const alertDateKey = `push_alert_batch_${userId}_${todayStr}_${batchSignature}`;
+      const immediateBatchKey = `push_batch_${userId}_${br.dateStr}_${batchSignature}`;
 
-      const alreadyNotified = notifiedAlerts[alertDateKey];
+      const alreadySentDaily = notifiedAlerts[dailyAlertKey];
+      const alreadySentBatch = notifiedAlerts[immediateBatchKey];
 
-      if (!alreadyNotified) {
-        console.log(`🚀 [BACKGROUND PUSH] Despachando notificação agrupada (${userExpiringBills.length} contas) para usuário: ${userId}`);
+      // Send condition:
+      // 1. If forceNow is true (manual test or immediate sync button)
+      // 2. OR if Brasília time is >= 08:00 and daily morning alert was not yet sent today
+      // 3. OR if a completely new batch was detected that hasn't been notified today
+      const shouldSend = forceNow || (br.hour >= 8 && !alreadySentDaily) || !alreadySentBatch;
+
+      if (shouldSend) {
+        console.log(`🚀 [BACKGROUND PUSH] Despachando notificação para o usuário ${userId} (${userExpiringBills.length} contas)...`);
 
         let pushTitle = '';
         let pushBody = '';
 
         if (userExpiringBills.length === 1) {
           const b = userExpiringBills[0];
-          pushTitle = b.isOverdue ? "🚨 CONTA EM ATRASO - FinançasPro" : "⚠️ ATENÇÃO - VENCIMENTO";
+          pushTitle = b.isOverdue ? "🚨 CONTA EM ATRASO - FinançasPro" : "⚠️ ATENÇÃO - VENCIMENTO HOJE/BREVE";
           const valStr = b.remaining > 0 ? ` (R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})` : '';
           pushBody = `A despesa "${b.name}"${valStr} vence no dia ${b.due}. Toque para regularizar.`;
         } else {
           const overdueCount = userExpiringBills.filter(b => b.isOverdue).length;
           pushTitle = overdueCount > 0
-            ? `🚨 ATENÇÃO - ${userExpiringBills.length} CONTAS A PAGAR (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`
+            ? `🚨 ATENÇÃO - ${userExpiringBills.length} CONTAS (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`
             : `⚠️ ATENÇÃO - VENCIMENTO DE ${userExpiringBills.length} CONTAS`;
 
-          const listSummary = userExpiringBills.slice(0, 5).map(b => {
+          const listSummary = userExpiringBills.slice(0, 4).map(b => {
             const valStr = b.remaining > 0 ? ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : '';
-            const st = b.isOverdue ? ' [ATRASADA]' : ` (Dia ${b.due})`;
+            const st = b.isOverdue ? ' [ATRASADA]' : ` (${b.due})`;
             return `• ${b.name}${valStr}${st}`;
           });
 
-          if (userExpiringBills.length > 5) {
-            listSummary.push(`... e mais ${userExpiringBills.length - 5} conta(s).`);
+          if (userExpiringBills.length > 4) {
+            listSummary.push(`... e mais ${userExpiringBills.length - 4} conta(s).`);
           }
 
-          pushBody = `Você tem ${userExpiringBills.length} contas para regularizar:\n` + listSummary.join('\n');
+          pushBody = `Lembrete das 08h: Você tem ${userExpiringBills.length} contas pendentes:\n` + listSummary.join('\n');
         }
 
         const messagePayload = JSON.stringify({
@@ -432,7 +487,7 @@ async function runBackgroundPushNotificationChecker() {
             sentCount++;
             validSubs.push(sub);
           } catch (subErr: any) {
-            console.warn(`⚠️ Falha ao despachar push de background para dispositivo do usuário ${userId}:`, subErr?.statusCode, subErr?.message || subErr);
+            console.warn(`⚠️ Falha ao despachar push para dispositivo do usuário ${userId}:`, subErr?.statusCode, subErr?.message || subErr);
             if (subErr?.statusCode !== 410 && subErr?.statusCode !== 404) {
               validSubs.push(sub);
             }
@@ -447,31 +502,38 @@ async function runBackgroundPushNotificationChecker() {
           } catch (e) {}
         }
 
-        markLocalAlertNotified(alertDateKey);
+        if (br.hour >= 8) {
+          markLocalAlertNotified(dailyAlertKey);
+        }
+        markLocalAlertNotified(immediateBatchKey);
 
         try {
           const db = admin.firestore();
-          await db.collection("notified_alerts").doc(alertDateKey).set({
+          await db.collection("notified_alerts").doc(dailyAlertKey).set({
             userId,
             count: userExpiringBills.length,
             dispatchedAt: new Date().toISOString()
           });
         } catch (e) {}
 
-        console.log(`✅ [BACKGROUND PUSH] Notificação entregue ao sistema operacional para ${sentCount} dispositivo(s).`);
+        totalDispatched += sentCount;
+        console.log(`✅ [BACKGROUND PUSH] Notificação entregue para ${sentCount} dispositivo(s) do usuário ${userId}.`);
       }
     }
   }
+
+  return { sent: totalDispatched, userCount: userIds.length };
 }
 
 if (!process.env.VERCEL) {
   setTimeout(() => {
     runBackgroundPushNotificationChecker().catch((e) => console.warn("⚠️ Background push checker error:", e?.message || e));
-  }, 10000);
+  }, 5000);
 
+  // Check every 2 minutes so 08:00 AM is hit with high precision
   setInterval(() => {
     runBackgroundPushNotificationChecker().catch((e) => console.warn("⚠️ Background push checker error:", e?.message || e));
-  }, 1000 * 60 * 15); // Check every 15 minutes
+  }, 1000 * 60 * 2);
 }
 
 // API route 1: Healthcheck
@@ -1215,12 +1277,51 @@ app.post("/api/push/test-background", async (req, res) => {
   }
 });
 
+// API route: Get current push subscription status and scheduled alert details
+app.get("/api/push/status/:userId", (req, res) => {
+  try {
+    const { userId } = req.params;
+    const allSubs = getLocalSubscriptions();
+    const userSubs = allSubs[userId] || [];
+    const allBills = getLocalUserBills();
+    const userBills = allBills[userId] || [];
+    const br = getBrasiliaDate();
+
+    res.json({
+      userId,
+      isSubscribed: userSubs.length > 0,
+      deviceCount: userSubs.length,
+      billsCount: userBills.length,
+      scheduledHour: "08:00",
+      currentBrasiliaTime: `${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}`,
+      currentBrasiliaDate: br.dateStr
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Erro ao consultar status" });
+  }
+});
+
+// API route: Immediately trigger notification check for a user (bypassing time constraint)
+app.post("/api/push/trigger-now", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: "userId é obrigatório." });
+    }
+    const result = await runBackgroundPushNotificationChecker(true, userId);
+    res.json({ success: true, result });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Erro interno" });
+  }
+});
+
 // API route for external cron / automated triggers to sweep and send alerts
 app.all("/api/cron/check-alerts", async (req, res) => {
   try {
     await ensureVapidKeys();
-    await runBackgroundPushNotificationChecker();
-    res.json({ success: true, message: "Varredura de notificações executada com sucesso.", timestamp: new Date().toISOString() });
+    const force = req.query.force === 'true' || req.body?.force === true;
+    const result = await runBackgroundPushNotificationChecker(force);
+    res.json({ success: true, message: "Varredura de notificações executada com sucesso.", result, timestamp: new Date().toISOString() });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || String(err) });
   }

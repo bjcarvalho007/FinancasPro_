@@ -78,24 +78,62 @@ export default function SettingsPanel({
   }
 
   const [backgroundTestCountdown, setBackgroundTestCountdown] = useState<number | null>(null);
+  const [serverPushStatus, setServerPushStatus] = useState<any>(null);
+  const [isInIframe, setIsInIframe] = useState(false);
+
+  const loadServerStatus = async () => {
+    if (!auth.currentUser) return;
+    try {
+      const res = await fetch(`/api/push/status/${auth.currentUser.uid}`);
+      if (res.ok) {
+        const data = await res.json();
+        setServerPushStatus(data);
+        if (data.isSubscribed) {
+          setIsPushSubscribed(true);
+        }
+      }
+    } catch (e) {}
+  };
 
   // Detect Web Push capabilities and current state on load
   useEffect(() => {
+    setIsInIframe(window.self !== window.top);
+
     if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) {
       setIsPushSupported(true);
-      navigator.serviceWorker.ready.then((reg) => {
-        reg.pushManager.getSubscription().then((sub) => {
+      
+      const initCheck = async () => {
+        try {
+          let reg = await navigator.serviceWorker.getRegistration();
+          if (!reg) {
+            reg = await navigator.serviceWorker.register('/sw.js');
+          }
+          const sub = await reg?.pushManager?.getSubscription();
           setIsPushSubscribed(!!sub);
-        });
-      });
+          loadServerStatus();
+        } catch (e) {}
+      };
+
+      initCheck();
     }
   }, []);
 
   const togglePushSubscription = async () => {
+    if (isInIframe) {
+      showToast('Para ativar notificações no celular ou computador, abra o app em uma aba própria!', 'warning');
+      window.open(window.location.href, '_blank');
+      return;
+    }
+
     if (!isPushSupported) return;
     setPushLoading(true);
     try {
-      const reg = await navigator.serviceWorker.ready;
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register('/sw.js');
+      }
+      await navigator.serviceWorker.ready;
+
       if (isPushSubscribed) {
         const sub = await reg.pushManager.getSubscription();
         if (sub) {
@@ -103,10 +141,11 @@ export default function SettingsPanel({
         }
         setIsPushSubscribed(false);
         showToast('Inscrição do Web Push removida para este dispositivo.', 'success');
+        loadServerStatus();
       } else {
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') {
-          showToast('Permissão de notificações negada pelo navegador.', 'warning');
+          showToast('Permissão de notificações não concedida pelo navegador.', 'warning');
           setPushLoading(false);
           return;
         }
@@ -145,26 +184,54 @@ export default function SettingsPanel({
           }).catch(() => {});
 
           // 2. Backup to Firestore
-          const cleanEndpoint = sub.endpoint
-            .replace(/[^a-zA-Z0-9]/g, '_')
-            .substring(sub.endpoint.length - 60);
-          const subId = `sub_${auth.currentUser.uid}_${cleanEndpoint}`;
+          try {
+            const cleanEndpoint = sub.endpoint
+              .replace(/[^a-zA-Z0-9]/g, '_')
+              .substring(sub.endpoint.length - 60);
+            const subId = `sub_${auth.currentUser.uid}_${cleanEndpoint}`;
 
-          await setDoc(doc(db, 'push_subscriptions', subId), {
-            id: subId,
-            userId: auth.currentUser.uid,
-            subscription: JSON.stringify(sub),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          }).catch(() => {});
+            await setDoc(doc(db, 'push_subscriptions', subId), {
+              id: subId,
+              userId: auth.currentUser.uid,
+              subscription: JSON.stringify(sub),
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+          } catch (e) {}
         }
 
         setIsPushSubscribed(true);
-        showToast('Dispositivo inscrito com sucesso para alertas mesmo com o app fechado!', 'success');
+        showToast('Dispositivo conectado com sucesso! Alertas programados para as 08:00.', 'success');
+        loadServerStatus();
       }
     } catch (err) {
       console.error('Erro ao alternar Web Push:', err);
       showToast('Falha ao configurar Web Push de notificações.', 'error');
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const triggerImmediateNotificationCheck = async () => {
+    if (!auth.currentUser) return;
+    setPushLoading(true);
+    try {
+      showToast('Disparando verificação e alerta imediato no servidor...', 'warning');
+      const res = await fetch('/api/push/trigger-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: auth.currentUser.uid })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao disparar.');
+      if (data.result && data.result.sent > 0) {
+        showToast(`✅ Alerta enviado para ${data.result.sent} dispositivo(s)!`, 'success');
+      } else {
+        showToast('ℹ️ Nenhuma fatura a vencer ou dispositivo ainda não sincronizado.', 'warning');
+      }
+      loadServerStatus();
+    } catch (err: any) {
+      showToast(err.message || 'Erro ao disparar alerta imediato.', 'error');
     } finally {
       setPushLoading(false);
     }
@@ -667,6 +734,23 @@ export default function SettingsPanel({
 
           {/* Web Push configuration section */}
           <div className="pt-4 border-t border-white/5 space-y-4">
+            {isInIframe && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <p className="text-[11px] text-amber-200/90 leading-tight">
+                    Para que o celular receba notificações com a tela bloqueada, o app precisa estar aberto em sua aba própria ou instalado.
+                  </p>
+                </div>
+                <button
+                  onClick={() => window.open(window.location.href, '_blank')}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-[10px] uppercase tracking-wider shrink-0 transition-colors"
+                >
+                  Abrir em Nova Aba
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="max-w-[70%]">
                 <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
@@ -674,7 +758,7 @@ export default function SettingsPanel({
                   {t('alertasSegundoPlano', 'Alertas em Segundo Plano (PWA)')}
                 </span>
                 <span className="text-[10px] text-slate-500 block leading-normal mt-0.5">
-                  {t('recebaAvisosInstantaneos', 'Receba avisos instantâneos mesmo se o navegador ou app estiverem fechados.')}
+                  {t('recebaAvisosInstantaneos', 'Receba avisos automáticos de vencimentos às 08:00 mesmo com o app ou navegador fechados.')}
                 </span>
               </div>
               <button
@@ -692,6 +776,22 @@ export default function SettingsPanel({
               </button>
             </div>
 
+            {/* Server Status Badge & Diagnostics */}
+            <div className="p-3 bg-slate-900/70 border border-white/5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-[10px]">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${isPushSubscribed ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                <span className="text-slate-300">
+                  {isPushSubscribed ? 'Dispositivo conectado ao robô do servidor' : 'Dispositivo desconectado'}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-slate-500">
+                <span>Horário do robô: <strong className="text-slate-300">08:00 (Brasília)</strong></span>
+                {serverPushStatus?.serverTimeBrasilia && (
+                  <span>Agora: <strong className="text-indigo-400">{serverPushStatus.serverTimeBrasilia}</strong></span>
+                )}
+              </div>
+            </div>
+
             {isPushSupported && isPushSubscribed && (
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
@@ -701,19 +801,23 @@ export default function SettingsPanel({
                     className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-950/20 disabled:opacity-50"
                   >
                     <Smartphone className="w-3.5 h-3.5" />
-                    <span>Testar com App Fechado (Dispara em 10s)</span>
+                    <span>Testar com App Fechado (10s)</span>
+                  </button>
+                  <button
+                    onClick={triggerImmediateNotificationCheck}
+                    disabled={pushLoading}
+                    className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/20 font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    {pushLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
+                    <span>Disparar Varredura de Contas Agora</span>
                   </button>
                   <button
                     onClick={triggerTestPush}
                     disabled={pushLoading}
                     className="bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
                   >
-                    {pushLoading ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Check className="w-3.5 h-3.5" />
-                    )}
-                    <span>Teste Instantâneo</span>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Teste Imediato</span>
                   </button>
                 </div>
 

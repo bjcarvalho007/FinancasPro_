@@ -207,20 +207,26 @@ function getLocalSubscriptions(): { [userId: string]: any[] } {
 
 function saveLocalSubscription(userId: string, subscription: any) {
   try {
+    if (!userId || !subscription) return;
     const data = getLocalSubscriptions();
     if (!data[userId]) data[userId] = [];
     const subObj = typeof subscription === 'string' ? JSON.parse(subscription) : subscription;
     
     const endpoint = subObj?.endpoint;
-    const exists = data[userId].some((s: any) => {
+    if (!endpoint) return;
+
+    const index = data[userId].findIndex((s: any) => {
       const ep = typeof s === 'string' ? JSON.parse(s)?.endpoint : s?.endpoint;
       return ep === endpoint;
     });
 
-    if (!exists && endpoint) {
+    if (index >= 0) {
+      data[userId][index] = subObj;
+    } else {
       data[userId].push(subObj);
-      fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(data, null, 2), "utf8");
     }
+    fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(data, null, 2), "utf8");
+    console.log(`💾 [SUBS] Dispositivo registrado com sucesso para usuário ${userId}. Total registrado: ${data[userId].length}`);
   } catch (e) {
     console.warn("⚠️ Erro ao salvar assinatura local:", e);
   }
@@ -245,7 +251,15 @@ function saveLocalUserBills(userId: string, bills: any[]) {
   }
 }
 
-function getLocalNotifiedAlerts(): { [alertKey: string]: boolean } {
+interface AlertRecord {
+  notified: boolean;
+  timestamp: string;
+  timeStr: string;
+  slot: string;
+  count: number;
+}
+
+function getLocalNotifiedAlerts(): { [alertKey: string]: AlertRecord } {
   try {
     if (fs.existsSync(NOTIFIED_ALERTS_FILE)) {
       return JSON.parse(fs.readFileSync(NOTIFIED_ALERTS_FILE, "utf8")) || {};
@@ -254,15 +268,23 @@ function getLocalNotifiedAlerts(): { [alertKey: string]: boolean } {
   return {};
 }
 
-function markLocalAlertNotified(alertKey: string) {
+function markLocalAlertNotified(alertKey: string, meta?: Partial<AlertRecord>) {
   try {
     const data = getLocalNotifiedAlerts();
-    data[alertKey] = true;
+    const br = getBrasiliaDate();
+    data[alertKey] = {
+      notified: true,
+      timestamp: new Date().toISOString(),
+      timeStr: br.timeStr,
+      slot: meta?.slot || 'auto',
+      count: meta?.count || 0,
+      ...meta
+    };
     fs.writeFileSync(NOTIFIED_ALERTS_FILE, JSON.stringify(data, null, 2), "utf8");
   } catch (e) {}
 }
 
-function getBrasiliaDate(): { hour: number; minute: number; dateStr: string; fullDate: Date } {
+function getBrasiliaDate(): { hour: number; minute: number; dateStr: string; timeStr: string; fullDate: Date } {
   const now = new Date();
   try {
     const brFormatter = new Intl.DateTimeFormat('pt-BR', {
@@ -282,19 +304,25 @@ function getBrasiliaDate(): { hour: number; minute: number; dateStr: string; ful
     const day = getPart('day');
     const hour = parseInt(getPart('hour'), 10);
     const minute = parseInt(getPart('minute'), 10);
+    const safeHour = isNaN(hour) ? now.getUTCHours() - 3 : hour;
+    const safeMin = isNaN(minute) ? now.getUTCMinutes() : minute;
     return {
-      hour: isNaN(hour) ? now.getUTCHours() - 3 : hour,
-      minute: isNaN(minute) ? now.getUTCMinutes() : minute,
+      hour: safeHour,
+      minute: safeMin,
       dateStr: `${year}-${month}-${day}`,
+      timeStr: `${String(safeHour).padStart(2, '0')}:${String(safeMin).padStart(2, '0')}`,
       fullDate: now
     };
   } catch (e) {
     const brOffset = -3 * 60; // UTC-3
     const brTime = new Date(now.getTime() + (brOffset + now.getTimezoneOffset()) * 60000);
+    const hour = brTime.getHours();
+    const minute = brTime.getMinutes();
     return {
-      hour: brTime.getHours(),
-      minute: brTime.getMinutes(),
+      hour,
+      minute,
       dateStr: brTime.toISOString().substring(0, 10),
+      timeStr: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
       fullDate: now
     };
   }
@@ -425,148 +453,151 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
       }
     }
 
-    if (userExpiringBills.length > 0) {
-      // Keys for daily morning (08:00) and midday (12:00) alerts in Brasília timezone
-      const morningAlertKey = `push_morning_alert_${userId}_${br.dateStr}`;
-      const middayAlertKey = `push_midday_alert_${userId}_${br.dateStr}`;
-      const batchSignature = userExpiringBills.map(b => b.id).sort().join("_");
-      const immediateBatchKey = `push_batch_${userId}_${br.dateStr}_${batchSignature}`;
+    // Keys for daily morning (08:00) and midday (12:00) alerts in Brasília timezone
+    const morningAlertKey = `push_morning_alert_${userId}_${br.dateStr}`;
+    const middayAlertKey = `push_midday_alert_${userId}_${br.dateStr}`;
+    const batchSignature = userExpiringBills.map(b => b.id).sort().join("_");
+    const immediateBatchKey = `push_batch_${userId}_${br.dateStr}_${batchSignature}`;
 
-      const alreadySentMorning = notifiedAlerts[morningAlertKey];
-      const alreadySentMidday = notifiedAlerts[middayAlertKey];
-      const alreadySentBatch = notifiedAlerts[immediateBatchKey];
+    const alreadySentMorning = Boolean(notifiedAlerts[morningAlertKey]?.notified);
+    const alreadySentMidday = Boolean(notifiedAlerts[middayAlertKey]?.notified);
+    const alreadySentBatch = Boolean(notifiedAlerts[immediateBatchKey]?.notified);
 
-      // Determine schedule slots:
-      // Morning slot: from 08:00 to 11:59
-      const isMorningSlot = br.hour >= 8 && br.hour < 12;
-      // Midday slot: from 12:00 onwards
-      const isMiddaySlot = br.hour >= 12;
+    // Schedule slots in Brasília timezone:
+    // Morning slot: from 08:00 to 11:59
+    const isMorningSlot = br.hour >= 8 && br.hour < 12;
+    // Midday slot: from 12:00 to 20:59
+    const isMiddaySlot = br.hour >= 12 && br.hour < 21;
 
-      const isMorningTrigger = isMorningSlot && !alreadySentMorning;
-      const isMiddayTrigger = isMiddaySlot && !alreadySentMidday;
+    const isMorningTrigger = !forceNow && isMorningSlot && !alreadySentMorning && userExpiringBills.length > 0;
+    const isMiddayTrigger = !forceNow && isMiddaySlot && !alreadySentMidday && userExpiringBills.length > 0;
 
-      // Send condition:
-      // 1. If forceNow is true (manual test or immediate sync button)
-      // 2. OR scheduled morning trigger (08:00-11:59) not yet sent today
-      // 3. OR scheduled midday trigger (12:00+) not yet sent today
-      // 4. OR if a completely new batch was detected that hasn't been notified today
-      const shouldSend = forceNow || isMorningTrigger || isMiddayTrigger || !alreadySentBatch;
+    // Send condition:
+    // 1. If forceNow is true (manual test or immediate sync button)
+    // 2. OR scheduled morning trigger (08:00-11:59) not yet sent today
+    // 3. OR scheduled midday trigger (12:00+) not yet sent today
+    // 4. OR if a completely new batch was detected that hasn't been notified today
+    const shouldSend = forceNow || isMorningTrigger || isMiddayTrigger || (!alreadySentBatch && userExpiringBills.length > 0);
 
-      if (shouldSend) {
-        console.log(`🚀 [BACKGROUND PUSH] Despachando notificação para o usuário ${userId} (${userExpiringBills.length} contas) [Manhã: ${isMorningTrigger}, Meio-Dia: ${isMiddayTrigger}, Forçado: ${forceNow}]...`);
+    if (shouldSend) {
+      console.log(`🚀 [BACKGROUND PUSH] Despachando notificação para usuário ${userId} (${userExpiringBills.length} contas) [Manhã: ${isMorningTrigger}, Meio-Dia: ${isMiddayTrigger}, Forçado: ${forceNow}]...`);
 
-        const isMidday = isMiddayTrigger || (br.hour >= 12 && !isMorningTrigger);
-        const isMorning = !isMidday && (isMorningTrigger || br.hour < 12);
+      const isMidday = isMiddayTrigger || (br.hour >= 12 && !isMorningTrigger);
 
-        let greetingPrefix = "Lembrete Financeiro";
-        if (isMidday) {
-          greetingPrefix = "☀️ Lembrete do Meio-Dia (12h)";
-        } else if (isMorning) {
-          greetingPrefix = "🌅 Lembrete da Manhã (08h)";
-        }
+      let pushTitle = '';
+      let pushBody = '';
 
-        let pushTitle = '';
-        let pushBody = '';
-
-        if (userExpiringBills.length === 1) {
-          const b = userExpiringBills[0];
-          const valStr = b.remaining > 0 ? ` (R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})` : '';
-          if (b.isOverdue) {
-            pushTitle = "🚨 CONTA EM ATRASO - FinançasPro";
-            pushBody = `Atenção: A despesa "${b.name}"${valStr} está atrasada (vencimento: ${b.due}). Toque para regularizar.`;
-          } else if (isMidday) {
-            pushTitle = "☀️ Lembrete do Meio-Dia - FinançasPro";
-            pushBody = `${greetingPrefix}: A despesa "${b.name}"${valStr} vence no dia ${b.due}. Não se esqueça de pagar.`;
-          } else {
-            pushTitle = "🌅 Lembrete da Manhã - FinançasPro";
-            pushBody = `${greetingPrefix}: A despesa "${b.name}"${valStr} vence no dia ${b.due}. Toque para regularizar.`;
-          }
+      if (userExpiringBills.length === 0) {
+        // When forceNow is triggered with no pending bills, send a reassuring status check
+        pushTitle = "✅ FinançasPro - Alertas 100% Operacionais";
+        pushBody = "Varredura executada com sucesso! Todas as suas despesas cadastradas estão em dia. Seu aparelho receberá os alertas automáticos às 08:00 (Manhã) e 12:00 (Meio-Dia).";
+      } else if (userExpiringBills.length === 1) {
+        const b = userExpiringBills[0];
+        const valStr = b.remaining > 0 ? ` (R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})` : '';
+        if (b.isOverdue) {
+          pushTitle = "🚨 CONTA EM ATRASO - FinançasPro";
+          pushBody = `Atenção: A despesa "${b.name}"${valStr} está atrasada (vencimento: ${b.due}). Toque para regularizar.`;
+        } else if (isMidday) {
+          pushTitle = "☀️ Lembrete do Meio-Dia (12:00) - FinançasPro";
+          pushBody = `☀️ Boa tarde! Varredura das 12:00: A despesa "${b.name}"${valStr} aguarda pagamento hoje. Aproveite o almoço para quitar e evitar juros.`;
         } else {
-          const overdueCount = userExpiringBills.filter(b => b.isOverdue).length;
-          if (overdueCount > 0) {
-            pushTitle = `🚨 ATENÇÃO - ${userExpiringBills.length} CONTAS (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`;
-          } else if (isMidday) {
-            pushTitle = `☀️ Meio-Dia: ${userExpiringBills.length} Contas para Pagar`;
-          } else {
-            pushTitle = `🌅 Manhã: ${userExpiringBills.length} Contas para Pagar`;
-          }
-
-          const listSummary = userExpiringBills.slice(0, 4).map(b => {
-            const valStr = b.remaining > 0 ? ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : '';
-            const st = b.isOverdue ? ' [ATRASADA]' : ` (${b.due})`;
-            return `• ${b.name}${valStr}${st}`;
-          });
-
-          if (userExpiringBills.length > 4) {
-            listSummary.push(`... e mais ${userExpiringBills.length - 4} conta(s).`);
-          }
-
-          pushBody = `${greetingPrefix}: Você tem ${userExpiringBills.length} contas pendentes:\n` + listSummary.join('\n');
+          pushTitle = "🌅 Lembrete da Manhã (08:00) - FinançasPro";
+          pushBody = `🌅 Bom dia! Varredura das 08:00: A despesa "${b.name}"${valStr} vence hoje/está pendente (${b.due}). Organize seu pagamento e evite juros.`;
+        }
+      } else {
+        const overdueCount = userExpiringBills.filter(b => b.isOverdue).length;
+        if (overdueCount > 0) {
+          pushTitle = `🚨 ATENÇÃO - ${userExpiringBills.length} CONTAS (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`;
+        } else if (isMidday) {
+          pushTitle = `☀️ Meio-Dia (12:00): ${userExpiringBills.length} Contas para Pagar`;
+        } else {
+          pushTitle = `🌅 Manhã (08:00): ${userExpiringBills.length} Contas para Pagar`;
         }
 
-        const messagePayload = JSON.stringify({
-          title: pushTitle,
-          body: pushBody,
-          icon: "/app_icon.png",
-          badge: "/app_icon.png",
-          tag: "financaspro-vencimentos-resumo",
-          data: { url: "/" }
+        const listSummary = userExpiringBills.slice(0, 4).map(b => {
+          const valStr = b.remaining > 0 ? ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : '';
+          const st = b.isOverdue ? ' [ATRASADA]' : ` (${b.due})`;
+          return `• ${b.name}${valStr}${st}`;
         });
 
-        let sentCount = 0;
-        const validSubs: any[] = [];
-        for (const sub of subs) {
-          try {
-            await webpush.sendNotification(sub, messagePayload);
-            sentCount++;
-            validSubs.push(sub);
-          } catch (subErr: any) {
-            console.warn(`⚠️ Falha ao despachar push para dispositivo do usuário ${userId}:`, subErr?.statusCode, subErr?.message || subErr);
-            if (subErr?.statusCode !== 410 && subErr?.statusCode !== 404) {
-              validSubs.push(sub);
-            }
-          }
+        if (userExpiringBills.length > 4) {
+          listSummary.push(`... e mais ${userExpiringBills.length - 4} conta(s).`);
         }
 
-        if (validSubs.length !== subs.length) {
-          const allSubs = getLocalSubscriptions();
-          allSubs[userId] = validSubs;
-          try {
-            fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(allSubs, null, 2), "utf8");
-          } catch (e) {}
-        }
-
-        if (isMorningSlot || isMorningTrigger) {
-          markLocalAlertNotified(morningAlertKey);
-        }
-        if (isMiddaySlot || isMiddayTrigger) {
-          markLocalAlertNotified(middayAlertKey);
-        }
-        markLocalAlertNotified(immediateBatchKey);
-
-        try {
-          const db = admin.firestore();
-          if (isMorningSlot || isMorningTrigger) {
-            await db.collection("notified_alerts").doc(morningAlertKey).set({
-              userId,
-              slot: "morning",
-              count: userExpiringBills.length,
-              dispatchedAt: new Date().toISOString()
-            });
-          }
-          if (isMiddaySlot || isMiddayTrigger) {
-            await db.collection("notified_alerts").doc(middayAlertKey).set({
-              userId,
-              slot: "midday",
-              count: userExpiringBills.length,
-              dispatchedAt: new Date().toISOString()
-            });
-          }
-        } catch (e) {}
-
-        totalDispatched += sentCount;
-        console.log(`✅ [BACKGROUND PUSH] Notificação entregue para ${sentCount} dispositivo(s) do usuário ${userId}.`);
+        const greetingPrefix = isMidday ? "☀️ Boa tarde! Varredura do almoço (12:00)" : "🌅 Bom dia! Varredura matinal (08:00)";
+        pushBody = `${greetingPrefix}: Você tem ${userExpiringBills.length} contas para regularizar:\n` + listSummary.join('\n');
       }
+
+      const messagePayload = JSON.stringify({
+        title: pushTitle,
+        body: pushBody,
+        icon: "/app_icon.png",
+        badge: "/app_icon.png",
+        tag: `financaspro-${isMidday ? 'midday' : 'morning'}-${br.dateStr}`,
+        data: { url: "/" }
+      });
+
+      let sentCount = 0;
+      const validSubs: any[] = [];
+      for (const rawSub of subs) {
+        try {
+          const sub = typeof rawSub === 'string' ? JSON.parse(rawSub) : rawSub;
+          if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+            console.warn("⚠️ Assinatura push incompleta ignorada:", sub?.endpoint);
+            continue;
+          }
+          await webpush.sendNotification(sub, messagePayload);
+          sentCount++;
+          validSubs.push(sub);
+        } catch (subErr: any) {
+          console.warn(`⚠️ Falha ao despachar push para dispositivo do usuário ${userId}:`, subErr?.statusCode, subErr?.message || subErr);
+          if (subErr?.statusCode !== 410 && subErr?.statusCode !== 404) {
+            validSubs.push(rawSub);
+          }
+        }
+      }
+
+      if (validSubs.length !== subs.length) {
+        const allSubs = getLocalSubscriptions();
+        allSubs[userId] = validSubs;
+        try {
+          fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(allSubs, null, 2), "utf8");
+        } catch (e) {}
+      }
+
+      // Record dispatch tracking
+      if (isMorningTrigger) {
+        markLocalAlertNotified(morningAlertKey, { slot: 'morning', count: userExpiringBills.length });
+      }
+      if (isMiddayTrigger) {
+        markLocalAlertNotified(middayAlertKey, { slot: 'midday', count: userExpiringBills.length });
+      }
+      if (userExpiringBills.length > 0) {
+        markLocalAlertNotified(immediateBatchKey, { slot: 'batch', count: userExpiringBills.length });
+      }
+
+      try {
+        const db = admin.firestore();
+        if (isMorningTrigger) {
+          await db.collection("notified_alerts").doc(morningAlertKey).set({
+            userId,
+            slot: "morning",
+            count: userExpiringBills.length,
+            dispatchedAt: new Date().toISOString()
+          });
+        }
+        if (isMiddayTrigger) {
+          await db.collection("notified_alerts").doc(middayAlertKey).set({
+            userId,
+            slot: "midday",
+            count: userExpiringBills.length,
+            dispatchedAt: new Date().toISOString()
+          });
+        }
+      } catch (e) {}
+
+      totalDispatched += sentCount;
+      console.log(`✅ [BACKGROUND PUSH] Notificação entregue para ${sentCount} dispositivo(s) do usuário ${userId}.`);
     }
   }
 
@@ -1327,7 +1358,7 @@ app.post("/api/push/test-background", async (req, res) => {
 
     if (userSubs.length === 0) {
       return res.status(400).json({ 
-        error: "Nenhum dispositivo cadastrado para este usuário. Toque em 'Permitir' quando o navegador solicitar ou abra o FinançasPro em uma nova aba/instalado para registrar seu aparelho." 
+        error: "Nenhum dispositivo cadastrado para este usuário. Ative as notificações primeiro tocando no botão 'Ativar Alertas em Segundo Plano' ou abrindo em uma aba própria." 
       });
     }
 
@@ -1338,15 +1369,17 @@ app.post("/api/push/test-background", async (req, res) => {
       console.log(`⏰ [TEST BACKGROUND PUSH] Disparando alerta de teste em segundo plano para usuário ${userId} (${userSubs.length} dispositivo(s))...`);
       const messagePayload = JSON.stringify({
         title: "🚨 FinançasPro - Alerta em Segundo Plano",
-        body: "Teste de notificação com sistema fechado bem-sucedido! Seus alertas de vencimento estão 100% operacionais.",
+        body: "Teste de notificação com aplicativo fechado bem-sucedido! Seus alertas das 08:00 (Manhã) e 12:00 (Meio-Dia) estão 100% operacionais.",
         icon: "/app_icon.png",
         badge: "/app_icon.png",
         tag: "financaspro-test-alert",
         data: { url: "/", action: "OPEN_APP" }
       });
 
-      for (const sub of userSubs) {
+      for (const rawSub of userSubs) {
         try {
+          const sub = typeof rawSub === 'string' ? JSON.parse(rawSub) : rawSub;
+          if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) continue;
           await webpush.sendNotification(sub, messagePayload);
           console.log(`✅ [TEST PUSH] Notificação enviada para dispositivo.`);
         } catch (err: any) {
@@ -1378,15 +1411,20 @@ app.get("/api/push/status/:userId", (req, res) => {
     const morningKey = `push_morning_alert_${userId}_${br.dateStr}`;
     const middayKey = `push_midday_alert_${userId}_${br.dateStr}`;
 
+    const morningInfo = notifiedAlerts[morningKey];
+    const middayInfo = notifiedAlerts[middayKey];
+
     res.json({
       userId,
       isSubscribed: userSubs.length > 0,
       deviceCount: userSubs.length,
       billsCount: userBills.length,
       scheduledHours: ["08:00 (Manhã)", "12:00 (Meio-Dia)"],
-      morningSentToday: !!notifiedAlerts[morningKey],
-      middaySentToday: !!notifiedAlerts[middayKey],
-      currentBrasiliaTime: `${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}`,
+      morningSentToday: Boolean(morningInfo?.notified),
+      morningSentTime: morningInfo?.timeStr || null,
+      middaySentToday: Boolean(middayInfo?.notified),
+      middaySentTime: middayInfo?.timeStr || null,
+      currentBrasiliaTime: br.timeStr,
       currentBrasiliaDate: br.dateStr
     });
   } catch (err: any) {

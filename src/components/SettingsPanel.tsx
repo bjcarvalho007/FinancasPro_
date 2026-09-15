@@ -4,7 +4,7 @@ import { auth, db } from '../firebase';
 import { useLanguage } from '../utils/i18n';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
-import { Settings, Download, Trash2, ShieldAlert, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle, HelpCircle } from 'lucide-react';
+import { Settings, Download, Trash2, ShieldAlert, ShieldCheck, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle, HelpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportPremiumPDF, exportPremiumSpreadsheet } from '../utils/reportGenerator';
 
@@ -119,12 +119,6 @@ export default function SettingsPanel({
   }, []);
 
   const ensureDevicePushSubscription = async (): Promise<PushSubscription | null> => {
-    if (isInIframe) {
-      showToast('Para ativar notificações no celular ou computador, abra o app em uma aba própria!', 'warning');
-      window.open(window.location.href, '_blank');
-      return null;
-    }
-
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
       showToast('Notificações não são suportadas neste navegador ou dispositivo.', 'warning');
       return null;
@@ -134,11 +128,17 @@ export default function SettingsPanel({
     if (perm === 'default') {
       try {
         perm = await Notification.requestPermission();
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Erro ao solicitar permissão de notificações:', e);
+      }
     }
 
     if (perm !== 'granted') {
-      showToast('Permissão de notificações não concedida. Toque no ícone de configurações ou cadeado na barra de endereço do navegador para permitir.', 'warning');
+      if (isInIframe) {
+        showToast('⚠️ No modo de pré-visualização, as notificações podem ser bloqueadas pelo navegador. Abra em Nova Aba para conceder permissão!', 'warning');
+      } else {
+        showToast('Permissão de notificações não concedida. Toque no ícone de cadeado na barra de endereço do navegador para permitir.', 'warning');
+      }
       return null;
     }
 
@@ -163,7 +163,7 @@ export default function SettingsPanel({
       }
 
       if (auth.currentUser && sub) {
-        // 1. Send subscription to Express API for background OS push
+        // 1. Send subscription & current bills to Express API for background sweeps
         await fetch('/api/push/subscribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -195,17 +195,14 @@ export default function SettingsPanel({
       return sub;
     } catch (err: any) {
       console.warn('Erro ao obter assinatura push:', err);
+      if (isInIframe) {
+        showToast('Dica: Abra o FinançasPro em Nova Aba para ativar o Service Worker de notificações nativas.', 'warning');
+      }
       return null;
     }
   };
 
   const togglePushSubscription = async () => {
-    if (isInIframe) {
-      showToast('Para ativar notificações no celular ou computador, abra o app em uma aba própria!', 'warning');
-      window.open(window.location.href, '_blank');
-      return;
-    }
-
     if (!isPushSupported) return;
     setPushLoading(true);
     try {
@@ -218,7 +215,7 @@ export default function SettingsPanel({
           }
         }
         setIsPushSubscribed(false);
-        showToast('Inscrição do Web Push removida para este dispositivo.', 'success');
+        showToast('Inscrição de notificações removida para este dispositivo.', 'success');
         loadServerStatus();
       } else {
         const sub = await ensureDevicePushSubscription();
@@ -815,31 +812,77 @@ export default function SettingsPanel({
             </div>
 
             {/* Server Status Badge & Diagnostics */}
-            <div className="p-3 bg-slate-900/70 border border-white/5 rounded-2xl flex flex-col gap-2 text-[10px]">
+            <div className="p-4 bg-slate-900/80 border border-white/10 rounded-2xl flex flex-col gap-3 text-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${isPushSubscribed ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                  <span className="text-slate-300 font-medium">
+                  <span className={`w-2.5 h-2.5 rounded-full ${isPushSubscribed ? 'bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50' : 'bg-amber-400'}`} />
+                  <span className="text-white font-semibold">
                     {isPushSubscribed ? 'Dispositivo conectado ao robô do servidor' : 'Dispositivo desconectado'}
                   </span>
                 </div>
                 {serverPushStatus?.currentBrasiliaTime && (
-                  <div className="text-slate-400">
-                    Hora em Brasília: <strong className="text-indigo-400">{serverPushStatus.currentBrasiliaTime}</strong>
+                  <div className="text-slate-400 text-[11px] bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
+                    Horário em Brasília: <strong className="text-indigo-400 font-mono text-xs">{serverPushStatus.currentBrasiliaTime}</strong>
                   </div>
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/5 text-slate-400">
-                <span className="text-slate-500">Horários de varredura:</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 font-bold border border-amber-500/20">
-                  🌅 08:00 (Manhã)
-                  {serverPushStatus?.morningSentToday && <span className="text-emerald-400 text-[9px]">✓ Enviado</span>}
+              {/* Sweep cards for Morning and Midday */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                {/* 08:00 Morning Sweep */}
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col justify-between gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
+                      🌅 Manhã (08:00 BRT)
+                    </span>
+                    {serverPushStatus?.morningSentToday ? (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                        ✓ Disparado {serverPushStatus.morningSentTime ? `às ${serverPushStatus.morningSentTime}` : 'hoje'}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-semibold">
+                        • Aguardando 08:00
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-300/80 leading-relaxed">
+                    Varredura matinal de contas que vencem hoje ou estão atrasadas, com lembrete dedicado da manhã.
+                  </p>
+                </div>
+
+                {/* 12:00 Midday Sweep */}
+                <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/20 flex flex-col justify-between gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sky-300 text-xs flex items-center gap-1.5">
+                      ☀️ Meio-Dia (12:00 BRT)
+                    </span>
+                    {serverPushStatus?.middaySentToday ? (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                        ✓ Disparado {serverPushStatus.middaySentTime ? `às ${serverPushStatus.middaySentTime}` : 'hoje'}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-semibold">
+                        • Aguardando 12:00
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-300/80 leading-relaxed">
+                    Segunda varredura diária no almoço para reforçar contas pendentes e evitar multas e juros.
+                  </p>
+                </div>
+              </div>
+
+              {/* Independent Tracking explanation */}
+              <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[10px] text-indigo-200/90 leading-relaxed flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Rastreamento independente:</strong> O robô em segundo plano mantém registros separados (<code className="text-indigo-300">push_morning_alert</code> e <code className="text-indigo-300">push_midday_alert</code>), garantindo que ambos os lembretes sejam disparados pontualmente sem sobreposição ou duplicação.
                 </span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-300 font-bold border border-sky-500/20">
-                  ☀️ 12:00 (Meio-Dia)
-                  {serverPushStatus?.middaySentToday && <span className="text-emerald-400 text-[9px]">✓ Enviado</span>}
-                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5 text-[10px] text-slate-400">
+                <span>Aparelhos ativos: <strong className="text-slate-200">{serverPushStatus?.deviceCount || 0}</strong></span>
+                <span>Contas monitoradas: <strong className="text-slate-200">{serverPushStatus?.billsCount || transactions?.length || 0}</strong></span>
               </div>
             </div>
 

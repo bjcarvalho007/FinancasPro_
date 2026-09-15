@@ -142,22 +142,31 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const notificationPromise = self.registration.showNotification(payload.title, {
-    body: payload.body,
-    icon: payload.icon || '/app_icon.png',
-    badge: payload.badge || '/app_icon.png',
-    tag: payload.tag || 'financaspro-alert',
-    renotify: true,
-    requireInteraction: true,
-    data: payload.data || { url: '/' },
-    vibrate: [300, 100, 300, 100, 300],
-    actions: [
-      { action: 'open', title: 'Abrir FinançasPro' },
-      { action: 'close', title: 'Fechar' }
-    ]
-  });
+  const showNotif = async () => {
+    try {
+      return await self.registration.showNotification(payload.title, {
+        body: payload.body,
+        icon: payload.icon || '/app_icon.png',
+        badge: payload.badge || '/app_icon.png',
+        tag: payload.tag || ('financaspro-' + Date.now()),
+        renotify: true,
+        data: payload.data || { url: '/' },
+        vibrate: [300, 100, 300, 100, 300]
+      });
+    } catch (err) {
+      console.warn('[SW] showNotification com opções estendidas falhou, usando modo seguro:', err);
+      try {
+        return await self.registration.showNotification(payload.title, {
+          body: payload.body,
+          icon: '/app_icon.png'
+        });
+      } catch (fallbackErr) {
+        console.error('[SW] Erro crítico ao mostrar notificação:', fallbackErr);
+      }
+    }
+  };
 
-  event.waitUntil(notificationPromise);
+  event.waitUntil(showNotif());
 });
 
 // Listener for notification click events (leads user directly to payment or client)

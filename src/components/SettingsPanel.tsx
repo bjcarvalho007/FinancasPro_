@@ -150,12 +150,34 @@ export default function SettingsPanel({
       await navigator.serviceWorker.ready;
 
       let sub = await reg.pushManager.getSubscription();
-      if (!sub) {
-        const keyRes = await fetch('/api/push/vapid-public-key');
-        if (!keyRes.ok) throw new Error('Falha ao buscar chave pública VAPID');
-        const { publicKey } = await keyRes.json();
-        if (!publicKey || publicKey.length < 65) throw new Error('Chave VAPID inválida');
+      const keyRes = await fetch('/api/push/vapid-public-key');
+      if (!keyRes.ok) throw new Error('Falha ao buscar chave pública VAPID');
+      const { publicKey } = await keyRes.json();
+      if (!publicKey || publicKey.length < 65) throw new Error('Chave VAPID inválida');
 
+      if (sub) {
+        try {
+          const expectedKeyArray = urlBase64ToUint8Array(publicKey);
+          const rawKey = sub.options.applicationServerKey;
+          let match = false;
+          if (rawKey) {
+            const rawKeyArray = new Uint8Array(rawKey);
+            if (rawKeyArray.length === expectedKeyArray.length) {
+              match = rawKeyArray.every((byte, idx) => byte === expectedKeyArray[idx]);
+            }
+          }
+          if (!match) {
+            console.log('🔄 Renovando inscrição push com a nova chave pública VAPID...');
+            await sub.unsubscribe().catch(() => {});
+            sub = null;
+          }
+        } catch (e) {
+          await sub.unsubscribe().catch(() => {});
+          sub = null;
+        }
+      }
+
+      if (!sub) {
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicKey)
@@ -170,7 +192,16 @@ export default function SettingsPanel({
           body: JSON.stringify({
             userId: auth.currentUser.uid,
             subscription: sub,
-            bills: transactions || []
+            bills: (transactions || []).map(t => ({
+              id: t.id,
+              name: t.name,
+              due: t.due,
+              amount: t.amount || t.total_parcelado || 0,
+              paid_amount: t.paid_amount || 0,
+              type: t.type,
+              monthKey: t.monthKey,
+              isOverdue: t.isOverdue
+            }))
           })
         }).catch(() => {});
 
@@ -277,7 +308,16 @@ export default function SettingsPanel({
           userId: auth.currentUser.uid, 
           delaySeconds,
           subscription: sub,
-          bills: transactions || []
+          bills: (transactions || []).map(t => ({
+            id: t.id,
+            name: t.name,
+            due: t.due,
+            amount: t.amount || t.total_parcelado || 0,
+            paid_amount: t.paid_amount || 0,
+            type: t.type,
+            monthKey: t.monthKey,
+            isOverdue: t.isOverdue
+          }))
         })
       });
       const data = await res.json();

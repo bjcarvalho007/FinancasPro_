@@ -12,6 +12,34 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Helper to parse different bill due date patterns reliably in SW
+function parseBillDueDay(dueStr, now) {
+  if (!dueStr) return null;
+  const s = String(dueStr).trim();
+  // Format: YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const parts = s.split('-').map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+    return Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  // Format: DD/MM/YYYY
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+    const parts = s.split('/').map(Number);
+    const d = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+    return Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  // Format: "Dia 15" or just numbers "15"
+  const match = s.match(/\d+/);
+  if (match) {
+    const day = parseInt(match[0], 10);
+    const currentDay = now.getDate();
+    return day - currentDay;
+  }
+  return null;
+}
+
 // Scheduler Background Checker Routine
 async function checkExpiringBillsAndNotify() {
   try {
@@ -25,14 +53,21 @@ async function checkExpiringBillsAndNotify() {
     const now = new Date();
     const currentDay = now.getDate();
     
-    // Filter pending/expiring/overdue bills
-    const pendingBills = bills.filter(bill => {
-      if (bill.isOverdue) return true;
-      const dueDay = parseInt(bill.due, 10);
-      if (isNaN(dueDay)) return false;
-      const diffDays = dueDay - currentDay;
-      return diffDays >= 0 && diffDays <= 3;
-    });
+    // Filter pending/expiring/overdue bills with multi-format support
+    const pendingBills = bills.map(bill => {
+      const diffDays = parseBillDueDay(bill.due, now);
+      const isOverdue = bill.isOverdue || (diffDays !== null && diffDays < 0);
+      const isDueToday = diffDays === 0;
+      const isUpcoming = diffDays !== null && diffDays > 0 && diffDays <= 3;
+      return {
+        ...bill,
+        diffDays,
+        isOverdue,
+        isDueToday,
+        isUpcoming,
+        shouldAlert: isOverdue || isDueToday || isUpcoming
+      };
+    }).filter(b => b.shouldAlert);
 
     if (pendingBills.length === 0) return;
 
@@ -46,23 +81,38 @@ async function checkExpiringBillsAndNotify() {
       let body = '';
 
       const count = pendingBills.length;
+      const overdueList = pendingBills.filter(b => b.isOverdue);
+      const todayList = pendingBills.filter(b => !b.isOverdue && b.isDueToday);
+
       if (count === 1) {
         const bill = pendingBills[0];
         const valStr = bill.amount ? ` (R$ ${Number(bill.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : '';
-        title = bill.isOverdue ? '🚨 CONTA EM ATRASO' : '⚠️ ATENÇÃO - VENCIMENTO';
-        body = `A despesa "${bill.name}"${valStr} vence no dia ${bill.due}. Toque para abrir o FinançasPro.`;
-      } else {
-        const overdueCount = pendingBills.filter(b => b.isOverdue).length;
-        if (overdueCount > 0) {
-          title = `🚨 ATENÇÃO - ${count} CONTAS A PAGAR (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`;
+        if (bill.isOverdue) {
+          title = '🚨 CONTA EM ATRASO - FinançasPro';
+          body = `A despesa "${bill.name}"${valStr} está ATRASADA (Venceu dia ${bill.due}). Toque para regularizar.`;
+        } else if (bill.isDueToday) {
+          title = '⚠️ VENCE HOJE - FinançasPro';
+          body = `A despesa "${bill.name}"${valStr} VENCE HOJE (${bill.due}). Aproveite para quitar e evitar juros.`;
         } else {
-          title = `⚠️ ATENÇÃO - VENCIMENTO DE ${count} CONTAS`;
+          title = '⚠️ PRÓXIMO DO VENCIMENTO - FinançasPro';
+          body = `A despesa "${bill.name}"${valStr} vence em ${bill.diffDays} dia(s) (${bill.due}).`;
+        }
+      } else {
+        if (overdueList.length > 0) {
+          title = `🚨 ${count} CONTAS PENDENTES (${overdueList.length} ATRASADA${overdueList.length > 1 ? 'S' : ''})`;
+        } else if (todayList.length > 0) {
+          title = `⚠️ ${count} CONTAS (${todayList.length} VENCEM HOJE)`;
+        } else {
+          title = `⚠️ LEMBRETE: ${count} CONTAS A VENCER`;
         }
 
         const maxDisplay = 5;
         const lines = pendingBills.slice(0, maxDisplay).map(b => {
           const valStr = b.amount ? ` - R$ ${Number(b.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
-          const statusStr = b.isOverdue ? ' [ATRASADA]' : ` (Dia ${b.due})`;
+          let statusStr = ` (${b.due})`;
+          if (b.isOverdue) statusStr = ' [ATRASADA]';
+          else if (b.isDueToday) statusStr = ' [VENCE HOJE]';
+          else if (b.diffDays !== null) statusStr = ` [Em ${b.diffDays}d]`;
           return `• ${b.name}${valStr}${statusStr}`;
         });
 
@@ -70,18 +120,28 @@ async function checkExpiringBillsAndNotify() {
           lines.push(`... e mais ${count - maxDisplay} conta(s).`);
         }
 
-        body = `Você tem ${count} contas para regularizar:\n` + lines.join('\n');
+        body = `Você tem ${count} conta(s) para regularizar:\n` + lines.join('\n');
       }
 
-      await self.registration.showNotification(title, {
+      const notifOptions = {
         body: body,
         icon: '/app_icon.png',
         badge: '/app_icon.png',
-        vibrate: [200, 100, 200, 100, 200],
         tag: 'financaspro-vencimentos-resumo',
         renotify: true,
         data: { url: '/', action: 'OPEN_APP' }
-      });
+      };
+
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        notifOptions.vibrate = [200, 100, 200, 100, 200];
+      }
+
+      try {
+        await self.registration.showNotification(title, notifOptions);
+      } catch (err) {
+        // Fallback for strict browsers / mobile OS
+        await self.registration.showNotification(title, { body: body, data: { url: '/', action: 'OPEN_APP' } });
+      }
 
       // Mark as notified for this signature today
       await cache.put(cacheKey, new Response('true'));
@@ -144,24 +204,35 @@ self.addEventListener('push', (event) => {
 
   const showNotif = async () => {
     try {
-      return await self.registration.showNotification(payload.title, {
+      const opts = {
         body: payload.body,
         icon: payload.icon || '/app_icon.png',
         badge: payload.badge || '/app_icon.png',
         tag: payload.tag || ('financaspro-' + Date.now()),
         renotify: true,
-        data: payload.data || { url: '/' },
-        vibrate: [300, 100, 300, 100, 300]
-      });
+        data: payload.data || { url: '/', action: 'OPEN_APP' }
+      };
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        opts.vibrate = [300, 100, 300, 100, 300];
+      }
+      return await self.registration.showNotification(payload.title, opts);
     } catch (err) {
-      console.warn('[SW] showNotification com opções estendidas falhou, usando modo seguro:', err);
+      console.warn('[SW] showNotification com opções estendidas falhou, usando modo padrão:', err);
       try {
         return await self.registration.showNotification(payload.title, {
           body: payload.body,
-          icon: '/app_icon.png'
+          icon: '/app_icon.png',
+          data: payload.data || { url: '/', action: 'OPEN_APP' }
         });
       } catch (fallbackErr) {
-        console.error('[SW] Erro crítico ao mostrar notificação:', fallbackErr);
+        console.warn('[SW] Tentando fallback ultra-compatível:', fallbackErr);
+        try {
+          return await self.registration.showNotification(payload.title, {
+            body: payload.body
+          });
+        } catch (critErr) {
+          console.error('[SW] Erro crítico irrecuperável ao mostrar notificação:', critErr);
+        }
       }
     }
   };

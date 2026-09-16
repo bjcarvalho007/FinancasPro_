@@ -29,6 +29,7 @@ export interface Transaction {
   extension_months?: number;
   target_payoff_month?: string;
   target_payoff_date?: string;
+  isOverdue?: boolean;
 }
 
 export interface Category {

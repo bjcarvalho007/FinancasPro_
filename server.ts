@@ -391,10 +391,29 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
 
     if (!userBills || userBills.length === 0) continue;
 
-    const userExpiringBills: Array<{ id: string; name: string; due: string; remaining: number; isOverdue: boolean }> = [];
+    // Reference today at 12:00 BRT
+    const brYear = parseInt(br.dateStr.split('-')[0], 10) || now.getFullYear();
+    const brMonth = (parseInt(br.dateStr.split('-')[1], 10) - 1) || now.getMonth();
+    const brDay = parseInt(br.dateStr.split('-')[2], 10) || now.getDate();
+    const brTodayNoon = new Date(brYear, brMonth, brDay, 12, 0, 0);
+
+    const userExpiringBills: Array<{
+      id: string;
+      name: string;
+      due: string;
+      remaining: number;
+      isOverdue: boolean;
+      isDueToday: boolean;
+      diffDays: number;
+    }> = [];
 
     for (const tx of userBills) {
       if (!tx || !tx.name || !tx.due) continue;
+
+      // Ignore income / receipt records
+      if (tx.type === 'rendas' || tx.type === 'entradas' || tx.type === 'receita') continue;
+      // Ignore user-skipped months
+      if (tx.is_skipped) continue;
 
       const amount = Number(tx.amount) || Number(tx.total_parcelado) || 0;
       const paid_amount = Number(tx.paid_amount) || 0;
@@ -402,19 +421,29 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
 
       let isNearDue = false;
       let isOverdue = !!tx.isOverdue;
+      let isDueToday = false;
+      let diffDays = 999;
 
       const dueStr = String(tx.due).trim();
       let dueDate: Date | null = null;
 
+      // Format 1: YYYY-MM-DD
       if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
         const parts = dueStr.split("-").map(Number);
         dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-      } else {
+      } 
+      // Format 2: DD/MM/YYYY
+      else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dueStr)) {
+        const parts = dueStr.split("/").map(Number);
+        dueDate = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
+      }
+      // Format 3: "Dia XX" or just "XX"
+      else {
         const dayMatch = dueStr.match(/\d+/);
         if (dayMatch) {
           const dueDay = parseInt(dayMatch[0], 10);
-          let dueYear = now.getFullYear();
-          let dueMonth = now.getMonth();
+          let dueYear = brYear;
+          let dueMonth = brMonth;
           if (tx.monthKey && /^\d{4}-\d{2}$/.test(tx.monthKey)) {
             const mParts = tx.monthKey.split("-").map(Number);
             dueYear = mParts[0];
@@ -427,10 +456,12 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
       }
 
       if (dueDate) {
-        const todayNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
-        const diffDays = Math.round((dueDate.getTime() - todayNoon.getTime()) / (1000 * 60 * 60 * 24));
+        diffDays = Math.round((dueDate.getTime() - brTodayNoon.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays < 0) {
           isOverdue = true;
+          isNearDue = true;
+        } else if (diffDays === 0) {
+          isDueToday = true;
           isNearDue = true;
         } else if (diffDays <= 3) {
           isNearDue = true;
@@ -448,10 +479,18 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
           name: tx.name,
           due: dueStr,
           remaining: Math.max(0, amount - paid_amount),
-          isOverdue
+          isOverdue,
+          isDueToday,
+          diffDays
         });
       }
     }
+
+    // Sort: overdue first, then due today, then upcoming (closest first)
+    userExpiringBills.sort((a, b) => {
+      if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+      return a.diffDays - b.diffDays;
+    });
 
     // Keys for daily morning (08:00) and midday (12:00) alerts in Brasília timezone
     const morningAlertKey = `push_morning_alert_${userId}_${br.dateStr}`;
@@ -483,49 +522,55 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
       console.log(`🚀 [BACKGROUND PUSH] Despachando notificação para usuário ${userId} (${userExpiringBills.length} contas) [Manhã: ${isMorningTrigger}, Meio-Dia: ${isMiddayTrigger}, Forçado: ${forceNow}]...`);
 
       const isMidday = isMiddayTrigger || (br.hour >= 12 && !isMorningTrigger);
+      const overdueBills = userExpiringBills.filter(b => b.isOverdue);
+      const todayBills = userExpiringBills.filter(b => !b.isOverdue && b.isDueToday);
+      const totalRemaining = userExpiringBills.reduce((acc, b) => acc + (b.remaining || 0), 0);
+      const totalRemainingStr = totalRemaining > 0 ? ` (Total: R$ ${totalRemaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})` : '';
 
       let pushTitle = '';
       let pushBody = '';
 
       if (userExpiringBills.length === 0) {
-        // When forceNow is triggered with no pending bills, send a reassuring status check
-        pushTitle = "✅ FinançasPro - Alertas 100% Operacionais";
-        pushBody = "Varredura executada com sucesso! Todas as suas despesas cadastradas estão em dia. Seu aparelho receberá os alertas automáticos às 08:00 (Manhã) e 12:00 (Meio-Dia).";
+        pushTitle = "✅ FinançasPro: Todas as Contas em Dia";
+        pushBody = "Varredura concluída! Nenhuma conta atrasada ou próxima do vencimento. Os alertas automáticos continuam ativos às 08:00 e 12:00.";
       } else if (userExpiringBills.length === 1) {
         const b = userExpiringBills[0];
-        const valStr = b.remaining > 0 ? ` (R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})` : '';
+        const valStr = b.remaining > 0 ? ` de R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : '';
         if (b.isOverdue) {
           pushTitle = "🚨 CONTA EM ATRASO - FinançasPro";
-          pushBody = `Atenção: A despesa "${b.name}"${valStr} está atrasada (vencimento: ${b.due}). Toque para regularizar.`;
-        } else if (isMidday) {
-          pushTitle = "☀️ Lembrete do Meio-Dia (12:00) - FinançasPro";
-          pushBody = `☀️ Boa tarde! Varredura das 12:00: A despesa "${b.name}"${valStr} aguarda pagamento hoje. Aproveite o almoço para quitar e evitar juros.`;
+          pushBody = `Atenção: A despesa "${b.name}"${valStr} está ATRASADA (Vencimento: ${b.due}). Toque para abrir o app e regularizar.`;
+        } else if (b.isDueToday) {
+          pushTitle = "⚠️ VENCE HOJE - FinançasPro";
+          pushBody = `Lembrete: A despesa "${b.name}"${valStr} VENCE HOJE (${b.due}). Aproveite para pagar e evitar juros.`;
         } else {
-          pushTitle = "🌅 Lembrete da Manhã (08:00) - FinançasPro";
-          pushBody = `🌅 Bom dia! Varredura das 08:00: A despesa "${b.name}"${valStr} vence hoje/está pendente (${b.due}). Organize seu pagamento e evite juros.`;
+          pushTitle = "⚠️ PRÓXIMO DO VENCIMENTO - FinançasPro";
+          pushBody = `Lembrete: A despesa "${b.name}"${valStr} vence em ${b.diffDays} dia(s) (${b.due}).`;
         }
       } else {
-        const overdueCount = userExpiringBills.filter(b => b.isOverdue).length;
-        if (overdueCount > 0) {
-          pushTitle = `🚨 ATENÇÃO - ${userExpiringBills.length} CONTAS (${overdueCount} ATRASADA${overdueCount > 1 ? 'S' : ''})`;
-        } else if (isMidday) {
-          pushTitle = `☀️ Meio-Dia (12:00): ${userExpiringBills.length} Contas para Pagar`;
+        if (overdueBills.length > 0) {
+          pushTitle = `🚨 ${userExpiringBills.length} CONTAS PENDENTES (${overdueBills.length} ATRASADA${overdueBills.length > 1 ? 'S' : ''})`;
+        } else if (todayBills.length > 0) {
+          pushTitle = `⚠️ ${userExpiringBills.length} CONTAS (${todayBills.length} VENCEM HOJE)`;
         } else {
-          pushTitle = `🌅 Manhã (08:00): ${userExpiringBills.length} Contas para Pagar`;
+          pushTitle = `⚠️ LEMBRETE: ${userExpiringBills.length} CONTAS A VENCER`;
         }
 
-        const listSummary = userExpiringBills.slice(0, 4).map(b => {
+        const maxDisplay = 5;
+        const summaryLines: string[] = [];
+        for (const b of userExpiringBills.slice(0, maxDisplay)) {
           const valStr = b.remaining > 0 ? ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : '';
-          const st = b.isOverdue ? ' [ATRASADA]' : ` (${b.due})`;
-          return `• ${b.name}${valStr}${st}`;
-        });
-
-        if (userExpiringBills.length > 4) {
-          listSummary.push(`... e mais ${userExpiringBills.length - 4} conta(s).`);
+          let tag = ` (${b.due})`;
+          if (b.isOverdue) tag = ' [ATRASADA]';
+          else if (b.isDueToday) tag = ' [VENCE HOJE]';
+          else if (b.diffDays !== 999) tag = ` [Em ${b.diffDays}d]`;
+          summaryLines.push(`• ${b.name}${valStr}${tag}`);
         }
 
-        const greetingPrefix = isMidday ? "☀️ Boa tarde! Varredura do almoço (12:00)" : "🌅 Bom dia! Varredura matinal (08:00)";
-        pushBody = `${greetingPrefix}: Você tem ${userExpiringBills.length} contas para regularizar:\n` + listSummary.join('\n');
+        if (userExpiringBills.length > maxDisplay) {
+          summaryLines.push(`... e mais ${userExpiringBills.length - maxDisplay} conta(s) pendente(s).`);
+        }
+
+        pushBody = `Você tem ${userExpiringBills.length} conta(s) pendente(s)${totalRemainingStr}:\n` + summaryLines.join('\n');
       }
 
       const messagePayload = JSON.stringify({
@@ -533,8 +578,8 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
         body: pushBody,
         icon: "/app_icon.png",
         badge: "/app_icon.png",
-        tag: `financaspro-${isMidday ? 'midday' : 'morning'}-${br.dateStr}`,
-        data: { url: "/" }
+        tag: forceNow ? `financaspro-alert-${Date.now()}` : `financaspro-${isMidday ? 'midday' : 'morning'}-${br.dateStr}`,
+        data: { url: "/", action: "OPEN_APP" }
       });
 
       let sentCount = 0;
@@ -546,7 +591,10 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
             console.warn("⚠️ Assinatura push incompleta ignorada:", sub?.endpoint);
             continue;
           }
-          await webpush.sendNotification(sub, messagePayload);
+          await webpush.sendNotification(sub, messagePayload, {
+            TTL: 86400,
+            urgency: 'high'
+          });
           sentCount++;
           validSubs.push(sub);
         } catch (subErr: any) {
@@ -1366,25 +1414,12 @@ app.post("/api/push/test-background", async (req, res) => {
     const delayMs = delay * 1000;
 
     setTimeout(async () => {
-      console.log(`⏰ [TEST BACKGROUND PUSH] Disparando alerta de teste em segundo plano para usuário ${userId} (${userSubs.length} dispositivo(s))...`);
-      const messagePayload = JSON.stringify({
-        title: "🚨 FinançasPro - Alerta em Segundo Plano",
-        body: "Teste de notificação com aplicativo fechado bem-sucedido! Seus alertas das 08:00 (Manhã) e 12:00 (Meio-Dia) estão 100% operacionais.",
-        icon: "/app_icon.png",
-        badge: "/app_icon.png",
-        tag: "financaspro-test-alert",
-        data: { url: "/", action: "OPEN_APP" }
-      });
-
-      for (const rawSub of userSubs) {
-        try {
-          const sub = typeof rawSub === 'string' ? JSON.parse(rawSub) : rawSub;
-          if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) continue;
-          await webpush.sendNotification(sub, messagePayload);
-          console.log(`✅ [TEST PUSH] Notificação enviada para dispositivo.`);
-        } catch (err: any) {
-          console.warn(`⚠️ [TEST PUSH] Falha ao enviar para dispositivo:`, err?.message || err);
-        }
+      console.log(`⏰ [TEST BACKGROUND PUSH] Disparando alerta de teste em segundo plano para usuário ${userId}...`);
+      try {
+        await runBackgroundPushNotificationChecker(true, userId);
+        console.log(`✅ [TEST BACKGROUND PUSH] Varredura e despacho de teste concluídos para usuário ${userId}.`);
+      } catch (err: any) {
+        console.warn(`⚠️ [TEST BACKGROUND PUSH] Falha ao despachar:`, err?.message || err);
       }
     }, delayMs);
 
@@ -1489,7 +1524,11 @@ app.post("/api/notify/email-and-push", async (req, res) => {
             icon: '/app_icon.png',
             badge: '/app_icon.png',
             data: { url: '/' }
-          })
+          }),
+          {
+            TTL: 86400,
+            urgency: 'high'
+          }
         );
         pushDeliveryResult.sent++;
       } catch (err) {

@@ -24,7 +24,12 @@ import {
   X,
   Receipt,
   Coins,
-  CreditCard
+  CreditCard,
+  ArrowUpDown,
+  Filter,
+  ChevronDown,
+  Check,
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -64,6 +69,11 @@ export default function DashboardAnalytics({
   const [showAssistantTip, setShowAssistantTip] = useState(false);
   const [hoveredBar, setHoveredBar] = useState<string | null>(null);
   const [showIntelligentAlertsModal, setShowIntelligentAlertsModal] = useState(false);
+
+  // Category drilldown interactive states
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
+  const [categoryItemFilter, setCategoryItemFilter] = useState<'all' | 'pending' | 'paid'>('all');
+  const [categoryDayOrder, setCategoryDayOrder] = useState<'asc' | 'desc'>('asc'); // 'asc': dia 1 ao 31, 'desc': dia 31 ao 1
 
   const isLight = currentTheme === 'light';
   const todayStr = useMemo(() => {
@@ -597,6 +607,105 @@ export default function DashboardAnalytics({
 
   // Projeção Próxima e Médio custo
   const averageItemCost = currentModeTransactions.length > 0 ? (modeTotalSpent / currentModeTransactions.length) : 0;
+
+  // Helper to extract numeric due day (1..31) for day-based ordering
+  const extractDueDayNumber = (dueStr?: string): number => {
+    if (!dueStr) return 99;
+    const s = String(dueStr).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const parts = s.split('-');
+      return parseInt(parts[2], 10) || 99;
+    }
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+      const parts = s.split('/');
+      return parseInt(parts[0], 10) || 99;
+    }
+    const m = s.match(/\d+/);
+    if (m) {
+      return parseInt(m[0], 10) || 99;
+    }
+    return 99;
+  };
+
+  const formatDueDayLabel = (dueStr?: string): string => {
+    if (!dueStr) return 'Sem dia';
+    const s = String(dueStr).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const parts = s.split('-');
+      return `Dia ${parts[2]}`;
+    }
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+      const parts = s.split('/');
+      return `Dia ${String(parts[0]).padStart(2, '0')}`;
+    }
+    const m = s.match(/\d+/);
+    if (m) {
+      return `Dia ${String(m[0]).padStart(2, '0')}`;
+    }
+    return s;
+  };
+
+  const checkTransactionOverdue = (t: Transaction): boolean => {
+    const isPaid = (t.paid_amount || 0) >= (t.amount || 0) && (t.amount || 0) > 0;
+    if (isPaid || !t.due) return false;
+    const cleanDue = String(t.due).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDue)) {
+      return cleanDue < todayStr;
+    }
+    const m = cleanDue.match(/\d+/);
+    if (m) {
+      const todayDay = new Date().getDate();
+      const dueDay = parseInt(m[0], 10);
+      return dueDay < todayDay;
+    }
+    return false;
+  };
+
+  // Detailed calculations for selected category drilldown
+  const selectedCategoryObj = useMemo(() => {
+    if (!selectedCategoryKey) return null;
+    return modeSortedCategories.find(c => c.key === selectedCategoryKey) || null;
+  }, [selectedCategoryKey, modeSortedCategories]);
+
+  const selectedCategoryTransactions = useMemo(() => {
+    if (!selectedCategoryKey) return [];
+    const list = currentModeTransactions.filter(t => (t.cat || 'outros') === selectedCategoryKey);
+    return [...list].sort((a, b) => {
+      const dayA = extractDueDayNumber(a.due);
+      const dayB = extractDueDayNumber(b.due);
+      if (dayA !== dayB) {
+        return categoryDayOrder === 'asc' ? dayA - dayB : dayB - dayA;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [selectedCategoryKey, currentModeTransactions, categoryDayOrder]);
+
+  const filteredCategoryTransactions = useMemo(() => {
+    if (categoryItemFilter === 'paid') {
+      return selectedCategoryTransactions.filter(t => (Number(t.paid_amount || 0) >= (Number(t.amount) || Number(t.total_parcelado) || 0)) && (Number(t.amount) || Number(t.total_parcelado) || 0) > 0);
+    }
+    if (categoryItemFilter === 'pending') {
+      return selectedCategoryTransactions.filter(t => (Number(t.paid_amount || 0) < (Number(t.amount) || Number(t.total_parcelado) || 0)) || (Number(t.amount) || Number(t.total_parcelado) || 0) === 0);
+    }
+    return selectedCategoryTransactions;
+  }, [selectedCategoryTransactions, categoryItemFilter]);
+
+  const selectedCategoryMetrics = useMemo(() => {
+    if (!selectedCategoryTransactions.length) return null;
+    const total = selectedCategoryTransactions.reduce((sum, t) => sum + (Number(t.amount) || Number(t.total_parcelado) || 0), 0);
+    const paidTotal = selectedCategoryTransactions.reduce((sum, t) => sum + Number(t.paid_amount || 0), 0);
+    const pendingTotal = Math.max(0, total - paidTotal);
+    const paidCount = selectedCategoryTransactions.filter(t => (Number(t.paid_amount || 0) >= (Number(t.amount) || Number(t.total_parcelado) || 0)) && (Number(t.amount) || Number(t.total_parcelado) || 0) > 0).length;
+    const pendingCount = selectedCategoryTransactions.length - paidCount;
+    return {
+      total,
+      paidTotal,
+      pendingTotal,
+      paidCount,
+      pendingCount,
+      count: selectedCategoryTransactions.length
+    };
+  }, [selectedCategoryTransactions]);
 
   // Deduplicate and combine all system alerts to meet "e que nada se repita" requirement
   const allSystemAlerts = [...historyAlerts, ...monthAlerts];
@@ -2035,17 +2144,32 @@ export default function DashboardAnalytics({
         )}
       </div>
 
-      {/* SECTION 4: BAR COLUMN ALLOCATION PIE CHART */}
+      {/* SECTION 4: BAR COLUMN ALLOCATION PIE CHART & DAY-ORDERED CATEGORY DRILLDOWN */}
       <div className={`p-6 rounded-3xl transition-all duration-300 border ${
         isLight 
           ? 'bg-white border-slate-200 shadow-xl shadow-slate-100/35 text-slate-800' 
           : 'glass-panel border-white/5 shadow-2xl text-slate-100'
       }`}>
-        <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
-          <h4 className={`font-display font-extrabold text-sm tracking-wide flex items-center gap-2 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
-            <BarChart2 className="w-4 h-4 text-emerald-400" /> 
-            {t('distribuicaoGastosEscopo', 'Distribuição de Gastos do Escopo')} ({activeDashboardMode === 'current' ? t('mesFocado', 'Mês Focado') : t('tudo', 'Tudo')})
-          </h4>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <div>
+            <h4 className={`font-display font-extrabold text-sm tracking-wide flex items-center gap-2 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+              <BarChart2 className="w-4 h-4 text-emerald-400" /> 
+              {t('distribuicaoGastosEscopo', 'Distribuição de Gastos do Escopo')} ({activeDashboardMode === 'current' ? t('mesFocado', 'Mês Focado') : t('tudo', 'Tudo')})
+            </h4>
+            <p className={`text-[11px] mt-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+              💡 Toque em qualquer coluna ou categoria para inspecionar os gastos organizados por <strong>ordem de dia</strong> do mês.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-mono font-bold px-3 py-1.5 rounded-xl border ${
+              isLight 
+                ? 'bg-slate-100 text-slate-700 border-slate-200' 
+                : 'bg-white/5 text-slate-300 border-white/10'
+            }`}>
+              Total: <strong className="text-emerald-500">{fmt(modeTotalSpent)}</strong> • {modeSortedCategories.length} cat.
+            </span>
+          </div>
         </div>
         
         {modeSortedCategories.length === 0 ? (
@@ -2054,15 +2178,15 @@ export default function DashboardAnalytics({
             {t('aguardandoLancamentosGrafico', 'Aguardando lançamentos para compor gráfico de colunas')}
           </div>
         ) : (
-          <div className="w-full flex flex-col justify-center">
-            <div className="w-full relative py-4">
+          <div className="w-full flex flex-col justify-center space-y-6">
+            <div className="w-full relative py-2">
               {(() => {
                 const maxAmountValue = Math.max(...modeSortedCategories.map(c => c.amountValue), 1);
                 const scaleMax = maxAmountValue * 1.15;
                 const yTicks = [1, 0.75, 0.5, 0.25, 0];
 
                 return (
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     {/* Tooltip detail bar */}
                     <div className="h-10 flex items-center justify-between px-2">
                       {hoveredBar ? (() => {
@@ -2071,7 +2195,7 @@ export default function DashboardAnalytics({
                         const style = getCategoryThemeStyle(item.key);
                         return (
                           <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                            <span className={`w-3 h-3 rounded-full`} style={{ backgroundColor: style.color1 }} />
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: style.color1 }} />
                             <span className="text-lg leading-none">{item.icon}</span>
                             <div>
                               <span className={`text-[11px] font-extrabold uppercase tracking-widest ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
@@ -2084,9 +2208,11 @@ export default function DashboardAnalytics({
                           </div>
                         );
                       })() : (
-                        <span className="text-[11px] font-bold text-slate-400 tracking-wider flex items-center gap-1">
+                        <span className="text-[11px] font-bold text-slate-400 tracking-wider flex items-center gap-1.5">
                           <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
-                          Passe o mouse nas colunas para detalhar desvios
+                          {selectedCategoryKey 
+                            ? 'Categoria ativa: toque para alternar ou fechar os detalhes abaixo' 
+                            : 'Clique na coluna para abrir todos os gastos por ordem cronológica'}
                         </span>
                       )}
 
@@ -2104,7 +2230,7 @@ export default function DashboardAnalytics({
                     </div>
 
                     {/* Columns structure */}
-                    <div className="relative h-44 w-full flex items-end">
+                    <div className="relative h-48 w-full flex items-end">
                       <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-7">
                         {yTicks.map((tick, i) => (
                           <div key={i} className="flex items-center w-full h-0">
@@ -2125,6 +2251,7 @@ export default function DashboardAnalytics({
                           const style = getCategoryThemeStyle(item.key);
                           const precisePctOfMax = (item.amountValue / scaleMax) * 100;
                           const isHovered = hoveredBar === item.key;
+                          const isSelected = selectedCategoryKey === item.key;
 
                           return (
                             <div
@@ -2133,25 +2260,47 @@ export default function DashboardAnalytics({
                               style={{ width: `${100 / modeSortedCategories.length}%`, maxWidth: '58px' }}
                               onMouseEnter={() => setHoveredBar(item.key)}
                               onMouseLeave={() => setHoveredBar(null)}
+                              onClick={() => setSelectedCategoryKey(prev => prev === item.key ? null : item.key)}
+                              title={`Clique para ver lançamentos de ${item.label} por ordem de dia`}
                             >
+                              {/* Selected indicator pin */}
+                              {isSelected && (
+                                <motion.div 
+                                  initial={{ y: -6, opacity: 0 }}
+                                  animate={{ y: 0, opacity: 1 }}
+                                  className="absolute -top-6 px-1.5 py-0.5 rounded-full bg-emerald-500 text-white font-black text-[9px] uppercase tracking-wider shadow-lg flex items-center gap-1 z-20"
+                                >
+                                  <Check className="w-2.5 h-2.5" />
+                                  <span className="hidden sm:inline">Aberta</span>
+                                </motion.div>
+                              )}
+
                               <div className="absolute inset-0 bg-transparent z-10" />
 
-                              <div className="w-6 sm:w-8 h-full flex items-end justify-center relative rounded-t-xl overflow-hidden bg-slate-500/5 group-hover:bg-slate-500/10 transition-all duration-300">
+                              <div className={`w-6 sm:w-8 h-full flex items-end justify-center relative rounded-t-xl overflow-hidden transition-all duration-300 ${
+                                isSelected 
+                                  ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-900 shadow-lg scale-105' 
+                                  : 'bg-slate-500/5 group-hover:bg-slate-500/10'
+                              }`}>
                                 <motion.div
                                   initial={{ height: 0 }}
                                   animate={{ height: `${precisePctOfMax}%` }}
                                   transition={{ duration: 0.8, ease: "easeOut" }}
-                                  className="w-full rounded-t-xl opacity-90 group-hover:opacity-100 transition-opacity flex flex-col justify-start p-1"
+                                  className={`w-full rounded-t-xl transition-opacity flex flex-col justify-start p-1 ${
+                                    isSelected ? 'opacity-100' : 'opacity-90 group-hover:opacity-100'
+                                  }`}
                                   style={{
                                     background: `linear-gradient(180deg, ${style.color1}, ${style.color2})`,
-                                    boxShadow: isHovered ? `0 0 15px ${style.color1}40` : 'none',
+                                    boxShadow: (isHovered || isSelected) ? `0 0 18px ${style.color1}55` : 'none',
                                   }}
                                 >
-                                  <div className="w-full h-1 bg-white/30 rounded-full opacity-65" />
+                                  <div className="w-full h-1 bg-white/40 rounded-full opacity-75" />
                                 </motion.div>
                               </div>
 
-                              <div className={`absolute -bottom-5 flex flex-col items-center transition-transform ${isHovered ? 'scale-110' : ''}`}>
+                              <div className={`absolute -bottom-5 flex flex-col items-center transition-transform ${
+                                (isHovered || isSelected) ? 'scale-125' : ''
+                              }`}>
                                 <span className="text-sm leading-none drop-shadow-sm select-none">
                                   {item.icon}
                                 </span>
@@ -2163,48 +2312,25 @@ export default function DashboardAnalytics({
                     </div>
 
                     <div className="flex justify-around pl-16 pt-1 text-slate-500 select-none">
-                      {modeSortedCategories.map((item) => (
-                        <span 
-                          key={item.key} 
-                          className={`truncate text-center transition-colors duration-200 uppercase font-black tracking-widest ${
-                            hoveredBar === item.key 
-                              ? (isLight ? 'text-indigo-600' : 'text-indigo-450') 
-                              : 'text-slate-450 text-slate-400'
-                          } xs:text-[9.5px] text-[7.5px]`} 
-                          style={{ width: `${100 / modeSortedCategories.length}%`, maxWidth: '58px' }}
-                          title={item.label}
-                        >
-                          <span className="sm:inline hidden">{item.label.split(' ')[0]}</span>
-                          <span className="sm:hidden inline">{item.label.substring(0, 3).toUpperCase()}</span>
-                        </span>
-                      ))}
-                    </div>
-
-                    {/* Interactive legend list especially designed for optimized mobile devices, wrapping cleanly */}
-                    <div className="sm:hidden flex flex-wrap gap-x-2 gap-y-1.5 justify-center pt-4 border-t border-white/5 px-2 select-none">
                       {modeSortedCategories.map((item) => {
-                        const style = getCategoryThemeStyle(item.key);
-                        const isHovered = hoveredBar === item.key;
+                        const isSelected = selectedCategoryKey === item.key;
                         return (
-                          <div 
-                            key={item.key}
-                            onClick={() => setHoveredBar(hoveredBar === item.key ? null : item.key)}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl transition-all duration-200 border cursor-pointer ${
-                              isHovered
-                                ? 'bg-indigo-500/10 border-indigo-500/30 scale-105'
-                                : isLight 
-                                  ? 'bg-slate-50 border-slate-200' 
-                                  : 'bg-white/3 border-white/5'
-                            }`}
+                          <span 
+                            key={item.key} 
+                            onClick={() => setSelectedCategoryKey(prev => prev === item.key ? null : item.key)}
+                            className={`truncate text-center transition-colors duration-200 uppercase font-black tracking-widest cursor-pointer ${
+                              isSelected
+                                ? 'text-emerald-500 font-extrabold scale-105'
+                                : hoveredBar === item.key 
+                                  ? (isLight ? 'text-indigo-600' : 'text-indigo-400') 
+                                  : 'text-slate-400'
+                            } xs:text-[9.5px] text-[7.5px]`} 
+                            style={{ width: `${100 / modeSortedCategories.length}%`, maxWidth: '58px' }}
+                            title={item.label}
                           >
-                            <span className="text-[12px]">{item.icon}</span>
-                            <span className={`text-[8.5px] font-black uppercase tracking-wider ${isLight ? 'text-slate-500 font-bold' : 'text-slate-450'}`}>
-                              {item.label.substring(0, 3).toUpperCase()}:
-                            </span>
-                            <span className={`text-[9.5px] font-extrabold ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
-                              {item.label}
-                            </span>
-                          </div>
+                            <span className="sm:inline hidden">{item.label.split(' ')[0]}</span>
+                            <span className="sm:hidden inline">{item.label.substring(0, 3).toUpperCase()}</span>
+                          </span>
                         );
                       })}
                     </div>
@@ -2212,6 +2338,352 @@ export default function DashboardAnalytics({
                 );
               })()}
             </div>
+
+            {/* INTERACTIVE CATEGORY CARDS CAROUSEL / GRID */}
+            <div className="pt-2 border-t border-white/5">
+              <div className="flex items-center justify-between mb-3">
+                <span className={`text-[11px] font-bold uppercase tracking-wider ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                  Selecione uma categoria para listar gastos por dia:
+                </span>
+                {selectedCategoryKey && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategoryKey(null)}
+                    className="text-[10px] text-slate-400 hover:text-rose-400 font-bold flex items-center gap-1 transition-colors cursor-pointer border-none bg-transparent"
+                  >
+                    <X className="w-3 h-3" />
+                    <span>Fechar lista</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                {modeSortedCategories.map((item) => {
+                  const style = getCategoryThemeStyle(item.key);
+                  const isSelected = selectedCategoryKey === item.key;
+                  const count = currentModeTransactions.filter(t => (t.cat || 'outros') === item.key).length;
+
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setSelectedCategoryKey(prev => prev === item.key ? null : item.key)}
+                      className={`p-2.5 rounded-2xl border transition-all duration-200 text-left flex flex-col justify-between gap-1.5 cursor-pointer relative overflow-hidden group ${
+                        isSelected
+                          ? isLight
+                            ? 'bg-emerald-50 border-emerald-400 shadow-md ring-2 ring-emerald-400/50 scale-[1.02]'
+                            : 'bg-emerald-950/40 border-emerald-400/80 shadow-lg shadow-emerald-950/50 ring-2 ring-emerald-400/50 scale-[1.02]'
+                          : isLight
+                            ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 hover:border-slate-300'
+                            : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5 hover:border-white/15'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-xl leading-none">{item.icon}</span>
+                        <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
+                          isSelected 
+                            ? 'bg-emerald-500 text-white' 
+                            : isLight 
+                              ? 'bg-slate-200 text-slate-700' 
+                              : 'bg-white/10 text-slate-300'
+                        }`}>
+                          {item.pct}%
+                        </span>
+                      </div>
+
+                      <div>
+                        <div className={`text-[11px] font-bold truncate ${
+                          isSelected 
+                            ? 'text-emerald-500 dark:text-emerald-400' 
+                            : isLight ? 'text-slate-800' : 'text-slate-200'
+                        }`}>
+                          {item.label}
+                        </div>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <span className={`font-mono text-xs font-black ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                            {fmt(item.amountValue)}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-semibold">
+                            {count} {count === 1 ? 'conta' : 'contas'}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* EXPANDABLE CATEGORY BREAKDOWN LIST (SORTED BY DAY OF MONTH) */}
+            <AnimatePresence>
+              {selectedCategoryKey && selectedCategoryObj && selectedCategoryMetrics && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, y: 15 }}
+                  animate={{ opacity: 1, height: 'auto', y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: 15 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                  className="overflow-hidden pt-3"
+                >
+                  <div className={`p-4 sm:p-5 rounded-3xl border transition-all ${
+                    isLight 
+                      ? 'bg-gradient-to-b from-slate-50 to-white border-emerald-200 shadow-lg' 
+                      : 'bg-gradient-to-b from-slate-900/90 to-slate-950/90 border-emerald-500/30 shadow-2xl'
+                  }`}>
+                    {/* Header Banner */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/10">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-2xl shadow-inner">
+                          {selectedCategoryObj.icon}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h5 className={`font-display font-black text-base ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                              Gastos de {selectedCategoryObj.label}
+                            </h5>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black border border-emerald-500/30">
+                              {selectedCategoryObj.pct}% do total
+                            </span>
+                          </div>
+                          <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                            Lançamentos organizados por <strong>ordem cronológica de dia</strong> de vencimento
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Day order toggle */}
+                        <button
+                          type="button"
+                          onClick={() => setCategoryDayOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+                            isLight
+                              ? 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700 shadow-sm'
+                              : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-200'
+                          }`}
+                          title="Alternar ordem crescente ou decrescente de dias"
+                        >
+                          <ArrowUpDown className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>{categoryDayOrder === 'asc' ? 'Dia 01 ➔ 31 (Crescente)' : 'Dia 31 ➔ 01 (Decrescente)'}</span>
+                        </button>
+
+                        {/* Close button */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCategoryKey(null)}
+                          className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 transition-all flex items-center gap-1 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Fechar</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Metrics Bar */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 my-4">
+                      <div className={`p-3 rounded-2xl border ${
+                        isLight ? 'bg-white border-slate-200' : 'bg-white/5 border-white/10'
+                      }`}>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Total da Categoria
+                        </div>
+                        <div className={`text-lg font-mono font-black mt-0.5 ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                          {fmt(selectedCategoryMetrics.total)}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {selectedCategoryMetrics.count} {selectedCategoryMetrics.count === 1 ? 'lançamento no total' : 'lançamentos no total'}
+                        </div>
+                      </div>
+
+                      <div className={`p-3 rounded-2xl border ${
+                        isLight ? 'bg-emerald-50/70 border-emerald-200' : 'bg-emerald-950/20 border-emerald-500/20'
+                      }`}>
+                        <div className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Quitado / Pago</span>
+                        </div>
+                        <div className="text-lg font-mono font-black text-emerald-500 dark:text-emerald-400 mt-0.5">
+                          {fmt(selectedCategoryMetrics.paidTotal)}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {selectedCategoryMetrics.paidCount} de {selectedCategoryMetrics.count} contas quitadas
+                        </div>
+                      </div>
+
+                      <div className={`p-3 rounded-2xl border ${
+                        isLight ? 'bg-amber-50/70 border-amber-200' : 'bg-amber-950/20 border-amber-500/20'
+                      }`}>
+                        <div className="text-[10px] font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          <span>A Pagar / Pendente</span>
+                        </div>
+                        <div className="text-lg font-mono font-black text-amber-500 dark:text-amber-400 mt-0.5">
+                          {fmt(selectedCategoryMetrics.pendingTotal)}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {selectedCategoryMetrics.pendingCount} {selectedCategoryMetrics.pendingCount === 1 ? 'conta em aberto' : 'contas em aberto'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Filter Tabs */}
+                    <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/20 border border-white/5 w-fit mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setCategoryItemFilter('all')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${
+                          categoryItemFilter === 'all'
+                            ? 'bg-emerald-500 text-white shadow-sm'
+                            : 'bg-transparent text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Todas as Contas ({selectedCategoryMetrics.count})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryItemFilter('pending')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${
+                          categoryItemFilter === 'pending'
+                            ? 'bg-amber-500 text-slate-950 shadow-sm'
+                            : 'bg-transparent text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Pendentes ({selectedCategoryMetrics.pendingCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryItemFilter('paid')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${
+                          categoryItemFilter === 'paid'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'bg-transparent text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Pagas ({selectedCategoryMetrics.paidCount})
+                      </button>
+                    </div>
+
+                    {/* Day-ordered Transactions List */}
+                    <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                      {filteredCategoryTransactions.length === 0 ? (
+                        <div className="p-8 text-center text-slate-400 text-xs">
+                          Nenhum gasto encontrado para o filtro selecionado.
+                        </div>
+                      ) : (
+                        filteredCategoryTransactions.map((tx, idx) => {
+                          const isPaid = (Number(tx.paid_amount || 0) >= (Number(tx.amount) || Number(tx.total_parcelado) || 0)) && (Number(tx.amount) || Number(tx.total_parcelado) || 0) > 0;
+                          const isOverdue = checkTransactionOverdue(tx);
+                          const dayLabel = formatDueDayLabel(tx.due);
+                          const txAmount = Number(tx.amount) || Number(tx.total_parcelado) || 0;
+
+                          return (
+                            <motion.div
+                              key={tx.id || idx}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.2, delay: idx * 0.03 }}
+                              className={`p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                                isLight
+                                  ? isPaid
+                                    ? 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-300'
+                                    : isOverdue
+                                      ? 'bg-rose-50/50 border-rose-200 hover:border-rose-300'
+                                      : 'bg-white border-slate-200 hover:border-slate-300'
+                                  : isPaid
+                                    ? 'bg-emerald-950/15 border-emerald-500/20 hover:border-emerald-500/35'
+                                    : isOverdue
+                                      ? 'bg-rose-950/20 border-rose-500/30 hover:border-rose-500/50'
+                                      : 'bg-white/[0.02] border-white/10 hover:border-white/20'
+                              }`}
+                            >
+                              {/* Left: Day Badge + Name */}
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={`px-3 py-2 rounded-xl font-mono font-black text-xs shrink-0 flex flex-col items-center justify-center border shadow-sm ${
+                                  isOverdue
+                                    ? 'bg-rose-500/20 border-rose-500/40 text-rose-400'
+                                    : isPaid
+                                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                                      : isLight
+                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                        : 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
+                                }`}>
+                                  <span className="text-[9px] uppercase tracking-wider font-bold opacity-75">
+                                    <Calendar className="w-2.5 h-2.5 inline mr-0.5 mb-0.5" />
+                                    Venc.
+                                  </span>
+                                  <span className="text-xs font-black">
+                                    {dayLabel}
+                                  </span>
+                                </div>
+
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`font-bold text-sm truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                                      {tx.name}
+                                    </span>
+                                    {/* Type badge */}
+                                    <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                                      tx.type === 'fixos'
+                                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                        : tx.type === 'parcelas'
+                                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                    }`}>
+                                      {tx.type === 'fixos' ? 'Fixo' : tx.type === 'parcelas' ? 'Parcelamento' : 'Variável'}
+                                    </span>
+                                  </div>
+
+                                  {tx.establishment && (
+                                    <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                                      Estabelecimento: <strong className="text-slate-300">{tx.establishment}</strong>
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right: Status badge + Value */}
+                              <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                                {/* Status badge */}
+                                {isPaid ? (
+                                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black border border-emerald-500/30 flex items-center gap-1">
+                                    <Check className="w-3 h-3" />
+                                    <span>Pago</span>
+                                  </span>
+                                ) : isOverdue ? (
+                                  <span className="px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-400 text-[10px] font-black border border-rose-500/30 flex items-center gap-1 animate-pulse">
+                                    <AlertTriangle className="w-3 h-3" />
+                                    <span>Atrasado</span>
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30 flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    <span>A Vencer</span>
+                                  </span>
+                                )}
+
+                                <div className="text-right">
+                                  <div className={`font-mono text-sm font-black ${
+                                    isPaid 
+                                      ? 'text-emerald-400' 
+                                      : isLight ? 'text-slate-900' : 'text-white'
+                                  }`}>
+                                    {fmt(txAmount)}
+                                  </div>
+                                  {tx.paid_amount > 0 && !isPaid && (
+                                    <div className="text-[9px] text-slate-400">
+                                      Pago: {fmt(tx.paid_amount)}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
       </div>

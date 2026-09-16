@@ -9,8 +9,16 @@ try {
   console.error('Failed to write firebase-applet-config.json:', error);
 }
 
-// Automatically download custom Google Drive logo to public/app_icon.png during build
+// Automatically download custom Google Drive logo to public/app_icon.png during build if not present
 async function downloadLogoOnPrebuild() {
+  if (fs.existsSync('./public/app_icon.png')) {
+    const stats = fs.statSync('./public/app_icon.png');
+    if (stats.size > 10000) {
+      console.log('[Prebuild] Local logo ./public/app_icon.png already exists and is valid. Skipping download.');
+      return;
+    }
+  }
+
   const fileId = '1T378zkUiwNTSniqvuW6fgUiitJobHajU';
   const url = `https://docs.google.com/uc?export=download&id=${fileId}`;
   

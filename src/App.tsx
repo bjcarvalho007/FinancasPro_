@@ -3974,56 +3974,6 @@ function MainApp() {
             </motion.div>
           )}
 
-          {/* Status ativo do Robô de Notificações com botão de teste */}
-          {user && pushPermissionStatus === 'granted' && (
-            <motion.div
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
-                theme === 'light'
-                  ? 'bg-emerald-50/90 border-emerald-200 text-slate-800 shadow-sm'
-                  : 'bg-emerald-950/25 border-emerald-500/25 text-slate-100 shadow-md'
-              } flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs`}
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0 shadow-sm shadow-emerald-400/50" />
-                <div>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400 block text-xs">
-                    🔔 Alertas em Segundo Plano Ativos (Mesmo com App Fechado)
-                  </span>
-                  <span className={`text-[11px] ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'}`}>
-                    Varreduras automáticas diárias às <strong>08:00</strong> e <strong>12:00</strong> (Horário de Brasília) para contas vencidas, de hoje ou próximas.
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleTestBackgroundPush(10)}
-                  disabled={isTestingPush || testPushCountdown !== null}
-                  className="flex-1 sm:flex-initial px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-[11px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer border-none"
-                  title="Bloqueie a tela ou feche o app para ver a notificação chegar"
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                  <span>Testar com App Fechado (10s)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleTriggerPushNow}
-                  disabled={isTestingPush}
-                  className={`px-3 py-2 ${
-                    theme === 'light' ? 'bg-slate-200 hover:bg-slate-300 text-slate-700' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-                  } font-semibold rounded-xl text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none`}
-                  title="Disparar verificação imediata agora"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isTestingPush ? 'animate-spin' : ''}`} />
-                  <span className="hidden md:inline">Verificar Agora</span>
-                </button>
-              </div>
-            </motion.div>
-          )}
-
           {/* Banner de Teste com Contagem Regressiva (Permite ao usuário bloquear a tela) */}
           {testPushCountdown !== null && (
             <motion.div

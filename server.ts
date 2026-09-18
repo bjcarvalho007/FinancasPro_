@@ -121,12 +121,18 @@ app.use(express.json({
   }
 }));
 
+// Stable persistent VAPID keys guaranteeing subscriptions remain valid across serverless cold starts
+const DEFAULT_VAPID_PUBLIC = "BFQCEUjGC0gqGnCfmurp4LZWhVgxTBaAzXPcJviSHX9FN-RcsIXNqfs6RtR1K1-VaoXrlEZetdl7LJeLjZh3Dns";
+const DEFAULT_VAPID_PRIVATE = "fZBZJUybvMYDHfdZllTwhpZg5eQ80fXxhmXukp9rPcU";
+
 // Generate or load persistent VAPID keys ensuring zero-config and persistent push subscriptions
 let vapidPublic = "";
 let vapidPrivate = "";
 let vapidInitialized = false;
 
-const VAPID_FILE = path.join(process.cwd(), "vapid-keys.json");
+const isServerlessEnv = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const storageBaseDir = isServerlessEnv ? "/tmp" : process.cwd();
+const VAPID_FILE = path.join(storageBaseDir, "vapid-keys.json");
 
 function isValidVapidKey(pubKey?: string, privKey?: string): boolean {
   if (!pubKey || !privKey) return false;
@@ -143,24 +149,7 @@ function isValidVapidKey(pubKey?: string, privKey?: string): boolean {
 async function ensureVapidKeys() {
   if (vapidInitialized && isValidVapidKey(vapidPublic, vapidPrivate)) return;
 
-  // 1. Check local file storage first (guarantees persistence across restarts)
-  try {
-    if (fs.existsSync(VAPID_FILE)) {
-      const fileData = JSON.parse(fs.readFileSync(VAPID_FILE, "utf8"));
-      if (isValidVapidKey(fileData?.publicKey, fileData?.privateKey)) {
-        vapidPublic = fileData.publicKey;
-        vapidPrivate = fileData.privateKey;
-        webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
-        vapidInitialized = true;
-        console.log("✅ [VAPID] Chaves VAPID persistentes carregadas do arquivo local com sucesso.");
-        return;
-      }
-    }
-  } catch (fileErr) {
-    // continue to env or generation
-  }
-
-  // 2. Check environment variables if valid
+  // 1. Check environment variables if valid
   const envPub = (process.env.VAPID_PUBLIC_KEY || "").trim();
   const envPriv = (process.env.VAPID_PRIVATE_KEY || "").trim();
   if (isValidVapidKey(envPub, envPriv)) {
@@ -168,33 +157,42 @@ async function ensureVapidKeys() {
     vapidPrivate = envPriv;
     webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
     vapidInitialized = true;
-    try {
-      fs.writeFileSync(VAPID_FILE, JSON.stringify({ publicKey: vapidPublic, privateKey: vapidPrivate }, null, 2), "utf8");
-    } catch (e) {}
     console.log("✅ [VAPID] Configurado com sucesso usando chaves válidas do ambiente.");
     return;
   }
 
-  // 3. Generate fresh pair and store persistently
-  console.log("🔑 [VAPID] Gerando novo par de chaves VAPID único e persistente...");
-  const newKeys = webpush.generateVAPIDKeys();
-  vapidPublic = newKeys.publicKey;
-  vapidPrivate = newKeys.privateKey;
+  // 2. Check local file storage
+  try {
+    const checkPaths = [VAPID_FILE, path.join(process.cwd(), "vapid-keys.json")];
+    for (const cp of checkPaths) {
+      if (fs.existsSync(cp)) {
+        const fileData = JSON.parse(fs.readFileSync(cp, "utf8"));
+        if (isValidVapidKey(fileData?.publicKey, fileData?.privateKey)) {
+          vapidPublic = fileData.publicKey;
+          vapidPrivate = fileData.privateKey;
+          webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
+          vapidInitialized = true;
+          console.log("✅ [VAPID] Chaves VAPID persistentes carregadas do arquivo local com sucesso.");
+          return;
+        }
+      }
+    }
+  } catch (fileErr) {
+    // continue to default
+  }
+
+  // 3. Fallback to constant default keys guaranteeing no desynchronization across serverless invocations
+  vapidPublic = DEFAULT_VAPID_PUBLIC;
+  vapidPrivate = DEFAULT_VAPID_PRIVATE;
   webpush.setVapidDetails("mailto:suporte@financapro.com", vapidPublic, vapidPrivate);
   vapidInitialized = true;
-
-  try {
-    fs.writeFileSync(VAPID_FILE, JSON.stringify({ publicKey: vapidPublic, privateKey: vapidPrivate }, null, 2), "utf8");
-    console.log("✅ [VAPID] Novas chaves VAPID geradas e salvas em vapid-keys.json!");
-  } catch (e) {
-    console.warn("⚠️ Não foi possível salvar vapid-keys.json localmente:", e);
-  }
+  console.log("✅ [VAPID] Chaves VAPID padrão persistentes ativadas com sucesso.");
 }
 
-// Background Checker & Push Cache File Storage
-const PUSH_SUBS_FILE = path.join(process.cwd(), "push-subscriptions.json");
-const USER_BILLS_FILE = path.join(process.cwd(), "user-bills-cache.json");
-const NOTIFIED_ALERTS_FILE = path.join(process.cwd(), "notified-alerts-cache.json");
+// Background Checker & Push Cache File Storage (using /tmp on serverless environments to prevent EROFS)
+const PUSH_SUBS_FILE = path.join(storageBaseDir, "push-subscriptions.json");
+const USER_BILLS_FILE = path.join(storageBaseDir, "user-bills-cache.json");
+const NOTIFIED_ALERTS_FILE = path.join(storageBaseDir, "notified-alerts-cache.json");
 
 function getLocalSubscriptions(): { [userId: string]: any[] } {
   try {
@@ -1410,24 +1408,36 @@ app.post("/api/push/test-background", async (req, res) => {
       });
     }
 
-    const delay = Math.max(2, Math.min(60, Number(delaySeconds) || 10));
+    const delay = Math.max(2, Math.min(isServerlessEnv ? 8 : 60, Number(delaySeconds) || 5));
     const delayMs = delay * 1000;
 
-    setTimeout(async () => {
-      console.log(`⏰ [TEST BACKGROUND PUSH] Disparando alerta de teste em segundo plano para usuário ${userId}...`);
-      try {
-        await runBackgroundPushNotificationChecker(true, userId);
-        console.log(`✅ [TEST BACKGROUND PUSH] Varredura e despacho de teste concluídos para usuário ${userId}.`);
-      } catch (err: any) {
-        console.warn(`⚠️ [TEST BACKGROUND PUSH] Falha ao despachar:`, err?.message || err);
-      }
-    }, delayMs);
+    if (isServerlessEnv) {
+      console.log(`⏰ [TEST BACKGROUND PUSH - SERVERLESS] Aguardando ${delay}s para usuário ${userId} bloquear a tela antes do disparo...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      const result = await runBackgroundPushNotificationChecker(true, userId);
+      return res.json({
+        success: true,
+        message: `Alerta disparado com sucesso após ${delay} segundos!`,
+        delaySeconds: delay,
+        result
+      });
+    } else {
+      setTimeout(async () => {
+        console.log(`⏰ [TEST BACKGROUND PUSH] Disparando alerta de teste em segundo plano para usuário ${userId}...`);
+        try {
+          await runBackgroundPushNotificationChecker(true, userId);
+          console.log(`✅ [TEST BACKGROUND PUSH] Varredura e despacho de teste concluídos para usuário ${userId}.`);
+        } catch (err: any) {
+          console.warn(`⚠️ [TEST BACKGROUND PUSH] Falha ao despachar:`, err?.message || err);
+        }
+      }, delayMs);
 
-    res.json({
-      success: true,
-      message: `Alerta agendado para daqui a ${delay} segundos! Bloqueie a tela ou feche o aplicativo agora.`,
-      delaySeconds: delay
-    });
+      return res.json({
+        success: true,
+        message: `Alerta agendado para daqui a ${delay} segundos! Bloqueie a tela ou feche o aplicativo agora.`,
+        delaySeconds: delay
+      });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "Erro interno" });
   }

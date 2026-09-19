@@ -293,16 +293,18 @@ function getBrasiliaDate(): { hour: number; minute: number; dateStr: string; tim
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: false
+      hour12: false,
+      hourCycle: 'h23'
     });
     const parts = brFormatter.formatToParts(now);
     const getPart = (type: string) => parts.find(p => p.type === type)?.value || '00';
     const year = getPart('year');
     const month = getPart('month');
     const day = getPart('day');
-    const hour = parseInt(getPart('hour'), 10);
+    let hour = parseInt(getPart('hour'), 10);
+    if (hour === 24) hour = 0;
     const minute = parseInt(getPart('minute'), 10);
-    const safeHour = isNaN(hour) ? now.getUTCHours() - 3 : hour;
+    const safeHour = isNaN(hour) ? (now.getUTCHours() - 3 + 24) % 24 : hour;
     const safeMin = isNaN(minute) ? now.getUTCMinutes() : minute;
     return {
       hour: safeHour,
@@ -619,15 +621,35 @@ async function runBackgroundPushNotificationChecker(
     const smart13Key = `push_smart_13h_${userId}_${br.dateStr}`;
     const smart21Key = `push_smart_21h_${userId}_${br.dateStr}`;
 
-    // Schedule windows for Bills (08:00, 12:00, 20:00):
-    const isBills08Trigger = !forceNow && br.hour >= 8 && br.hour < 12 && !notifiedAlerts[bills08Key]?.notified;
-    const isBills12Trigger = !forceNow && br.hour >= 12 && br.hour < 20 && !notifiedAlerts[bills12Key]?.notified;
-    const isBills20Trigger = !forceNow && br.hour >= 20 && br.hour <= 23 && !notifiedAlerts[bills20Key]?.notified;
+    // Sync with Firestore notified_alerts to guarantee persistent memory across restarts
+    try {
+      const db = admin.firestore();
+      const keysToCheck = [bills08Key, bills12Key, bills20Key, smart09Key, smart13Key, smart21Key];
+      for (const k of keysToCheck) {
+        if (!notifiedAlerts[k]?.notified) {
+          const docSnap = await db.collection("notified_alerts").doc(k).get();
+          if (docSnap.exists) {
+            notifiedAlerts[k] = {
+              notified: true,
+              timestamp: docSnap.data()?.dispatchedAt || new Date().toISOString(),
+              timeStr: br.timeStr,
+              slot: docSnap.data()?.slot || 'cloud',
+              count: docSnap.data()?.count || 0
+            };
+          }
+        }
+      }
+    } catch (e) {}
 
-    // Schedule windows for Smart Insights (09:00, 13:00, 21:00):
-    const isSmart09Trigger = !forceNow && br.hour >= 9 && br.hour < 13 && !notifiedAlerts[smart09Key]?.notified;
-    const isSmart13Trigger = !forceNow && br.hour >= 13 && br.hour < 21 && !notifiedAlerts[smart13Key]?.notified;
-    const isSmart21Trigger = !forceNow && br.hour >= 21 && br.hour <= 23 && !notifiedAlerts[smart21Key]?.notified;
+    // STRICT EXACT-HOUR SCHEDULE RULES (As requested: 08:00, 12:00, 20:00 for Bills; 09:00, 13:00, 21:00 for Smart Insights)
+    // No drift, no overlapping, and NEVER fire outside the exact scheduled hour!
+    const isBills08Trigger = !forceNow && targetMode !== 'smart' && br.hour === 8 && !notifiedAlerts[bills08Key]?.notified;
+    const isBills12Trigger = !forceNow && targetMode !== 'smart' && br.hour === 12 && !notifiedAlerts[bills12Key]?.notified;
+    const isBills20Trigger = !forceNow && targetMode !== 'smart' && br.hour === 20 && !notifiedAlerts[bills20Key]?.notified;
+
+    const isSmart09Trigger = !forceNow && targetMode !== 'bills' && br.hour === 9 && !notifiedAlerts[smart09Key]?.notified;
+    const isSmart13Trigger = !forceNow && targetMode !== 'bills' && br.hour === 13 && !notifiedAlerts[smart13Key]?.notified;
+    const isSmart21Trigger = !forceNow && targetMode !== 'bills' && br.hour === 21 && !notifiedAlerts[smart21Key]?.notified;
 
     const overdueBills = userExpiringBills.filter(b => b.isOverdue);
     const todayBills = userExpiringBills.filter(b => !b.isOverdue && b.isDueToday);
@@ -647,7 +669,18 @@ async function runBackgroundPushNotificationChecker(
       let billsTitle = '';
       let billsBody = '';
 
-      if (isBills08Trigger || (forceNow && br.hour < 12 && targetMode !== 'smart')) {
+      if (forceNow) {
+        billsSlotName = 'teste';
+        if (overdueBills.length > 0) {
+          billsTitle = `🚨 [TESTE] ${overdueBills.length} Conta(s) em Atraso`;
+        } else if (todayBills.length > 0) {
+          billsTitle = `⚠️ [TESTE] ${todayBills.length} Conta(s) Vence(m) Hoje`;
+        } else if (userExpiringBills.length > 0) {
+          billsTitle = `⚠️ [TESTE] ${userExpiringBills.length} Conta(s) a Vencer`;
+        } else {
+          billsTitle = "✅ [TESTE] Contas em Dia!";
+        }
+      } else if (isBills08Trigger) {
         billsSlotName = '08h';
         if (overdueBills.length > 0) {
           billsTitle = `🚨 ALERTA MATINAL (08:00): ${overdueBills.length} Conta(s) Atrasada(s)`;
@@ -658,7 +691,7 @@ async function runBackgroundPushNotificationChecker(
         } else {
           billsTitle = "✅ CONTAS EM DIA (08:00): Tudo organizado!";
         }
-      } else if (isBills12Trigger || (forceNow && br.hour >= 12 && br.hour < 20 && targetMode !== 'smart')) {
+      } else if (isBills12Trigger) {
         billsSlotName = '12h';
         if (overdueBills.length > 0) {
           billsTitle = `🚨 MEIO-DIA (12:00): ${overdueBills.length} Conta(s) em Atraso`;
@@ -669,7 +702,7 @@ async function runBackgroundPushNotificationChecker(
         } else {
           billsTitle = "✅ CONTAS EM DIA (12:00): Suas finanças estão tranquilas!";
         }
-      } else {
+      } else if (isBills20Trigger) {
         billsSlotName = '20h';
         if (overdueBills.length > 0 || todayBills.length > 0) {
           billsTitle = `🌙 8 DA NOITE (20:00): ${overdueBills.length + todayBills.length} Pendência(s) de Atenção`;
@@ -740,7 +773,7 @@ async function runBackgroundPushNotificationChecker(
     // B) DISPATCH SMART INSIGHTS NOTIFICATION (09h, 13h, 21h)
     // ====================================================
     const shouldSendSmart = 
-      (forceNow && (targetMode === 'smart' || targetMode === 'both')) || 
+      (forceNow && targetMode === 'smart') || 
       isSmart09Trigger || 
       isSmart13Trigger || 
       isSmart21Trigger;
@@ -750,7 +783,15 @@ async function runBackgroundPushNotificationChecker(
       let smartTitle = '';
       let smartBody = '';
 
-      if (isSmart09Trigger || (forceNow && br.hour < 13 && targetMode === 'smart')) {
+      if (forceNow) {
+        smartSlotName = 'teste';
+        smartTitle = "💡 [TESTE] Informações Inteligentes & Maior Gasto";
+        if (insights.topExpense) {
+          smartBody = `📊 Maior gasto do mês: "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n🎯 Progresso: ${insights.paidPercentage}% quitado. Mantenha seus limites diários para proteger seu saldo!`;
+        } else {
+          smartBody = "💡 Dica de Ouro: Registre seus gastos no FinançasPro para manter sua meta e orçamento sob controle!";
+        }
+      } else if (isSmart09Trigger) {
         smartSlotName = '09h';
         smartTitle = "💡 CONTROLE INTELIGENTE (09:00)";
         if (insights.topExpense) {
@@ -758,12 +799,12 @@ async function runBackgroundPushNotificationChecker(
         } else {
           smartBody = "💡 Dica de Ouro: Comece o dia no controle! Registre qualquer novo gasto no FinançasPro para manter sua meta em dia.";
         }
-      } else if (isSmart13Trigger || (forceNow && br.hour >= 13 && br.hour < 21 && targetMode === 'smart')) {
+      } else if (isSmart13Trigger) {
         smartSlotName = '13h';
         smartTitle = "🎯 RAIO-X FINANCEIRO (13:00)";
         const topStr = insights.topExpense ? `\nMaior despesa: ${insights.topExpense.name} (R$ ${fmt(insights.topExpense.amount)}).` : '';
         smartBody = `Progresso do mês: ${insights.paidPercentage}% das despesas pagas (R$ ${fmt(insights.totalPaid)} de R$ ${fmt(insights.totalExpenses)}).${topStr}\n💡 Dica: Acompanhe seus gastos na pausa do almoço para evitar excessos à tarde.`;
-      } else {
+      } else if (isSmart21Trigger) {
         smartSlotName = '21h';
         smartTitle = "✨ 9 DA NOITE - FECHAMENTO INTELIGENTE (21:00)";
         const topStr = insights.topExpense ? `Sua maior fatura neste mês é "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n` : '';

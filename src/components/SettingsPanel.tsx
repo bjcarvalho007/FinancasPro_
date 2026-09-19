@@ -263,11 +263,11 @@ export default function SettingsPanel({
     }
   };
 
-  const triggerImmediateNotificationCheck = async () => {
+  const triggerImmediateNotificationCheck = async (mode: 'bills' | 'smart' | 'both' = 'both') => {
     if (!auth.currentUser) return;
     setPushLoading(true);
     try {
-      showToast('Disparando verificação e alerta imediato no servidor...', 'warning');
+      showToast(`Disparando verificação imediata (${mode === 'bills' ? 'Contas' : mode === 'smart' ? 'Inteligente' : 'Completa'})...`, 'warning');
       const sub = await ensureDevicePushSubscription();
 
       const res = await fetch('/api/push/trigger-now', {
@@ -276,7 +276,8 @@ export default function SettingsPanel({
         body: JSON.stringify({ 
           userId: auth.currentUser.uid,
           subscription: sub,
-          bills: transactions || []
+          bills: transactions || [],
+          mode
         })
       });
       const data = await res.json();
@@ -284,7 +285,7 @@ export default function SettingsPanel({
       if (data.result && data.result.sent > 0) {
         showToast(`✅ Alerta enviado para ${data.result.sent} dispositivo(s)!`, 'success');
       } else {
-        showToast('ℹ️ Varredura executada! Nenhuma conta a vencer ou pendente no momento.', 'warning');
+        showToast('ℹ️ Varredura executada! Notificação processada com sucesso.', 'warning');
       }
       loadServerStatus();
     } catch (err: any) {
@@ -294,7 +295,7 @@ export default function SettingsPanel({
     }
   };
 
-  const triggerDelayedBackgroundPush = async (delaySeconds: number = 10) => {
+  const triggerDelayedBackgroundPush = async (delaySeconds: number = 10, mode: 'bills' | 'smart' | 'both' = 'both') => {
     if (!auth.currentUser) return;
     setPushLoading(true);
     try {
@@ -307,6 +308,7 @@ export default function SettingsPanel({
         body: JSON.stringify({ 
           userId: auth.currentUser.uid, 
           delaySeconds,
+          mode,
           subscription: sub,
           bills: (transactions || []).map(t => ({
             id: t.id,
@@ -325,7 +327,7 @@ export default function SettingsPanel({
         throw new Error(data.error || 'Falha ao agendar teste.');
       }
 
-      showToast(`Alerta agendado! Bloqueie a tela ou feche o app agora. Chegará em ${delaySeconds}s.`, 'success');
+      showToast(`Alerta (${mode === 'bills' ? 'Contas' : mode === 'smart' ? 'Inteligente' : 'Completo'}) agendado! Bloqueie a tela ou feche o app agora. Chegará em ${delaySeconds}s.`, 'success');
       setBackgroundTestCountdown(delaySeconds);
       let remaining = delaySeconds;
       const interval = setInterval(() => {
@@ -867,60 +869,7 @@ export default function SettingsPanel({
                 )}
               </div>
 
-              {/* Sweep cards for Morning and Midday */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                {/* 08:00 Morning Sweep */}
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 flex flex-col justify-between gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
-                      🌅 Manhã (08:00 BRT)
-                    </span>
-                    {serverPushStatus?.morningSentToday ? (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
-                        ✓ Disparado {serverPushStatus.morningSentTime ? `às ${serverPushStatus.morningSentTime}` : 'hoje'}
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-semibold">
-                        • Aguardando 08:00
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-slate-300/80 leading-relaxed">
-                    Varredura matinal de contas que vencem hoje ou estão atrasadas, com lembrete dedicado da manhã.
-                  </p>
-                </div>
-
-                {/* 12:00 Midday Sweep */}
-                <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/20 flex flex-col justify-between gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-sky-300 text-xs flex items-center gap-1.5">
-                      ☀️ Meio-Dia (12:00 BRT)
-                    </span>
-                    {serverPushStatus?.middaySentToday ? (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
-                        ✓ Disparado {serverPushStatus.middaySentTime ? `às ${serverPushStatus.middaySentTime}` : 'hoje'}
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-semibold">
-                        • Aguardando 12:00
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-slate-300/80 leading-relaxed">
-                    Segunda varredura diária no almoço para reforçar contas pendentes e evitar multas e juros.
-                  </p>
-                </div>
-              </div>
-
-              {/* Independent Tracking explanation */}
-              <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[10px] text-indigo-200/90 leading-relaxed flex items-start gap-2">
-                <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong>Rastreamento independente:</strong> O robô em segundo plano mantém registros separados (<code className="text-indigo-300">push_morning_alert</code> e <code className="text-indigo-300">push_midday_alert</code>), garantindo que ambos os lembretes sejam disparados pontualmente sem sobreposição ou duplicação.
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5 text-[10px] text-slate-400">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5 text-[10px] text-slate-400">
                 <span>Aparelhos ativos: <strong className="text-slate-200">{serverPushStatus?.deviceCount || 0}</strong></span>
                 <span>Contas monitoradas: <strong className="text-slate-200">{serverPushStatus?.billsCount || transactions?.length || 0}</strong></span>
               </div>
@@ -938,7 +887,7 @@ export default function SettingsPanel({
                     <span>Testar com App Fechado (10s)</span>
                   </button>
                   <button
-                    onClick={triggerImmediateNotificationCheck}
+                    onClick={() => triggerImmediateNotificationCheck('both')}
                     disabled={pushLoading}
                     className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/20 font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
                   >

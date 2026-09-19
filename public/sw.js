@@ -194,6 +194,7 @@ self.addEventListener('push', (event) => {
         body: data.body || payload.body,
         icon: data.icon || payload.icon,
         badge: data.badge || payload.badge,
+        tag: data.tag || payload.tag,
         data: data.data || payload.data
       };
     } catch (e) {

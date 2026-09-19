@@ -326,11 +326,135 @@ function getBrasiliaDate(): { hour: number; minute: number; dateStr: string; tim
   }
 }
 
+interface SmartInsightsData {
+  topExpense: { name: string; amount: number; category: string } | null;
+  totalExpenses: number;
+  totalPaid: number;
+  totalPending: number;
+  paidPercentage: number;
+  topCategory: string | null;
+  expensesCount: number;
+}
+
+function calculateUserSmartInsights(userBills: any[], brYear: number, brMonth: number): SmartInsightsData {
+  const currentMonthKey = `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
+  let topExpense: { name: string; amount: number; category: string } | null = null;
+  let totalExpenses = 0;
+  let totalPaid = 0;
+  const categoryTotals: { [cat: string]: number } = {};
+  let count = 0;
+
+  for (const tx of userBills) {
+    if (!tx || !tx.name) continue;
+    if (tx.type === 'rendas' || tx.type === 'entradas' || tx.type === 'receita') continue;
+    if (tx.is_skipped) continue;
+
+    // Consider transactions for current month or active non-month-specific expenses
+    if (tx.monthKey && tx.monthKey !== currentMonthKey) continue;
+
+    const amount = Number(tx.amount) || Number(tx.total_parcelado) || 0;
+    const paid = Number(tx.paid_amount) || 0;
+
+    if (amount <= 0 && paid <= 0) continue;
+
+    count++;
+    totalExpenses += amount;
+    totalPaid += paid;
+
+    if (!topExpense || amount > topExpense.amount) {
+      topExpense = {
+        name: tx.name,
+        amount: amount,
+        category: tx.cat || tx.category || 'Geral'
+      };
+    }
+
+    const catName = String(tx.cat || tx.category || 'Outros').trim();
+    categoryTotals[catName] = (categoryTotals[catName] || 0) + amount;
+  }
+
+  let topCategory: string | null = null;
+  let topCatAmount = 0;
+  for (const [cat, sum] of Object.entries(categoryTotals)) {
+    if (sum > topCatAmount) {
+      topCatAmount = sum;
+      topCategory = cat;
+    }
+  }
+
+  const totalPending = Math.max(0, totalExpenses - totalPaid);
+  const paidPercentage = totalExpenses > 0 ? Math.round((totalPaid / totalExpenses) * 100) : 100;
+
+  return {
+    topExpense,
+    totalExpenses,
+    totalPaid,
+    totalPending,
+    paidPercentage,
+    topCategory,
+    expensesCount: count
+  };
+}
+
+async function dispatchPushToSubscriptions(
+  userId: string,
+  subs: any[],
+  title: string,
+  body: string,
+  tag: string
+): Promise<number> {
+  const messagePayload = JSON.stringify({
+    title,
+    body,
+    icon: "/app_icon.png",
+    badge: "/app_icon.png",
+    tag,
+    data: { url: "/", action: "OPEN_APP" }
+  });
+
+  let sentCount = 0;
+  const validSubs: any[] = [];
+
+  for (const rawSub of subs) {
+    try {
+      const sub = typeof rawSub === 'string' ? JSON.parse(rawSub) : rawSub;
+      if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+        continue;
+      }
+      await webpush.sendNotification(sub, messagePayload, {
+        TTL: 86400,
+        urgency: 'high'
+      });
+      sentCount++;
+      validSubs.push(sub);
+    } catch (subErr: any) {
+      console.warn(`⚠️ Falha ao despachar push (${tag}) para usuário ${userId}:`, subErr?.statusCode, subErr?.message || subErr);
+      if (subErr?.statusCode !== 410 && subErr?.statusCode !== 404) {
+        validSubs.push(rawSub);
+      }
+    }
+  }
+
+  if (validSubs.length !== subs.length) {
+    const allSubs = getLocalSubscriptions();
+    allSubs[userId] = validSubs;
+    try {
+      fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(allSubs, null, 2), "utf8");
+    } catch (e) {}
+  }
+
+  return sentCount;
+}
+
 // Background Checker Task for push notifications when browser is closed
-async function runBackgroundPushNotificationChecker(forceNow: boolean = false, targetUserId?: string) {
+async function runBackgroundPushNotificationChecker(
+  forceNow: boolean = false, 
+  targetUserId?: string,
+  targetMode: 'bills' | 'smart' | 'both' = 'both'
+) {
   await ensureVapidKeys();
   const br = getBrasiliaDate();
-  console.log(`⏰ [BACKGROUND SWEEPER] Varredura em 2º plano (Horário de Brasília: ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}, Data: ${br.dateStr}, Forçar: ${forceNow})...`);
+  console.log(`⏰ [BACKGROUND SWEEPER] Varredura em 2º plano (Horário de Brasília: ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}, Data: ${br.dateStr}, Forçar: ${forceNow}, Modo: ${targetMode})...`);
 
   const userSubsMap: { [userId: string]: any[] } = getLocalSubscriptions();
 
@@ -371,6 +495,7 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
   const now = new Date();
 
   let totalDispatched = 0;
+  const fmt = (v: number) => (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   for (const userId of userIds) {
     const subs = userSubsMap[userId];
@@ -387,14 +512,13 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
       }
     } catch (e) {}
 
-    if (!userBills || userBills.length === 0) continue;
-
     // Reference today at 12:00 BRT
     const brYear = parseInt(br.dateStr.split('-')[0], 10) || now.getFullYear();
     const brMonth = (parseInt(br.dateStr.split('-')[1], 10) - 1) || now.getMonth();
     const brDay = parseInt(br.dateStr.split('-')[2], 10) || now.getDate();
     const brTodayNoon = new Date(brYear, brMonth, brDay, 12, 0, 0);
 
+    // 1. Process expiring and overdue bills
     const userExpiringBills: Array<{
       id: string;
       name: string;
@@ -407,10 +531,7 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
 
     for (const tx of userBills) {
       if (!tx || !tx.name || !tx.due) continue;
-
-      // Ignore income / receipt records
       if (tx.type === 'rendas' || tx.type === 'entradas' || tx.type === 'receita') continue;
-      // Ignore user-skipped months
       if (tx.is_skipped) continue;
 
       const amount = Number(tx.amount) || Number(tx.total_parcelado) || 0;
@@ -425,18 +546,13 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
       const dueStr = String(tx.due).trim();
       let dueDate: Date | null = null;
 
-      // Format 1: YYYY-MM-DD
       if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
         const parts = dueStr.split("-").map(Number);
         dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-      } 
-      // Format 2: DD/MM/YYYY
-      else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dueStr)) {
+      } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dueStr)) {
         const parts = dueStr.split("/").map(Number);
         dueDate = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
-      }
-      // Format 3: "Dia XX" or just "XX"
-      else {
+      } else {
         const dayMatch = dueStr.match(/\d+/);
         if (dayMatch) {
           const dueDay = parseInt(dayMatch[0], 10);
@@ -484,166 +600,202 @@ async function runBackgroundPushNotificationChecker(forceNow: boolean = false, t
       }
     }
 
-    // Sort: overdue first, then due today, then upcoming (closest first)
     userExpiringBills.sort((a, b) => {
       if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
       return a.diffDays - b.diffDays;
     });
 
-    // Keys for daily morning (08:00) and midday (12:00) alerts in Brasília timezone
-    const morningAlertKey = `push_morning_alert_${userId}_${br.dateStr}`;
-    const middayAlertKey = `push_midday_alert_${userId}_${br.dateStr}`;
-    const batchSignature = userExpiringBills.map(b => b.id).sort().join("_");
-    const immediateBatchKey = `push_batch_${userId}_${br.dateStr}_${batchSignature}`;
+    // 2. Process Smart Insights for current month (biggest expense, control balance)
+    const insights = calculateUserSmartInsights(userBills, brYear, brMonth);
 
-    const alreadySentMorning = Boolean(notifiedAlerts[morningAlertKey]?.notified);
-    const alreadySentMidday = Boolean(notifiedAlerts[middayAlertKey]?.notified);
-    const alreadySentBatch = Boolean(notifiedAlerts[immediateBatchKey]?.notified);
+    // Keys for anti-spam tracking
+    // Bills Slots: 08:00, 12:00, 20:00
+    const bills08Key = `push_bills_08h_${userId}_${br.dateStr}`;
+    const bills12Key = `push_bills_12h_${userId}_${br.dateStr}`;
+    const bills20Key = `push_bills_20h_${userId}_${br.dateStr}`;
 
-    // Schedule slots in Brasília timezone:
-    // Morning slot: from 08:00 to 11:59
-    const isMorningSlot = br.hour >= 8 && br.hour < 12;
-    // Midday slot: from 12:00 to 20:59
-    const isMiddaySlot = br.hour >= 12 && br.hour < 21;
+    // Smart Insights Slots: 09:00, 13:00, 21:00
+    const smart09Key = `push_smart_09h_${userId}_${br.dateStr}`;
+    const smart13Key = `push_smart_13h_${userId}_${br.dateStr}`;
+    const smart21Key = `push_smart_21h_${userId}_${br.dateStr}`;
 
-    const isMorningTrigger = !forceNow && isMorningSlot && !alreadySentMorning && userExpiringBills.length > 0;
-    const isMiddayTrigger = !forceNow && isMiddaySlot && !alreadySentMidday && userExpiringBills.length > 0;
+    // Schedule windows for Bills (08:00, 12:00, 20:00):
+    const isBills08Trigger = !forceNow && br.hour >= 8 && br.hour < 12 && !notifiedAlerts[bills08Key]?.notified;
+    const isBills12Trigger = !forceNow && br.hour >= 12 && br.hour < 20 && !notifiedAlerts[bills12Key]?.notified;
+    const isBills20Trigger = !forceNow && br.hour >= 20 && br.hour <= 23 && !notifiedAlerts[bills20Key]?.notified;
 
-    // Send condition:
-    // 1. If forceNow is true (manual test or immediate sync button)
-    // 2. OR scheduled morning trigger (08:00-11:59) not yet sent today
-    // 3. OR scheduled midday trigger (12:00+) not yet sent today
-    // 4. OR if a completely new batch was detected that hasn't been notified today
-    const shouldSend = forceNow || isMorningTrigger || isMiddayTrigger || (!alreadySentBatch && userExpiringBills.length > 0);
+    // Schedule windows for Smart Insights (09:00, 13:00, 21:00):
+    const isSmart09Trigger = !forceNow && br.hour >= 9 && br.hour < 13 && !notifiedAlerts[smart09Key]?.notified;
+    const isSmart13Trigger = !forceNow && br.hour >= 13 && br.hour < 21 && !notifiedAlerts[smart13Key]?.notified;
+    const isSmart21Trigger = !forceNow && br.hour >= 21 && br.hour <= 23 && !notifiedAlerts[smart21Key]?.notified;
 
-    if (shouldSend) {
-      console.log(`🚀 [BACKGROUND PUSH] Despachando notificação para usuário ${userId} (${userExpiringBills.length} contas) [Manhã: ${isMorningTrigger}, Meio-Dia: ${isMiddayTrigger}, Forçado: ${forceNow}]...`);
+    const overdueBills = userExpiringBills.filter(b => b.isOverdue);
+    const todayBills = userExpiringBills.filter(b => !b.isOverdue && b.isDueToday);
+    const totalRemaining = userExpiringBills.reduce((acc, b) => acc + (b.remaining || 0), 0);
 
-      const isMidday = isMiddayTrigger || (br.hour >= 12 && !isMorningTrigger);
-      const overdueBills = userExpiringBills.filter(b => b.isOverdue);
-      const todayBills = userExpiringBills.filter(b => !b.isOverdue && b.isDueToday);
-      const totalRemaining = userExpiringBills.reduce((acc, b) => acc + (b.remaining || 0), 0);
-      const totalRemainingStr = totalRemaining > 0 ? ` (Total: R$ ${totalRemaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })})` : '';
+    // ==========================================
+    // A) DISPATCH BILLS NOTIFICATION (08h, 12h, 20h)
+    // ==========================================
+    const shouldSendBills = 
+      (forceNow && targetMode !== 'smart') || 
+      isBills08Trigger || 
+      isBills12Trigger || 
+      isBills20Trigger;
 
-      let pushTitle = '';
-      let pushBody = '';
+    if (shouldSendBills) {
+      let billsSlotName = 'manual';
+      let billsTitle = '';
+      let billsBody = '';
 
-      if (userExpiringBills.length === 0) {
-        pushTitle = "✅ FinançasPro: Todas as Contas em Dia";
-        pushBody = "Varredura concluída! Nenhuma conta atrasada ou próxima do vencimento. Os alertas automáticos continuam ativos às 08:00 e 12:00.";
-      } else if (userExpiringBills.length === 1) {
-        const b = userExpiringBills[0];
-        const valStr = b.remaining > 0 ? ` de R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : '';
-        if (b.isOverdue) {
-          pushTitle = "🚨 CONTA EM ATRASO - FinançasPro";
-          pushBody = `Atenção: A despesa "${b.name}"${valStr} está ATRASADA (Vencimento: ${b.due}). Toque para abrir o app e regularizar.`;
-        } else if (b.isDueToday) {
-          pushTitle = "⚠️ VENCE HOJE - FinançasPro";
-          pushBody = `Lembrete: A despesa "${b.name}"${valStr} VENCE HOJE (${b.due}). Aproveite para pagar e evitar juros.`;
+      if (isBills08Trigger || (forceNow && br.hour < 12 && targetMode !== 'smart')) {
+        billsSlotName = '08h';
+        if (overdueBills.length > 0) {
+          billsTitle = `🚨 ALERTA MATINAL (08:00): ${overdueBills.length} Conta(s) Atrasada(s)`;
+        } else if (todayBills.length > 0) {
+          billsTitle = `⚠️ BOM DIA (08:00): ${todayBills.length} Conta(s) Vence(m) Hoje`;
+        } else if (userExpiringBills.length > 0) {
+          billsTitle = `⚠️ RADAR DO DIA (08:00): ${userExpiringBills.length} Conta(s) a Vencer`;
         } else {
-          pushTitle = "⚠️ PRÓXIMO DO VENCIMENTO - FinançasPro";
-          pushBody = `Lembrete: A despesa "${b.name}"${valStr} vence em ${b.diffDays} dia(s) (${b.due}).`;
+          billsTitle = "✅ CONTAS EM DIA (08:00): Tudo organizado!";
+        }
+      } else if (isBills12Trigger || (forceNow && br.hour >= 12 && br.hour < 20 && targetMode !== 'smart')) {
+        billsSlotName = '12h';
+        if (overdueBills.length > 0) {
+          billsTitle = `🚨 MEIO-DIA (12:00): ${overdueBills.length} Conta(s) em Atraso`;
+        } else if (todayBills.length > 0) {
+          billsTitle = `☀️ REFORÇO DO ALMOÇO (12:00): ${todayBills.length} Vence(m) Hoje`;
+        } else if (userExpiringBills.length > 0) {
+          billsTitle = `☀️ MEIO-DIA (12:00): ${userExpiringBills.length} Conta(s) Pendente(s)`;
+        } else {
+          billsTitle = "✅ CONTAS EM DIA (12:00): Suas finanças estão tranquilas!";
         }
       } else {
-        if (overdueBills.length > 0) {
-          pushTitle = `🚨 ${userExpiringBills.length} CONTAS PENDENTES (${overdueBills.length} ATRASADA${overdueBills.length > 1 ? 'S' : ''})`;
-        } else if (todayBills.length > 0) {
-          pushTitle = `⚠️ ${userExpiringBills.length} CONTAS (${todayBills.length} VENCEM HOJE)`;
+        billsSlotName = '20h';
+        if (overdueBills.length > 0 || todayBills.length > 0) {
+          billsTitle = `🌙 8 DA NOITE (20:00): ${overdueBills.length + todayBills.length} Pendência(s) de Atenção`;
+        } else if (userExpiringBills.length > 0) {
+          billsTitle = `🌙 RADAR NOTURNO (20:00): Contas dos próximos dias`;
         } else {
-          pushTitle = `⚠️ LEMBRETE: ${userExpiringBills.length} CONTAS A VENCER`;
+          billsTitle = "✨ NOITE TRANQUILA (20:00): Nenhuma conta atrasada!";
         }
+      }
 
+      if (userExpiringBills.length === 0) {
+        billsBody = "Parabéns! Nenhuma conta atrasada ou próxima do vencimento. Seus alertas diários continuam agendados às 08:00, 12:00 e 20:00.";
+      } else if (userExpiringBills.length === 1) {
+        const b = userExpiringBills[0];
+        const valStr = b.remaining > 0 ? ` de R$ ${fmt(b.remaining)}` : '';
+        if (b.isOverdue) {
+          billsBody = `A despesa "${b.name}"${valStr} está ATRASADA (${b.due}). Abra o app para regularizar e evitar juros.`;
+        } else if (b.isDueToday) {
+          billsBody = `Lembrete: A despesa "${b.name}"${valStr} VENCE HOJE (${b.due}). Aproveite para quitar agora.`;
+        } else {
+          billsBody = `Lembrete: A despesa "${b.name}"${valStr} vence em ${b.diffDays} dia(s) (${b.due}).`;
+        }
+      } else {
         const maxDisplay = 5;
-        const summaryLines: string[] = [];
+        const lines: string[] = [];
         for (const b of userExpiringBills.slice(0, maxDisplay)) {
-          const valStr = b.remaining > 0 ? ` - R$ ${b.remaining.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : '';
+          const valStr = b.remaining > 0 ? ` - R$ ${fmt(b.remaining)}` : '';
           let tag = ` (${b.due})`;
           if (b.isOverdue) tag = ' [ATRASADA]';
           else if (b.isDueToday) tag = ' [VENCE HOJE]';
           else if (b.diffDays !== 999) tag = ` [Em ${b.diffDays}d]`;
-          summaryLines.push(`• ${b.name}${valStr}${tag}`);
+          lines.push(`• ${b.name}${valStr}${tag}`);
         }
-
         if (userExpiringBills.length > maxDisplay) {
-          summaryLines.push(`... e mais ${userExpiringBills.length - maxDisplay} conta(s) pendente(s).`);
+          lines.push(`... e mais ${userExpiringBills.length - maxDisplay} conta(s) pendente(s).`);
         }
-
-        pushBody = `Você tem ${userExpiringBills.length} conta(s) pendente(s)${totalRemainingStr}:\n` + summaryLines.join('\n');
+        const totalStr = totalRemaining > 0 ? ` Total pendente: R$ ${fmt(totalRemaining)}.` : '';
+        billsBody = `Você tem ${userExpiringBills.length} contas para acompanhar.${totalStr}\n` + lines.join('\n');
       }
 
-      const messagePayload = JSON.stringify({
-        title: pushTitle,
-        body: pushBody,
-        icon: "/app_icon.png",
-        badge: "/app_icon.png",
-        tag: forceNow ? `financaspro-alert-${Date.now()}` : `financaspro-${isMidday ? 'midday' : 'morning'}-${br.dateStr}`,
-        data: { url: "/", action: "OPEN_APP" }
-      });
+      const billsTag = forceNow ? `financaspro-bills-test-${Date.now()}` : `financaspro-bills-${billsSlotName}-${br.dateStr}`;
+      const sent = await dispatchPushToSubscriptions(userId, subs, billsTitle, billsBody, billsTag);
+      totalDispatched += sent;
 
-      let sentCount = 0;
-      const validSubs: any[] = [];
-      for (const rawSub of subs) {
-        try {
-          const sub = typeof rawSub === 'string' ? JSON.parse(rawSub) : rawSub;
-          if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
-            console.warn("⚠️ Assinatura push incompleta ignorada:", sub?.endpoint);
-            continue;
-          }
-          await webpush.sendNotification(sub, messagePayload, {
-            TTL: 86400,
-            urgency: 'high'
-          });
-          sentCount++;
-          validSubs.push(sub);
-        } catch (subErr: any) {
-          console.warn(`⚠️ Falha ao despachar push para dispositivo do usuário ${userId}:`, subErr?.statusCode, subErr?.message || subErr);
-          if (subErr?.statusCode !== 410 && subErr?.statusCode !== 404) {
-            validSubs.push(rawSub);
-          }
-        }
-      }
-
-      if (validSubs.length !== subs.length) {
-        const allSubs = getLocalSubscriptions();
-        allSubs[userId] = validSubs;
-        try {
-          fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(allSubs, null, 2), "utf8");
-        } catch (e) {}
-      }
-
-      // Record dispatch tracking
-      if (isMorningTrigger) {
-        markLocalAlertNotified(morningAlertKey, { slot: 'morning', count: userExpiringBills.length });
-      }
-      if (isMiddayTrigger) {
-        markLocalAlertNotified(middayAlertKey, { slot: 'midday', count: userExpiringBills.length });
-      }
-      if (userExpiringBills.length > 0) {
-        markLocalAlertNotified(immediateBatchKey, { slot: 'batch', count: userExpiringBills.length });
-      }
+      // Mark slot notified
+      if (isBills08Trigger) markLocalAlertNotified(bills08Key, { slot: 'bills_08h', count: userExpiringBills.length });
+      if (isBills12Trigger) markLocalAlertNotified(bills12Key, { slot: 'bills_12h', count: userExpiringBills.length });
+      if (isBills20Trigger) markLocalAlertNotified(bills20Key, { slot: 'bills_20h', count: userExpiringBills.length });
 
       try {
         const db = admin.firestore();
-        if (isMorningTrigger) {
-          await db.collection("notified_alerts").doc(morningAlertKey).set({
+        const activeSlotKey = isBills08Trigger ? bills08Key : (isBills12Trigger ? bills12Key : (isBills20Trigger ? bills20Key : null));
+        if (activeSlotKey) {
+          await db.collection("notified_alerts").doc(activeSlotKey).set({
             userId,
-            slot: "morning",
-            count: userExpiringBills.length,
-            dispatchedAt: new Date().toISOString()
-          });
-        }
-        if (isMiddayTrigger) {
-          await db.collection("notified_alerts").doc(middayAlertKey).set({
-            userId,
-            slot: "midday",
+            slot: billsSlotName,
+            type: "bills",
             count: userExpiringBills.length,
             dispatchedAt: new Date().toISOString()
           });
         }
       } catch (e) {}
 
-      totalDispatched += sentCount;
-      console.log(`✅ [BACKGROUND PUSH] Notificação entregue para ${sentCount} dispositivo(s) do usuário ${userId}.`);
+      console.log(`✅ [BILLS PUSH] Alerta das ${billsSlotName} entregue para ${sent} aparelho(s) do usuário ${userId}.`);
+    }
+
+    // ====================================================
+    // B) DISPATCH SMART INSIGHTS NOTIFICATION (09h, 13h, 21h)
+    // ====================================================
+    const shouldSendSmart = 
+      (forceNow && (targetMode === 'smart' || targetMode === 'both')) || 
+      isSmart09Trigger || 
+      isSmart13Trigger || 
+      isSmart21Trigger;
+
+    if (shouldSendSmart) {
+      let smartSlotName = 'manual';
+      let smartTitle = '';
+      let smartBody = '';
+
+      if (isSmart09Trigger || (forceNow && br.hour < 13 && targetMode === 'smart')) {
+        smartSlotName = '09h';
+        smartTitle = "💡 CONTROLE INTELIGENTE (09:00)";
+        if (insights.topExpense) {
+          smartBody = `📊 Maior gasto do mês: "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n🎯 Meta de hoje: Mantenha seus limites diários e priorize o que é essencial para proteger seu saldo!`;
+        } else {
+          smartBody = "💡 Dica de Ouro: Comece o dia no controle! Registre qualquer novo gasto no FinançasPro para manter sua meta em dia.";
+        }
+      } else if (isSmart13Trigger || (forceNow && br.hour >= 13 && br.hour < 21 && targetMode === 'smart')) {
+        smartSlotName = '13h';
+        smartTitle = "🎯 RAIO-X FINANCEIRO (13:00)";
+        const topStr = insights.topExpense ? `\nMaior despesa: ${insights.topExpense.name} (R$ ${fmt(insights.topExpense.amount)}).` : '';
+        smartBody = `Progresso do mês: ${insights.paidPercentage}% das despesas pagas (R$ ${fmt(insights.totalPaid)} de R$ ${fmt(insights.totalExpenses)}).${topStr}\n💡 Dica: Acompanhe seus gastos na pausa do almoço para evitar excessos à tarde.`;
+      } else {
+        smartSlotName = '21h';
+        smartTitle = "✨ 9 DA NOITE - FECHAMENTO INTELIGENTE (21:00)";
+        const topStr = insights.topExpense ? `Sua maior fatura neste mês é "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n` : '';
+        const pendStr = insights.totalPending > 0 ? `Restam R$ ${fmt(insights.totalPending)} em despesas pendentes no mês.\n` : 'Todas as despesas do mês já estão quitadas!\n';
+        smartBody = `${topStr}${pendStr}🌙 Dica da noite: Registre pequenas compras do dia antes de dormir para garantir tranquilidade financeira amanhã!`;
+      }
+
+      const smartTag = forceNow ? `financaspro-smart-test-${Date.now()}` : `financaspro-smart-${smartSlotName}-${br.dateStr}`;
+      const sent = await dispatchPushToSubscriptions(userId, subs, smartTitle, smartBody, smartTag);
+      totalDispatched += sent;
+
+      // Mark slot notified
+      if (isSmart09Trigger) markLocalAlertNotified(smart09Key, { slot: 'smart_09h', count: insights.expensesCount });
+      if (isSmart13Trigger) markLocalAlertNotified(smart13Key, { slot: 'smart_13h', count: insights.expensesCount });
+      if (isSmart21Trigger) markLocalAlertNotified(smart21Key, { slot: 'smart_21h', count: insights.expensesCount });
+
+      try {
+        const db = admin.firestore();
+        const activeSmartSlotKey = isSmart09Trigger ? smart09Key : (isSmart13Trigger ? smart13Key : (isSmart21Trigger ? smart21Key : null));
+        if (activeSmartSlotKey) {
+          await db.collection("notified_alerts").doc(activeSmartSlotKey).set({
+            userId,
+            slot: smartSlotName,
+            type: "smart",
+            topExpense: insights.topExpense,
+            totalExpenses: insights.totalExpenses,
+            dispatchedAt: new Date().toISOString()
+          });
+        }
+      } catch (e) {}
+
+      console.log(`✅ [SMART PUSH] Alerta inteligente das ${smartSlotName} entregue para ${sent} aparelho(s) do usuário ${userId}.`);
     }
   }
 
@@ -1356,7 +1508,7 @@ app.post("/api/push/sync-bills", async (req, res) => {
 app.post("/api/push/test-background", async (req, res) => {
   try {
     await ensureVapidKeys();
-    const { userId, delaySeconds = 10, subscription, bills } = req.body;
+    const { userId, delaySeconds = 10, subscription, bills, mode = 'both' } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
@@ -1410,22 +1562,24 @@ app.post("/api/push/test-background", async (req, res) => {
 
     const delay = Math.max(2, Math.min(isServerlessEnv ? 8 : 60, Number(delaySeconds) || 5));
     const delayMs = delay * 1000;
+    const testMode = (mode === 'bills' || mode === 'smart' ? mode : 'both') as 'bills' | 'smart' | 'both';
 
     if (isServerlessEnv) {
-      console.log(`⏰ [TEST BACKGROUND PUSH - SERVERLESS] Aguardando ${delay}s para usuário ${userId} bloquear a tela antes do disparo...`);
+      console.log(`⏰ [TEST BACKGROUND PUSH - SERVERLESS] Aguardando ${delay}s para usuário ${userId} bloquear a tela antes do disparo (${testMode})...`);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
-      const result = await runBackgroundPushNotificationChecker(true, userId);
+      const result = await runBackgroundPushNotificationChecker(true, userId, testMode);
       return res.json({
         success: true,
-        message: `Alerta disparado com sucesso após ${delay} segundos!`,
+        message: `Alerta (${testMode}) disparado com sucesso após ${delay} segundos!`,
         delaySeconds: delay,
+        mode: testMode,
         result
       });
     } else {
       setTimeout(async () => {
-        console.log(`⏰ [TEST BACKGROUND PUSH] Disparando alerta de teste em segundo plano para usuário ${userId}...`);
+        console.log(`⏰ [TEST BACKGROUND PUSH] Disparando alerta de teste em segundo plano para usuário ${userId} (${testMode})...`);
         try {
-          await runBackgroundPushNotificationChecker(true, userId);
+          await runBackgroundPushNotificationChecker(true, userId, testMode);
           console.log(`✅ [TEST BACKGROUND PUSH] Varredura e despacho de teste concluídos para usuário ${userId}.`);
         } catch (err: any) {
           console.warn(`⚠️ [TEST BACKGROUND PUSH] Falha ao despachar:`, err?.message || err);
@@ -1435,7 +1589,8 @@ app.post("/api/push/test-background", async (req, res) => {
       return res.json({
         success: true,
         message: `Alerta agendado para daqui a ${delay} segundos! Bloqueie a tela ou feche o aplicativo agora.`,
-        delaySeconds: delay
+        delaySeconds: delay,
+        mode: testMode
       });
     }
   } catch (err: any) {
@@ -1443,7 +1598,7 @@ app.post("/api/push/test-background", async (req, res) => {
   }
 });
 
-// API route: Get current push subscription status and scheduled alert details
+// API route: Get current push subscription status and scheduled alert details across all 6 slots
 app.get("/api/push/status/:userId", (req, res) => {
   try {
     const { userId } = req.params;
@@ -1453,22 +1608,33 @@ app.get("/api/push/status/:userId", (req, res) => {
     const userBills = allBills[userId] || [];
     const notifiedAlerts = getLocalNotifiedAlerts();
     const br = getBrasiliaDate();
-    const morningKey = `push_morning_alert_${userId}_${br.dateStr}`;
-    const middayKey = `push_midday_alert_${userId}_${br.dateStr}`;
 
-    const morningInfo = notifiedAlerts[morningKey];
-    const middayInfo = notifiedAlerts[middayKey];
+    // Slot keys
+    const bills08Key = `push_bills_08h_${userId}_${br.dateStr}`;
+    const bills12Key = `push_bills_12h_${userId}_${br.dateStr}`;
+    const bills20Key = `push_bills_20h_${userId}_${br.dateStr}`;
+
+    const smart09Key = `push_smart_09h_${userId}_${br.dateStr}`;
+    const smart13Key = `push_smart_13h_${userId}_${br.dateStr}`;
+    const smart21Key = `push_smart_21h_${userId}_${br.dateStr}`;
 
     res.json({
       userId,
       isSubscribed: userSubs.length > 0,
       deviceCount: userSubs.length,
       billsCount: userBills.length,
-      scheduledHours: ["08:00 (Manhã)", "12:00 (Meio-Dia)"],
-      morningSentToday: Boolean(morningInfo?.notified),
-      morningSentTime: morningInfo?.timeStr || null,
-      middaySentToday: Boolean(middayInfo?.notified),
-      middaySentTime: middayInfo?.timeStr || null,
+      scheduledHours: {
+        bills: ["08:00 (Contas da Manhã)", "12:00 (Contas do Almoço)", "20:00 (Contas da Noite)"],
+        smart: ["09:00 (Planejamento & Maior Gasto)", "13:00 (Balanço do Mês)", "21:00 (Fechamento Inteligente)"]
+      },
+      slots: {
+        bills08: { slot: "08:00", type: "bills", sent: Boolean(notifiedAlerts[bills08Key]?.notified), time: notifiedAlerts[bills08Key]?.timeStr || null },
+        smart09: { slot: "09:00", type: "smart", sent: Boolean(notifiedAlerts[smart09Key]?.notified), time: notifiedAlerts[smart09Key]?.timeStr || null },
+        bills12: { slot: "12:00", type: "bills", sent: Boolean(notifiedAlerts[bills12Key]?.notified), time: notifiedAlerts[bills12Key]?.timeStr || null },
+        smart13: { slot: "13:00", type: "smart", sent: Boolean(notifiedAlerts[smart13Key]?.notified), time: notifiedAlerts[smart13Key]?.timeStr || null },
+        bills20: { slot: "20:00", type: "bills", sent: Boolean(notifiedAlerts[bills20Key]?.notified), time: notifiedAlerts[bills20Key]?.timeStr || null },
+        smart21: { slot: "21:00", type: "smart", sent: Boolean(notifiedAlerts[smart21Key]?.notified), time: notifiedAlerts[smart21Key]?.timeStr || null },
+      },
       currentBrasiliaTime: br.timeStr,
       currentBrasiliaDate: br.dateStr
     });
@@ -1480,7 +1646,7 @@ app.get("/api/push/status/:userId", (req, res) => {
 // API route: Immediately trigger notification check for a user (bypassing time constraint)
 app.post("/api/push/trigger-now", async (req, res) => {
   try {
-    const { userId, subscription, bills } = req.body;
+    const { userId, subscription, bills, mode = 'both' } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
@@ -1490,8 +1656,9 @@ app.post("/api/push/trigger-now", async (req, res) => {
     if (bills && Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
     }
-    const result = await runBackgroundPushNotificationChecker(true, userId);
-    res.json({ success: true, result });
+    const testMode = (mode === 'bills' || mode === 'smart' ? mode : 'both') as 'bills' | 'smart' | 'both';
+    const result = await runBackgroundPushNotificationChecker(true, userId, testMode);
+    res.json({ success: true, mode: testMode, result });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "Erro interno" });
   }
@@ -1502,8 +1669,9 @@ app.all("/api/cron/check-alerts", async (req, res) => {
   try {
     await ensureVapidKeys();
     const force = req.query.force === 'true' || req.body?.force === true;
-    const result = await runBackgroundPushNotificationChecker(force);
-    res.json({ success: true, message: "Varredura de notificações executada com sucesso.", result, timestamp: new Date().toISOString() });
+    const mode = (req.query.mode || req.body?.mode || 'both') as 'bills' | 'smart' | 'both';
+    const result = await runBackgroundPushNotificationChecker(force, undefined, mode);
+    res.json({ success: true, message: "Varredura de notificações executada com sucesso.", mode, result, timestamp: new Date().toISOString() });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || String(err) });
   }

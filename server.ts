@@ -416,9 +416,7 @@ function generateDashboardSmartAlerts(
     return true;
   });
 
-  const activeExpenses = monthExpenses.length > 0 
-    ? monthExpenses 
-    : rawList.filter(t => t && t.name && t.type !== 'rendas' && t.type !== 'entradas' && t.type !== 'receita' && !t.is_skipped);
+  const activeExpenses = monthExpenses;
 
   let totalExpenses = 0;
   let totalPaid = 0;
@@ -738,11 +736,30 @@ async function runBackgroundPushNotificationChecker(
       ? userStored.currentMonthKey
       : `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
 
-    const rawPendingList: any[] = (userStored && typeof userStored === 'object')
-      ? (userStored.pendingBills || userStored.monthBills || userStored.bills || (Array.isArray(userStored) ? userStored : []))
-      : (Array.isArray(userStored) ? userStored : []);
+    // 1. Gather all potential bill sources to ensure no overdue or pending bill is missed
+    const sourceArrays: any[] = [];
+    if (userStored && typeof userStored === 'object') {
+      if (Array.isArray(userStored.pendingBills)) sourceArrays.push(...userStored.pendingBills);
+      if (Array.isArray(userStored.allBills)) sourceArrays.push(...userStored.allBills);
+      if (Array.isArray(userStored.monthBills)) sourceArrays.push(...userStored.monthBills);
+      if (Array.isArray(userStored.bills)) sourceArrays.push(...userStored.bills);
+    } else if (Array.isArray(userStored)) {
+      sourceArrays.push(...userStored);
+    }
 
-    // 1. Process ALL pending bills for the active month cycle
+    // Deduplicate by unique id or name+due+monthKey
+    const seenBillKeys = new Set<string>();
+    const rawPendingList: any[] = [];
+    for (const b of sourceArrays) {
+      if (!b || !b.name) continue;
+      const key = b.id || `${b.name}_${b.due}_${b.monthKey}`;
+      if (!seenBillKeys.has(key)) {
+        seenBillKeys.add(key);
+        rawPendingList.push(b);
+      }
+    }
+
+    // 2. Process ALL pending & overdue bills accurately
     const userPendingBills: Array<{
       id: string;
       name: string;
@@ -761,8 +778,11 @@ async function runBackgroundPushNotificationChecker(
       if (!tx || !tx.name) continue;
       if (tx.type === 'rendas' || tx.type === 'entradas' || tx.type === 'receita') continue;
       if (tx.is_skipped) continue;
-      // Skip if bill belongs to a different cycle
-      if (tx.monthKey && tx.monthKey !== userCurrentMonthKey) continue;
+
+      // STRICTLY CURRENT MONTH: all alerts and notifications are about the current active month only!
+      if (tx.monthKey && tx.monthKey !== userCurrentMonthKey) {
+        continue;
+      }
 
       const amount = Number(tx.amount) > 0 
         ? Number(tx.amount) 
@@ -782,9 +802,17 @@ async function runBackgroundPushNotificationChecker(
       if (dueStr) {
         if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
           const parts = dueStr.split("-").map(Number);
+          const dueMKey = `${parts[0]}-${String(parts[1]).padStart(2, '0')}`;
+          if (dueMKey !== userCurrentMonthKey) {
+            continue; // Belongs to a different month
+          }
           dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
         } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dueStr)) {
           const parts = dueStr.split("/").map(Number);
+          const dueMKey = `${parts[2]}-${String(parts[1]).padStart(2, '0')}`;
+          if (dueMKey !== userCurrentMonthKey) {
+            continue; // Belongs to a different month
+          }
           dueDate = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
         } else {
           const dayMatch = dueStr.match(/\d+/);
@@ -792,8 +820,8 @@ async function runBackgroundPushNotificationChecker(
             const dueDay = parseInt(dayMatch[0], 10);
             let dueYear = brYear;
             let dueMonth = brMonth;
-            if (tx.monthKey && /^\d{4}-\d{2}$/.test(tx.monthKey)) {
-              const mParts = tx.monthKey.split("-").map(Number);
+            if (userCurrentMonthKey && /^\d{4}-\d{2}$/.test(userCurrentMonthKey)) {
+              const mParts = userCurrentMonthKey.split("-").map(Number);
               dueYear = mParts[0];
               dueMonth = mParts[1] - 1;
             }
@@ -813,6 +841,7 @@ async function runBackgroundPushNotificationChecker(
         }
       } else if (tx.isOverdue) {
         isOverdue = true;
+        diffDays = -1;
       }
 
       userPendingBills.push({
@@ -826,11 +855,11 @@ async function runBackgroundPushNotificationChecker(
         isDueToday,
         diffDays,
         cat: tx.cat || tx.category || 'Geral',
-        monthKey: tx.monthKey || userCurrentMonthKey
+        monthKey: userCurrentMonthKey
       });
     }
 
-    // Sort: 1º Overdue, 2º Due Today, 3º Nearest Due Date
+    // Sort: 1º Overdue (most delayed first), 2º Due Today, 3º Nearest Due Date
     userPendingBills.sort((a, b) => {
       if (a.isOverdue && !b.isOverdue) return -1;
       if (!a.isOverdue && b.isOverdue) return 1;
@@ -897,53 +926,30 @@ async function runBackgroundPushNotificationChecker(
       isBills20Trigger;
 
     let billsSentCount = 0;
-    if (shouldSendBills) {
+    if (shouldSendBills && (userPendingBills.length > 0 || forceNow)) {
       let billsSlotName = 'manual';
       let billsTitle = '';
       let billsBody = '';
 
-      let statusSummary = '';
-      if (overdueBills.length > 0 && todayBills.length > 0) {
-        statusSummary = ` (${overdueBills.length} atrasada(s), ${todayBills.length} vence(m) hoje)`;
-      } else if (overdueBills.length > 0) {
-        statusSummary = ` (${overdueBills.length} em atraso!)`;
-      } else if (todayBills.length > 0) {
-        statusSummary = ` (${todayBills.length} vence(m) hoje)`;
-      }
-
-      if (forceNow) {
-        billsSlotName = 'teste';
-        if (userPendingBills.length > 0) {
-          billsTitle = `📋 [TESTE] ${userPendingBills.length} Conta(s) Pendente(s)${statusSummary}`;
-        } else {
-          billsTitle = "✅ [TESTE] Contas em Dia (Zero Pendências)";
-        }
-      } else if (isBills08Trigger) {
-        billsSlotName = '08h';
-        if (userPendingBills.length > 0) {
-          billsTitle = `📋 MANHÃ (08:00): ${userPendingBills.length} Conta(s) Pendente(s)${statusSummary}`;
-        } else {
-          billsTitle = "✅ MANHÃ (08:00): Contas em dia, zero pendências!";
-        }
-      } else if (isBills12Trigger) {
-        billsSlotName = '12h';
-        if (userPendingBills.length > 0) {
-          billsTitle = `☀️ MEIO-DIA (12:00): ${userPendingBills.length} Conta(s) Pendente(s)${statusSummary}`;
-        } else {
-          billsTitle = "✅ MEIO-DIA (12:00): Tudo quitado e em dia!";
-        }
-      } else if (isBills20Trigger) {
-        billsSlotName = '20h';
-        if (userPendingBills.length > 0) {
-          billsTitle = `🌙 8 DA NOITE (20:00): ${userPendingBills.length} Conta(s) Pendente(s)${statusSummary}`;
-        } else {
-          billsTitle = "✨ NOITE TRANQUILA (20:00): Nenhuma conta pendente!";
-        }
-      }
+      if (isBills08Trigger) billsSlotName = '08h';
+      else if (isBills12Trigger) billsSlotName = '12h';
+      else if (isBills20Trigger) billsSlotName = '20h';
+      else if (forceNow) billsSlotName = 'teste';
 
       if (userPendingBills.length === 0) {
-        billsBody = "Parabéns! Todas as suas despesas cadastradas estão 100% quitadas. Nenhuma pendência em aberto.";
+        billsTitle = "✅ Finanças do Mês em Dia";
+        billsBody = "Parabéns! Todas as contas do mês atual estão quitadas. Nenhuma pendência em aberto.";
       } else {
+        if (overdueBills.length > 0 && todayBills.length > 0) {
+          billsTitle = `⚠️ ${overdueBills.length} em Atraso e ${todayBills.length} Vencendo Hoje`;
+        } else if (overdueBills.length > 0) {
+          billsTitle = `⚠️ ${overdueBills.length} Conta(s) em Atraso no Mês`;
+        } else if (todayBills.length > 0) {
+          billsTitle = `🔔 ${todayBills.length} Conta(s) Vencendo Hoje`;
+        } else {
+          billsTitle = `📋 ${userPendingBills.length} Conta(s) a Pagar no Mês`;
+        }
+
         const maxDisplay = 5;
         const lines: string[] = [];
         for (const b of userPendingBills.slice(0, maxDisplay)) {
@@ -954,15 +960,20 @@ async function runBackgroundPushNotificationChecker(
           } else if (b.isDueToday) {
             statusLabel = ' [VENCE HOJE]';
           } else if (b.due) {
-            statusLabel = ` [Venc: ${b.due}]`;
+            let dueFmt = b.due;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(b.due)) {
+              const parts = b.due.split('-');
+              dueFmt = `${parts[2]}/${parts[1]}`;
+            }
+            statusLabel = ` [Venc: ${dueFmt}]`;
           }
           lines.push(`• ${b.name}: ${valStr}${statusLabel}`);
         }
         if (userPendingBills.length > maxDisplay) {
-          lines.push(`... e mais ${userPendingBills.length - maxDisplay} conta(s) pendente(s).`);
+          lines.push(`... e mais ${userPendingBills.length - maxDisplay} conta(s) do mês.`);
         }
 
-        const header = `Total a quitar: R$ ${fmt(totalRemaining)} (${userPendingBills.length} pendência${userPendingBills.length > 1 ? 's' : ''}):\n`;
+        const header = `Total a pagar no mês: R$ ${fmt(totalRemaining)} (${userPendingBills.length} pendência${userPendingBills.length > 1 ? 's' : ''}):\n`;
         billsBody = header + lines.join('\n');
       }
 
@@ -990,7 +1001,9 @@ async function runBackgroundPushNotificationChecker(
         }
       } catch (e) {}
 
-      console.log(`✅ [BILLS PUSH] Alerta das ${billsSlotName} entregue para ${billsSentCount} aparelho(s) do usuário ${userId}.`);
+      console.log(`✅ [BILLS PUSH] Alerta entregue para ${billsSentCount} aparelho(s) do usuário ${userId}.`);
+    } else if (shouldSendBills && userPendingBills.length === 0) {
+      console.log(`ℹ️ [BILLS PUSH] Usuário ${userId} está com todas as contas quitadas. Alerta programado suprimido.`);
     }
 
     // Small delay between alerts during manual test if both are requested
@@ -1019,7 +1032,7 @@ async function runBackgroundPushNotificationChecker(
 
       if (forceNow) {
         smartSlotName = 'teste';
-        smartTitle = `💡 [TESTE] Análise Inteligente do Dashboard`;
+        smartTitle = `💡 Análise Inteligente do Dashboard`;
         if (alertLines.length > 0) {
           smartBody = `Resumo das Análises do Dashboard:\n` + alertLines.join('\n');
         } else {
@@ -1027,7 +1040,7 @@ async function runBackgroundPushNotificationChecker(
         }
       } else if (isSmart09Trigger) {
         smartSlotName = '09h';
-        smartTitle = "💡 MANHÃ (09:00): CONTROLE INTELIGENTE";
+        smartTitle = "💡 Controle Inteligente de Gastos";
         if (alertLines.length > 0) {
           smartBody = `Raio-X de Início de Dia:\n` + alertLines.join('\n') + `\n💡 Meta de hoje: Mantenha seus limites para proteger seu saldo!`;
         } else {
@@ -1035,7 +1048,7 @@ async function runBackgroundPushNotificationChecker(
         }
       } else if (isSmart13Trigger) {
         smartSlotName = '13h';
-        smartTitle = "🎯 TARDE (13:00): RAIO-X & CONTROLE";
+        smartTitle = "🎯 Raio-X & Controle Financeiro";
         if (alertLines.length > 0) {
           smartBody = `Análise do Dashboard no Almoço:\n` + alertLines.join('\n') + `\n💡 Dica: Acompanhe seus gastos para evitar excessos à tarde.`;
         } else {
@@ -1043,7 +1056,7 @@ async function runBackgroundPushNotificationChecker(
         }
       } else if (isSmart21Trigger) {
         smartSlotName = '21h';
-        smartTitle = "✨ 9 DA NOITE (21:00): FECHAMENTO INTELIGENTE";
+        smartTitle = "✨ Fechamento Financeiro do Dia";
         if (alertLines.length > 0) {
           smartBody = `Fechamento do Dia:\n` + alertLines.join('\n') + `\n🌙 Dica da noite: Registre pequenas compras do dia antes de descansar!`;
         } else {

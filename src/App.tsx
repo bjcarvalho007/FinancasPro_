@@ -1235,31 +1235,18 @@ function MainApp() {
       setTransactions(items);
       saveLocalUserCache(uid, 'txs', items);
 
-      // Synchronize unpaid transactions with server for OS background push notifications when app is closed
+      // Synchronize current month transactions with server for background push notifications
       if (items.length > 0) {
-        fetch('/api/push/sync-bills', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: uid,
-            settings: {
-              income: settings?.income || 0,
-              balance: settings?.balance || 0,
-              monthlyIncome: settings?.monthlyIncome || {},
-              extras: settings?.extras || {}
-            },
-            bills: items.map(t => ({
-              id: t.id,
-              name: t.name,
-              due: t.due,
-              amount: t.amount,
-              paid_amount: t.paid_amount || 0,
-              type: t.type,
-              monthKey: t.monthKey,
-              cat: t.cat || 'Geral'
-            }))
-          })
-        }).catch(() => {});
+        if (getFinancialSnapshotRef.current) {
+          const snap = getFinancialSnapshotRef.current();
+          if (snap) {
+            fetch('/api/push/sync-bills', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(snap)
+            }).catch(() => {});
+          }
+        }
 
         // Re-ensure push subscription is synced with latest bills
         silentAutoSubscribe(user, items);
@@ -2419,12 +2406,56 @@ function MainApp() {
     const leftoverVal = totalAvail - totalSpent;
     const spentRatioVal = totalAvail > 0 ? (totalSpent / totalAvail) * 100 : 0;
 
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+
+    const parseDueDate = (dueStr?: string, monthKeyStr?: string) => {
+      if (!dueStr) return null;
+      const s = dueStr.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const parts = s.split('-').map(Number);
+        return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+      }
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+        const parts = s.split('/').map(Number);
+        return new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
+      }
+      const dayMatch = s.match(/\d+/);
+      if (dayMatch) {
+        const day = parseInt(dayMatch[0], 10);
+        let year = calendarDate.getFullYear();
+        let month = calendarDate.getMonth();
+        if (monthKeyStr && /^\d{4}-\d{2}$/.test(monthKeyStr)) {
+          const parts = monthKeyStr.split('-').map(Number);
+          year = parts[0];
+          month = parts[1] - 1;
+        }
+        const maxDays = new Date(year, month + 1, 0).getDate();
+        const safeDay = Math.min(Math.max(1, day), maxDays);
+        return new Date(year, month, safeDay, 12, 0, 0);
+      }
+      return null;
+    };
+
+    // 1. Process active month bills (strictly current month)
     const normMonthBills = activeMonthTransactions.map(t => {
       const amt = Number(t.amount) || 0;
       const paid = Number(t.paid_amount) || 0;
       const rem = Math.max(0, amt - paid);
-      const expItem = expiringBillsList.find(e => e.item.id === t.id);
-      const isOverdue = expItem ? expItem.isOverdue : false;
+      const dueDate = parseDueDate(t.due, t.monthKey || currentMonthKey);
+      let diffDays = 999;
+      let isOverdue = false;
+      let isDueToday = false;
+
+      if (dueDate) {
+        diffDays = Math.round((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) isOverdue = true;
+        else if (diffDays === 0) isDueToday = true;
+      } else if (t.isOverdue) {
+        isOverdue = true;
+        diffDays = -1;
+      }
+
       return {
         id: t.id,
         name: t.name,
@@ -2435,13 +2466,21 @@ function MainApp() {
         type: t.type || 'variaveis',
         monthKey: t.monthKey || currentMonthKey,
         isOverdue,
-        isDueToday: expItem ? expItem.diffInDays === 0 : false,
-        diffDays: expItem ? expItem.diffInDays : 999,
+        isDueToday,
+        diffDays,
         cat: t.cat || 'Geral'
       };
     });
 
+    // Strictly current month pending bills
     const normPendingBills = normMonthBills.filter(b => b.remaining > 0);
+    normPendingBills.sort((a, b) => {
+      if (a.isOverdue && !b.isOverdue) return -1;
+      if (!a.isOverdue && b.isOverdue) return 1;
+      if (a.isDueToday && !b.isDueToday) return -1;
+      if (!a.isDueToday && b.isDueToday) return 1;
+      return a.diffDays - b.diffDays;
+    });
 
     let topExp: { name: string; amount: number; category: string } | null = null;
     for (const b of normMonthBills) {
@@ -2481,15 +2520,16 @@ function MainApp() {
       },
       monthBills: normMonthBills,
       pendingBills: normPendingBills,
-      bills: normMonthBills
+      allBills: normMonthBills,
+      bills: normPendingBills
     };
-  }, [user, settings, currentMonthKey, activeMonthTransactions, expiringBillsList]);
+  }, [user, settings, currentMonthKey, activeMonthTransactions, calendarDate]);
 
   useEffect(() => {
     getFinancialSnapshotRef.current = buildFinancialSnapshot;
   }, [buildFinancialSnapshot]);
 
-  // Alert triggers: Monitor upcoming / overdue bills due on mounting/ledger updates using activeMonthTransactions (enables virtual/projection compatibility)
+  // Alert triggers: Monitor upcoming / overdue bills strictly for the current active month
   useEffect(() => {
     if (activeMonthTransactions.length === 0) {
       setExpiringBillsList([]);
@@ -2499,7 +2539,6 @@ function MainApp() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const expiring: { item: Transaction; diffInDays: number; isOverdue: boolean }[] = [];
-
     const thresholdDays = settings?.alertThresholdDays !== undefined ? settings.alertThresholdDays : 3;
 
     activeMonthTransactions.forEach(item => {
@@ -2510,39 +2549,49 @@ function MainApp() {
       const remainingDeficit = itemAmount - (item.paid_amount || 0);
 
       if (remainingDeficit > 0 && item.due) {
-        let diffInDays = 0;
+        let diffInDays = 999;
         let isOverdue = false;
         let isWithinUpcomingThreshold = false;
 
-        if (/^\d{4}-\d{2}-\d{2}$/.test(item.due.trim())) {
-          const parts = item.due.trim().split('-');
-          const dueYear = parseInt(parts[0], 10);
-          const dueMonth = parseInt(parts[1], 10) - 1;
-          const dueDay = parseInt(parts[2], 10);
-          const dueDate = new Date(dueYear, dueMonth, dueDay);
-          dueDate.setHours(0, 0, 0, 0);
+        let dueDate: Date | null = null;
+        const s = item.due.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+          const parts = s.split('-').map(Number);
+          const itemMKey = `${parts[0]}-${String(parts[1]).padStart(2, '0')}`;
+          if (itemMKey === currentMonthKey) {
+            dueDate = new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0);
+          }
+        } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+          const parts = s.split('/').map(Number);
+          const itemMKey = `${parts[2]}-${String(parts[1]).padStart(2, '0')}`;
+          if (itemMKey === currentMonthKey) {
+            dueDate = new Date(parts[2], parts[1] - 1, parts[0], 0, 0, 0);
+          }
+        } else {
+          const dayMatch = s.match(/\d+/);
+          if (dayMatch) {
+            const dueDay = parseInt(dayMatch[0], 10);
+            let dueYear = calendarDate.getFullYear();
+            let dueMonth = calendarDate.getMonth();
+            if (item.monthKey && /^\d{4}-\d{2}$/.test(item.monthKey)) {
+              const mParts = item.monthKey.split('-').map(Number);
+              dueYear = mParts[0];
+              dueMonth = mParts[1] - 1;
+            }
+            const maxDays = new Date(dueYear, dueMonth + 1, 0).getDate();
+            const safeDueDay = Math.min(Math.max(1, dueDay), maxDays);
+            dueDate = new Date(dueYear, dueMonth, safeDueDay, 0, 0, 0);
+          }
+        }
 
+        if (dueDate) {
           const diffInMs = dueDate.getTime() - today.getTime();
           diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
           isOverdue = diffInDays < 0;
           isWithinUpcomingThreshold = diffInDays >= 0 && diffInDays <= thresholdDays;
-        } else {
-          const dayMatch = item.due.match(/\d+/);
-          if (dayMatch) {
-            const dueDay = parseInt(dayMatch[0], 10);
-            const currentYear = calendarDate.getFullYear();
-            const currentMonth = calendarDate.getMonth();
-            const maxDays = new Date(currentYear, currentMonth + 1, 0).getDate();
-            const safeDueDay = Math.min(Math.max(1, dueDay), maxDays);
-
-            const dueDate = new Date(currentYear, currentMonth, safeDueDay);
-            dueDate.setHours(0, 0, 0, 0);
-
-            const diffInMs = dueDate.getTime() - today.getTime();
-            diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
-            isOverdue = diffInDays < 0;
-            isWithinUpcomingThreshold = diffInDays >= 0 && diffInDays <= thresholdDays;
-          }
+        } else if (item.isOverdue) {
+          isOverdue = true;
+          diffInDays = -1;
         }
 
         if (isOverdue || isWithinUpcomingThreshold) {
@@ -2581,88 +2630,16 @@ function MainApp() {
       }).catch(e => console.warn('SW Ready check failed:', e));
     }
 
-    // Sync to Express backend so server can send OS notifications when app is completely closed
-    if (user && activeMonthTransactions.length > 0) {
-      const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
-      const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
-      const extVal = settings?.extras?.[currentMonthKey] ?? 0;
-      const totalAvail = incVal + balVal + extVal;
-
-      const totalSpent = activeMonthTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-      const totalPaid = activeMonthTransactions.reduce((sum, t) => sum + (Number(t.paid_amount) || 0), 0);
-      const totalUnpaid = Math.max(0, totalSpent - totalPaid);
-      const paidPct = totalSpent > 0 ? Math.round((totalPaid / totalSpent) * 100) : 100;
-      const leftoverVal = totalAvail - totalSpent;
-      const spentRatioVal = totalAvail > 0 ? (totalSpent / totalAvail) * 100 : 0;
-
-      const normMonthBills = activeMonthTransactions.map(t => {
-        const amt = Number(t.amount) || 0;
-        const paid = Number(t.paid_amount) || 0;
-        const rem = Math.max(0, amt - paid);
-        const expItem = expiring.find(e => e.item.id === t.id);
-        const isOverdue = expItem ? expItem.isOverdue : false;
-        return {
-          id: t.id,
-          name: t.name,
-          due: t.due || '',
-          amount: amt,
-          paid_amount: paid,
-          remaining: rem,
-          type: t.type || 'variaveis',
-          monthKey: t.monthKey || currentMonthKey,
-          isOverdue,
-          isDueToday: expItem ? expItem.diffInDays === 0 : false,
-          diffDays: expItem ? expItem.diffInDays : 999,
-          cat: t.cat || 'Geral'
-        };
-      });
-
-      const normPendingBills = normMonthBills.filter(b => b.remaining > 0);
-
-      let topExp: { name: string; amount: number; category: string } | null = null;
-      for (const b of normMonthBills) {
-        if (!topExp || b.amount > topExp.amount) {
-          topExp = { name: b.name, amount: b.amount, category: b.cat };
-        }
+    // Sync full financial snapshot to Express backend for accurate background OS push sweeps
+    if (user) {
+      const snap = buildFinancialSnapshot();
+      if (snap) {
+        fetch('/api/push/sync-bills', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(snap)
+        }).catch(() => {});
       }
-
-      const catTotals: Record<string, number> = {};
-      normMonthBills.forEach(b => {
-        catTotals[b.cat] = (catTotals[b.cat] || 0) + b.amount;
-      });
-
-      fetch('/api/push/sync-bills', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.uid,
-          currentMonthKey,
-          settings: {
-            income: settings?.income || 0,
-            balance: settings?.balance || 0,
-            monthlyIncome: settings?.monthlyIncome || {},
-            monthlyBalance: settings?.monthlyBalance || {},
-            extras: settings?.extras || {},
-            alertThresholdDays: thresholdDays
-          },
-          summary: {
-            totalAvailable: totalAvail,
-            totalSpentMonth: totalSpent,
-            totalPaidMonth: totalPaid,
-            totalUnpaidMonth: totalUnpaid,
-            paidPercentage: paidPct,
-            leftover: leftoverVal,
-            spentRatio: spentRatioVal,
-            topExpense: topExp,
-            categoryTotals: catTotals,
-            overdueCount: normPendingBills.filter(b => b.isOverdue).length,
-            dueTodayCount: normPendingBills.filter(b => b.isDueToday).length
-          },
-          monthBills: normMonthBills,
-          pendingBills: normPendingBills,
-          bills: normMonthBills
-        })
-      }).catch(() => {});
     }
 
     if (expiring.length > 0) {

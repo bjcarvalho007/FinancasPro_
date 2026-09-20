@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import {
   onAuthStateChanged,
@@ -271,6 +271,7 @@ function MainApp() {
   });
   const [isTestingPush, setIsTestingPush] = useState<boolean>(false);
   const [testPushCountdown, setTestPushCountdown] = useState<number | null>(null);
+  const getFinancialSnapshotRef = useRef<() => any>(() => null);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -343,6 +344,7 @@ function MainApp() {
 
       // Re-register push subscription and sync bills first
       const sub = await silentAutoSubscribe(user, transactions);
+      const snapshot = getFinancialSnapshotRef.current ? getFinancialSnapshotRef.current() : null;
 
       const res = await fetch('/api/push/trigger-now', {
         method: 'POST',
@@ -350,23 +352,26 @@ function MainApp() {
         body: JSON.stringify({ 
           userId: user.uid,
           subscription: sub,
-          settings: {
-            income: settings?.income || 0,
-            balance: settings?.balance || 0,
-            monthlyIncome: settings?.monthlyIncome || {},
-            extras: settings?.extras || {}
-          },
-          bills: (transactions || []).map(t => ({
-            id: t.id,
-            name: t.name,
-            due: t.due,
-            amount: t.amount || t.total_parcelado || 0,
-            paid_amount: t.paid_amount || 0,
-            type: t.type,
-            monthKey: t.monthKey,
-            isOverdue: t.isOverdue,
-            cat: t.cat || 'Geral'
-          }))
+          ...(snapshot || {
+            settings: {
+              income: settings?.income || 0,
+              balance: settings?.balance || 0,
+              monthlyIncome: settings?.monthlyIncome || {},
+              monthlyBalance: settings?.monthlyBalance || {},
+              extras: settings?.extras || {}
+            },
+            bills: (transactions || []).map(t => ({
+              id: t.id,
+              name: t.name,
+              due: t.due,
+              amount: Number(t.amount) || 0,
+              paid_amount: Number(t.paid_amount) || 0,
+              type: t.type,
+              monthKey: t.monthKey,
+              isOverdue: t.isOverdue,
+              cat: t.cat || 'Geral'
+            }))
+          })
         })
       });
       const data = await res.json();
@@ -395,6 +400,7 @@ function MainApp() {
     try {
       setIsTestingPush(true);
       const sub = await silentAutoSubscribe(user, transactions);
+      const snapshot = getFinancialSnapshotRef.current ? getFinancialSnapshotRef.current() : null;
 
       const res = await fetch('/api/push/test-background', {
         method: 'POST',
@@ -403,23 +409,26 @@ function MainApp() {
           userId: user.uid, 
           delaySeconds,
           subscription: sub,
-          settings: {
-            income: settings?.income || 0,
-            balance: settings?.balance || 0,
-            monthlyIncome: settings?.monthlyIncome || {},
-            extras: settings?.extras || {}
-          },
-          bills: (transactions || []).map(t => ({
-            id: t.id,
-            name: t.name,
-            due: t.due,
-            amount: t.amount || t.total_parcelado || 0,
-            paid_amount: t.paid_amount || 0,
-            type: t.type,
-            monthKey: t.monthKey,
-            isOverdue: t.isOverdue,
-            cat: t.cat || 'Geral'
-          }))
+          ...(snapshot || {
+            settings: {
+              income: settings?.income || 0,
+              balance: settings?.balance || 0,
+              monthlyIncome: settings?.monthlyIncome || {},
+              monthlyBalance: settings?.monthlyBalance || {},
+              extras: settings?.extras || {}
+            },
+            bills: (transactions || []).map(t => ({
+              id: t.id,
+              name: t.name,
+              due: t.due,
+              amount: Number(t.amount) || 0,
+              paid_amount: Number(t.paid_amount) || 0,
+              type: t.type,
+              monthKey: t.monthKey,
+              isOverdue: t.isOverdue,
+              cat: t.cat || 'Geral'
+            }))
+          })
         })
       });
       const data = await res.json();
@@ -787,29 +796,33 @@ function MainApp() {
 
       // 1. Post subscription and current bills to Express backend for OS background push
       const billsToSend = (currentBills && currentBills.length > 0) ? currentBills : transactions;
+      const snapshot = getFinancialSnapshotRef.current ? getFinancialSnapshotRef.current() : null;
       const subscribeRes = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: currentUser.uid,
           subscription: sub,
-          settings: {
-            income: settings?.income || 0,
-            balance: settings?.balance || 0,
-            monthlyIncome: settings?.monthlyIncome || {},
-            extras: settings?.extras || {}
-          },
-          bills: (billsToSend || []).map(t => ({
-            id: t.id,
-            name: t.name,
-            due: t.due,
-            amount: t.amount || t.total_parcelado || 0,
-            paid_amount: t.paid_amount || 0,
-            type: t.type,
-            monthKey: t.monthKey,
-            isOverdue: t.isOverdue,
-            cat: t.cat || 'Geral'
-          }))
+          ...(snapshot || {
+            settings: {
+              income: settings?.income || 0,
+              balance: settings?.balance || 0,
+              monthlyIncome: settings?.monthlyIncome || {},
+              monthlyBalance: settings?.monthlyBalance || {},
+              extras: settings?.extras || {}
+            },
+            bills: (billsToSend || []).map(t => ({
+              id: t.id,
+              name: t.name,
+              due: t.due,
+              amount: Number(t.amount) || 0,
+              paid_amount: Number(t.paid_amount) || 0,
+              type: t.type,
+              monthKey: t.monthKey,
+              isOverdue: t.isOverdue,
+              cat: t.cat || 'Geral'
+            }))
+          })
         })
       });
 
@@ -2390,6 +2403,92 @@ function MainApp() {
     return enrichedTransactions.filter(t => !t.is_skipped);
   }, [transactions, currentMonthKey]);
 
+  const buildFinancialSnapshot = useCallback(() => {
+    if (!user) return null;
+    const thresholdDays = settings?.alertThresholdDays !== undefined ? settings.alertThresholdDays : 3;
+
+    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
+    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
+    const extVal = settings?.extras?.[currentMonthKey] ?? 0;
+    const totalAvail = incVal + balVal + extVal;
+
+    const totalSpent = activeMonthTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const totalPaid = activeMonthTransactions.reduce((sum, t) => sum + (Number(t.paid_amount) || 0), 0);
+    const totalUnpaid = Math.max(0, totalSpent - totalPaid);
+    const paidPct = totalSpent > 0 ? Math.round((totalPaid / totalSpent) * 100) : 100;
+    const leftoverVal = totalAvail - totalSpent;
+    const spentRatioVal = totalAvail > 0 ? (totalSpent / totalAvail) * 100 : 0;
+
+    const normMonthBills = activeMonthTransactions.map(t => {
+      const amt = Number(t.amount) || 0;
+      const paid = Number(t.paid_amount) || 0;
+      const rem = Math.max(0, amt - paid);
+      const expItem = expiringBillsList.find(e => e.item.id === t.id);
+      const isOverdue = expItem ? expItem.isOverdue : false;
+      return {
+        id: t.id,
+        name: t.name,
+        due: t.due || '',
+        amount: amt,
+        paid_amount: paid,
+        remaining: rem,
+        type: t.type || 'variaveis',
+        monthKey: t.monthKey || currentMonthKey,
+        isOverdue,
+        isDueToday: expItem ? expItem.diffInDays === 0 : false,
+        diffDays: expItem ? expItem.diffInDays : 999,
+        cat: t.cat || 'Geral'
+      };
+    });
+
+    const normPendingBills = normMonthBills.filter(b => b.remaining > 0);
+
+    let topExp: { name: string; amount: number; category: string } | null = null;
+    for (const b of normMonthBills) {
+      if (!topExp || b.amount > topExp.amount) {
+        topExp = { name: b.name, amount: b.amount, category: b.cat };
+      }
+    }
+
+    const catTotals: Record<string, number> = {};
+    normMonthBills.forEach(b => {
+      catTotals[b.cat] = (catTotals[b.cat] || 0) + b.amount;
+    });
+
+    return {
+      userId: user.uid,
+      currentMonthKey,
+      settings: {
+        income: settings?.income || 0,
+        balance: settings?.balance || 0,
+        monthlyIncome: settings?.monthlyIncome || {},
+        monthlyBalance: settings?.monthlyBalance || {},
+        extras: settings?.extras || {},
+        alertThresholdDays: thresholdDays
+      },
+      summary: {
+        totalAvailable: totalAvail,
+        totalSpentMonth: totalSpent,
+        totalPaidMonth: totalPaid,
+        totalUnpaidMonth: totalUnpaid,
+        paidPercentage: paidPct,
+        leftover: leftoverVal,
+        spentRatio: spentRatioVal,
+        topExpense: topExp,
+        categoryTotals: catTotals,
+        overdueCount: normPendingBills.filter(b => b.isOverdue).length,
+        dueTodayCount: normPendingBills.filter(b => b.isDueToday).length
+      },
+      monthBills: normMonthBills,
+      pendingBills: normPendingBills,
+      bills: normMonthBills
+    };
+  }, [user, settings, currentMonthKey, activeMonthTransactions, expiringBillsList]);
+
+  useEffect(() => {
+    getFinancialSnapshotRef.current = buildFinancialSnapshot;
+  }, [buildFinancialSnapshot]);
+
   // Alert triggers: Monitor upcoming / overdue bills due on mounting/ledger updates using activeMonthTransactions (enables virtual/projection compatibility)
   useEffect(() => {
     if (activeMonthTransactions.length === 0) {
@@ -2472,7 +2571,9 @@ function MainApp() {
               id: e.item.id,
               name: e.item.name,
               due: e.item.due,
-              amount: e.item.amount || e.item.total_parcelado || 0,
+              amount: Number(e.item.amount) || 0,
+              paid_amount: Number(e.item.paid_amount) || 0,
+              remaining: Math.max(0, (Number(e.item.amount) || 0) - (Number(e.item.paid_amount) || 0)),
               isOverdue: e.isOverdue
             }))
           });
@@ -2481,30 +2582,85 @@ function MainApp() {
     }
 
     // Sync to Express backend so server can send OS notifications when app is completely closed
-    if (user && transactions.length > 0) {
-      const unpaidTransactions = transactions.filter(t => ((Number(t.amount) || Number(t.total_parcelado) || 0) - (Number(t.paid_amount) || 0)) > 0);
+    if (user && activeMonthTransactions.length > 0) {
+      const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
+      const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
+      const extVal = settings?.extras?.[currentMonthKey] ?? 0;
+      const totalAvail = incVal + balVal + extVal;
+
+      const totalSpent = activeMonthTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      const totalPaid = activeMonthTransactions.reduce((sum, t) => sum + (Number(t.paid_amount) || 0), 0);
+      const totalUnpaid = Math.max(0, totalSpent - totalPaid);
+      const paidPct = totalSpent > 0 ? Math.round((totalPaid / totalSpent) * 100) : 100;
+      const leftoverVal = totalAvail - totalSpent;
+      const spentRatioVal = totalAvail > 0 ? (totalSpent / totalAvail) * 100 : 0;
+
+      const normMonthBills = activeMonthTransactions.map(t => {
+        const amt = Number(t.amount) || 0;
+        const paid = Number(t.paid_amount) || 0;
+        const rem = Math.max(0, amt - paid);
+        const expItem = expiring.find(e => e.item.id === t.id);
+        const isOverdue = expItem ? expItem.isOverdue : false;
+        return {
+          id: t.id,
+          name: t.name,
+          due: t.due || '',
+          amount: amt,
+          paid_amount: paid,
+          remaining: rem,
+          type: t.type || 'variaveis',
+          monthKey: t.monthKey || currentMonthKey,
+          isOverdue,
+          isDueToday: expItem ? expItem.diffInDays === 0 : false,
+          diffDays: expItem ? expItem.diffInDays : 999,
+          cat: t.cat || 'Geral'
+        };
+      });
+
+      const normPendingBills = normMonthBills.filter(b => b.remaining > 0);
+
+      let topExp: { name: string; amount: number; category: string } | null = null;
+      for (const b of normMonthBills) {
+        if (!topExp || b.amount > topExp.amount) {
+          topExp = { name: b.name, amount: b.amount, category: b.cat };
+        }
+      }
+
+      const catTotals: Record<string, number> = {};
+      normMonthBills.forEach(b => {
+        catTotals[b.cat] = (catTotals[b.cat] || 0) + b.amount;
+      });
+
       fetch('/api/push/sync-bills', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.uid,
+          currentMonthKey,
           settings: {
             income: settings?.income || 0,
             balance: settings?.balance || 0,
             monthlyIncome: settings?.monthlyIncome || {},
-            extras: settings?.extras || {}
+            monthlyBalance: settings?.monthlyBalance || {},
+            extras: settings?.extras || {},
+            alertThresholdDays: thresholdDays
           },
-          bills: (unpaidTransactions.length > 0 ? unpaidTransactions : transactions).map(t => ({
-            id: t.id,
-            name: t.name,
-            due: t.due,
-            amount: t.amount || t.total_parcelado || 0,
-            paid_amount: t.paid_amount || 0,
-            type: t.type,
-            monthKey: t.monthKey,
-            isOverdue: expiring.some(e => e.item.id === t.id && e.isOverdue),
-            cat: t.cat || 'Geral'
-          }))
+          summary: {
+            totalAvailable: totalAvail,
+            totalSpentMonth: totalSpent,
+            totalPaidMonth: totalPaid,
+            totalUnpaidMonth: totalUnpaid,
+            paidPercentage: paidPct,
+            leftover: leftoverVal,
+            spentRatio: spentRatioVal,
+            topExpense: topExp,
+            categoryTotals: catTotals,
+            overdueCount: normPendingBills.filter(b => b.isOverdue).length,
+            dueTodayCount: normPendingBills.filter(b => b.isDueToday).length
+          },
+          monthBills: normMonthBills,
+          pendingBills: normPendingBills,
+          bills: normMonthBills
         })
       }).catch(() => {});
     }
@@ -5057,6 +5213,7 @@ function MainApp() {
                     alertThresholdDays={settings?.alertThresholdDays !== undefined ? settings.alertThresholdDays : 3}
                     settings={settings}
                     onOpenTutorial={() => setIsTutorialOpen(true)}
+                    getFinancialSnapshot={buildFinancialSnapshot}
                   />
                 )}
               </main>

@@ -251,7 +251,7 @@ function saveLocalSubscription(userId: string, subscription: any) {
   }
 }
 
-function getLocalUserBills(): { [userId: string]: any[] } {
+function getLocalUserBills(): { [userId: string]: any } {
   try {
     if (fs.existsSync(USER_BILLS_FILE)) {
       return JSON.parse(fs.readFileSync(USER_BILLS_FILE, "utf8")) || {};
@@ -260,13 +260,29 @@ function getLocalUserBills(): { [userId: string]: any[] } {
   return {};
 }
 
-function saveLocalUserBills(userId: string, bills: any[]) {
+function saveLocalUserBills(userId: string, data: any) {
   try {
-    const data = getLocalUserBills();
-    data[userId] = bills;
-    fs.writeFileSync(USER_BILLS_FILE, JSON.stringify(data, null, 2), "utf8");
+    const store = getLocalUserBills();
+    if (Array.isArray(data)) {
+      store[userId] = {
+        userId,
+        bills: data,
+        monthBills: data,
+        pendingBills: data.filter(b => ((Number(b.amount) || 0) - (Number(b.paid_amount) || 0)) > 0),
+        updatedAt: new Date().toISOString()
+      };
+    } else if (data && typeof data === 'object') {
+      const existing = (store[userId] && typeof store[userId] === 'object' && !Array.isArray(store[userId])) ? store[userId] : {};
+      store[userId] = {
+        ...existing,
+        ...data,
+        userId,
+        updatedAt: new Date().toISOString()
+      };
+    }
+    fs.writeFileSync(USER_BILLS_FILE, JSON.stringify(store, null, 2), "utf8");
   } catch (e) {
-    console.warn("⚠️ Erro ao salvar faturas locais:", e);
+    console.warn("⚠️ Erro ao salvar dados financeiros locais:", e);
   }
 }
 
@@ -370,22 +386,29 @@ interface DashboardSmartInsightsData {
 }
 
 function generateDashboardSmartAlerts(
-  userBills: any[],
+  userData: any,
   userSettings: any,
   brYear: number,
   brMonth: number
 ): DashboardSmartInsightsData {
-  const currentMonthKey = `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
+  const currentMonthKey = (userData && typeof userData === 'object' && userData.currentMonthKey)
+    ? userData.currentMonthKey
+    : `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
   const fmt = (v: number) => (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // 1. Inflows (Renda + Reserva/Mãos + Extras)
   const income = Number(userSettings?.monthlyIncome?.[currentMonthKey] ?? userSettings?.income ?? 0);
   const balance = Number(userSettings?.monthlyBalance?.[currentMonthKey] ?? userSettings?.balance ?? 0);
   const extra = Number(userSettings?.extras?.[currentMonthKey] ?? 0);
-  const totalAvailable = income + balance + extra;
+  const storedSummary = (userData && typeof userData === 'object') ? userData.summary : null;
+  const totalAvailable = (storedSummary?.totalAvailable !== undefined) ? Number(storedSummary.totalAvailable) : (income + balance + extra);
 
-  // 2. Identify month expenses (or fallback to active non-income expenses if monthKey doesn't match)
-  const monthExpenses = userBills.filter(t => {
+  // 2. Identify month expenses
+  const rawList: any[] = (userData && typeof userData === 'object')
+    ? (userData.monthBills || userData.bills || (Array.isArray(userData) ? userData : []))
+    : (Array.isArray(userData) ? userData : []);
+
+  const monthExpenses = rawList.filter(t => {
     if (!t || !t.name) return false;
     if (t.type === 'rendas' || t.type === 'entradas' || t.type === 'receita') return false;
     if (t.is_skipped) return false;
@@ -395,20 +418,30 @@ function generateDashboardSmartAlerts(
 
   const activeExpenses = monthExpenses.length > 0 
     ? monthExpenses 
-    : userBills.filter(t => t && t.name && t.type !== 'rendas' && t.type !== 'entradas' && t.type !== 'receita' && !t.is_skipped);
+    : rawList.filter(t => t && t.name && t.type !== 'rendas' && t.type !== 'entradas' && t.type !== 'receita' && !t.is_skipped);
 
   let totalExpenses = 0;
   let totalPaid = 0;
-  let topExpense: { name: string; amount: number; category: string } | null = null;
-  const categoryTotals: Record<string, number> = {};
+  let topExpense: { name: string; amount: number; category: string } | null = storedSummary?.topExpense || null;
+  const categoryTotals: Record<string, number> = storedSummary?.categoryTotals ? { ...storedSummary.categoryTotals } : {};
   let installmentsTotal = 0;
   const overdueItems: string[] = [];
 
+  if (storedSummary?.totalSpentMonth !== undefined && storedSummary?.totalPaidMonth !== undefined) {
+    totalExpenses = Number(storedSummary.totalSpentMonth) || 0;
+    totalPaid = Number(storedSummary.totalPaidMonth) || 0;
+  }
+
   for (const tx of activeExpenses) {
-    const amt = Number(tx.amount) || Number(tx.total_parcelado) || 0;
+    const amt = Number(tx.amount) > 0 
+      ? Number(tx.amount) 
+      : (Number(tx.total_parcelado) > 0 && tx.installmentsCount ? (Number(tx.total_parcelado) / Number(tx.installmentsCount)) : (Number(tx.total_parcelado) || 0));
     const paid = Number(tx.paid_amount) || 0;
-    totalExpenses += amt;
-    totalPaid += paid;
+
+    if (storedSummary?.totalSpentMonth === undefined) {
+      totalExpenses += amt;
+      totalPaid += paid;
+    }
 
     if (!topExpense || amt > topExpense.amount) {
       topExpense = {
@@ -419,7 +452,9 @@ function generateDashboardSmartAlerts(
     }
 
     const catName = String(tx.cat || tx.category || 'Outros').trim();
-    categoryTotals[catName] = (categoryTotals[catName] || 0) + amt;
+    if (!storedSummary?.categoryTotals) {
+      categoryTotals[catName] = (categoryTotals[catName] || 0) + amt;
+    }
 
     if (tx.type === 'parcelas') {
       installmentsTotal += amt;
@@ -431,7 +466,7 @@ function generateDashboardSmartAlerts(
 
   const totalPending = Math.max(0, totalExpenses - totalPaid);
   const paidPercentage = totalExpenses > 0 ? Math.round((totalPaid / totalExpenses) * 100) : 100;
-  const leftover = totalAvailable > 0 ? totalAvailable - totalExpenses : 0;
+  const leftover = (storedSummary?.leftover !== undefined) ? Number(storedSummary.leftover) : (totalAvailable - totalExpenses);
   const spentRatio = totalAvailable > 0 ? (totalExpenses / totalAvailable) * 100 : 0;
 
   // Build exact Dashboard Alerts (reproducing DashboardAnalytics.tsx)
@@ -448,7 +483,7 @@ function generateDashboardSmartAlerts(
   }
 
   // B. Orçamento e Sobras (Leftover)
-  if (totalAvailable > 0) {
+  if (totalAvailable > 0 || totalExpenses > 0) {
     if (leftover < 0) {
       alerts.push({
         id: 'month-leftover-deficit',
@@ -467,8 +502,8 @@ function generateDashboardSmartAlerts(
       alerts.push({
         id: 'month-leftover-surplus',
         type: 'success',
-        title: `Dinheiro Livre: Sobra de R$ ${fmt(leftover)}`,
-        summary: `Saldo livre disponível para reserva ou investimentos após quitar as despesas.`
+        title: `Muito bem! Sobrou R$ ${fmt(leftover)} no mês`,
+        summary: `Você gastou menos do que tinha disponível neste ciclo! Saldo livre disponível para guardar ou investir.`
       });
     }
   }
@@ -490,7 +525,7 @@ function generateDashboardSmartAlerts(
     });
   }
 
-  // D. Concentração de Categoria (leaks)
+  // D. Concentração de Categoria
   let topCat: { name: string; amount: number; pct: number } | null = null;
   for (const [cName, cAmt] of Object.entries(categoryTotals)) {
     const pct = totalExpenses > 0 ? Math.round((cAmt / totalExpenses) * 100) : 0;
@@ -677,16 +712,12 @@ async function runBackgroundPushNotificationChecker(
     const subs = userSubsMap[userId];
     if (!subs || subs.length === 0) continue;
 
-    let userBills = localUserBills[userId] || [];
+    const userStored = localUserBills[userId];
     let userSettings = getLocalUserSettings()[userId] || {};
 
     // Try fetching from Firestore if accessible
     try {
       const db = admin.firestore();
-      const txSnapshot = await db.collection("transactions").where("userId", "==", userId).get();
-      if (!txSnapshot.empty) {
-        userBills = txSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      }
       const userDoc = await db.collection("users").doc(userId).get();
       if (userDoc.exists) {
         userSettings = { ...userDoc.data(), ...userSettings };
@@ -703,7 +734,15 @@ async function runBackgroundPushNotificationChecker(
     const brDay = parseInt(br.dateStr.split('-')[2], 10) || now.getDate();
     const brTodayNoon = new Date(brYear, brMonth, brDay, 12, 0, 0);
 
-    // 1. Process ALL pending bills (not just overdue, but ALL pendencies: overdue, today, and upcoming)
+    const userCurrentMonthKey = (userStored && typeof userStored === 'object' && userStored.currentMonthKey)
+      ? userStored.currentMonthKey
+      : `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
+
+    const rawPendingList: any[] = (userStored && typeof userStored === 'object')
+      ? (userStored.pendingBills || userStored.monthBills || userStored.bills || (Array.isArray(userStored) ? userStored : []))
+      : (Array.isArray(userStored) ? userStored : []);
+
+    // 1. Process ALL pending bills for the active month cycle
     const userPendingBills: Array<{
       id: string;
       name: string;
@@ -718,19 +757,24 @@ async function runBackgroundPushNotificationChecker(
       monthKey?: string;
     }> = [];
 
-    for (const tx of userBills) {
+    for (const tx of rawPendingList) {
       if (!tx || !tx.name) continue;
       if (tx.type === 'rendas' || tx.type === 'entradas' || tx.type === 'receita') continue;
       if (tx.is_skipped) continue;
+      // Skip if bill belongs to a different cycle
+      if (tx.monthKey && tx.monthKey !== userCurrentMonthKey) continue;
 
-      const amount = Number(tx.amount) || Number(tx.total_parcelado) || 0;
+      const amount = Number(tx.amount) > 0 
+        ? Number(tx.amount) 
+        : (Number(tx.total_parcelado) > 0 && tx.installmentsCount ? (Number(tx.total_parcelado) / Number(tx.installmentsCount)) : (Number(tx.total_parcelado) || 0));
       const paid_amount = Number(tx.paid_amount) || 0;
-      const remaining = Math.max(0, amount - paid_amount);
+      const remaining = tx.remaining !== undefined ? Number(tx.remaining) : Math.max(0, amount - paid_amount);
+      
       // If remaining is 0, this bill is completely paid - not pending!
       if (amount <= 0 || remaining <= 0) continue;
 
       const dueStr = tx.due ? String(tx.due).trim() : '';
-      let isOverdue = !!tx.isOverdue;
+      let isOverdue = false;
       let isDueToday = false;
       let diffDays = 999;
       let dueDate: Date | null = null;
@@ -767,9 +811,7 @@ async function runBackgroundPushNotificationChecker(
         } else if (diffDays === 0) {
           isDueToday = true;
         }
-      }
-
-      if (tx.isOverdue) {
+      } else if (tx.isOverdue) {
         isOverdue = true;
       }
 
@@ -784,7 +826,7 @@ async function runBackgroundPushNotificationChecker(
         isDueToday,
         diffDays,
         cat: tx.cat || tx.category || 'Geral',
-        monthKey: tx.monthKey
+        monthKey: tx.monthKey || userCurrentMonthKey
       });
     }
 
@@ -802,7 +844,7 @@ async function runBackgroundPushNotificationChecker(
     const totalRemaining = userPendingBills.reduce((acc, b) => acc + (b.remaining || 0), 0);
 
     // 2. Generate Dashboard Smart Alerts matching DashboardAnalytics.tsx
-    const dashboard = generateDashboardSmartAlerts(userBills, userSettings, brYear, brMonth);
+    const dashboard = generateDashboardSmartAlerts(userStored, userSettings, brYear, brMonth);
 
     // Keys for anti-spam tracking
     // Bills Slots: 08:00, 12:00, 20:00
@@ -1710,14 +1752,23 @@ app.get("/api/push/vapid-public-key", async (req, res) => {
 // API route: Save PWA Web Push Subscription for background alerts when app is closed
 app.post("/api/push/subscribe", async (req, res) => {
   try {
-    const { userId, subscription, bills, settings } = req.body;
+    const { userId, subscription, bills, monthBills, pendingBills, summary, currentMonthKey, settings } = req.body;
     if (!userId || !subscription) {
       return res.status(400).json({ error: "userId e subscription são obrigatórios." });
     }
 
     saveLocalSubscription(userId, subscription);
 
-    if (Array.isArray(bills)) {
+    if (monthBills || pendingBills || summary || currentMonthKey) {
+      saveLocalUserBills(userId, {
+        userId,
+        currentMonthKey,
+        monthBills: monthBills || bills || [],
+        pendingBills: pendingBills || [],
+        summary,
+        bills: monthBills || bills || []
+      });
+    } else if (Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
     }
     if (settings) {
@@ -1749,12 +1800,21 @@ app.post("/api/push/subscribe", async (req, res) => {
 // API route: Synchronize user unpaid bills so server can sweep when app is closed
 app.post("/api/push/sync-bills", async (req, res) => {
   try {
-    const { userId, bills, settings } = req.body;
+    const { userId, bills, monthBills, pendingBills, summary, currentMonthKey, settings } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
 
-    if (Array.isArray(bills)) {
+    if (monthBills || pendingBills || summary || currentMonthKey) {
+      saveLocalUserBills(userId, {
+        userId,
+        currentMonthKey,
+        monthBills: monthBills || bills || [],
+        pendingBills: pendingBills || [],
+        summary,
+        bills: monthBills || bills || []
+      });
+    } else if (Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
     }
     if (settings) {
@@ -1764,7 +1824,7 @@ app.post("/api/push/sync-bills", async (req, res) => {
     // Run check in background to trigger push if appropriate
     runBackgroundPushNotificationChecker().catch((e) => console.warn("Background push check err:", e));
 
-    res.json({ success: true, syncedCount: Array.isArray(bills) ? bills.length : 0 });
+    res.json({ success: true, syncedCount: Array.isArray(monthBills || bills) ? (monthBills || bills).length : 0 });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "Erro interno" });
   }
@@ -1774,7 +1834,7 @@ app.post("/api/push/sync-bills", async (req, res) => {
 app.post("/api/push/test-background", async (req, res) => {
   try {
     await ensureVapidKeys();
-    const { userId, delaySeconds = 10, subscription, bills, settings, mode = 'both' } = req.body;
+    const { userId, delaySeconds = 10, subscription, bills, monthBills, pendingBills, summary, currentMonthKey, settings, mode = 'both' } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
@@ -1783,7 +1843,16 @@ app.post("/api/push/test-background", async (req, res) => {
     if (subscription) {
       saveLocalSubscription(userId, subscription);
     }
-    if (bills && Array.isArray(bills)) {
+    if (monthBills || pendingBills || summary || currentMonthKey) {
+      saveLocalUserBills(userId, {
+        userId,
+        currentMonthKey,
+        monthBills: monthBills || bills || [],
+        pendingBills: pendingBills || [],
+        summary,
+        bills: monthBills || bills || []
+      });
+    } else if (bills && Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
     }
     if (settings) {
@@ -1969,14 +2038,23 @@ app.get("/api/push/all-users-status", (req, res) => {
 // API route: Immediately trigger notification check for a user (bypassing time constraint)
 app.post("/api/push/trigger-now", async (req, res) => {
   try {
-    const { userId, subscription, bills, settings, mode = 'both' } = req.body;
+    const { userId, subscription, bills, monthBills, pendingBills, summary, currentMonthKey, settings, mode = 'both' } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
     if (subscription) {
       saveLocalSubscription(userId, subscription);
     }
-    if (bills && Array.isArray(bills)) {
+    if (monthBills || pendingBills || summary || currentMonthKey) {
+      saveLocalUserBills(userId, {
+        userId,
+        currentMonthKey,
+        monthBills: monthBills || bills || [],
+        pendingBills: pendingBills || [],
+        summary,
+        bills: monthBills || bills || []
+      });
+    } else if (bills && Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
     }
     if (settings) {

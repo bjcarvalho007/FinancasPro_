@@ -22,6 +22,7 @@ interface SettingsPanelProps {
   alertThresholdDays?: number;
   settings?: any;
   onOpenTutorial?: () => void;
+  getFinancialSnapshot?: () => any;
 }
 
 export default function SettingsPanel({
@@ -37,7 +38,8 @@ export default function SettingsPanel({
   showToast,
   alertThresholdDays = 3,
   settings = null,
-  onOpenTutorial
+  onOpenTutorial,
+  getFinancialSnapshot
 }: SettingsPanelProps) {
   const { t, lang, formatCurrency } = useLanguage();
   const [incStr, setIncStr] = useState<string>(
@@ -185,6 +187,7 @@ export default function SettingsPanel({
       }
 
       if (auth.currentUser && sub) {
+        const snap = getFinancialSnapshot ? getFinancialSnapshot() : null;
         // 1. Send subscription & current bills to Express API for background sweeps
         await fetch('/api/push/subscribe', {
           method: 'POST',
@@ -192,23 +195,26 @@ export default function SettingsPanel({
           body: JSON.stringify({
             userId: auth.currentUser.uid,
             subscription: sub,
-            settings: {
-              income: baseIncome || settings?.income || 0,
-              balance: baseBalance || settings?.balance || 0,
-              monthlyIncome: settings?.monthlyIncome || {},
-              extras: settings?.extras || {}
-            },
-            bills: (transactions || []).map(t => ({
-              id: t.id,
-              name: t.name,
-              due: t.due,
-              amount: t.amount || t.total_parcelado || 0,
-              paid_amount: t.paid_amount || 0,
-              type: t.type,
-              monthKey: t.monthKey,
-              isOverdue: t.isOverdue,
-              cat: t.cat || 'Geral'
-            }))
+            ...(snap || {
+              settings: {
+                income: baseIncome || settings?.income || 0,
+                balance: baseBalance || settings?.balance || 0,
+                monthlyIncome: settings?.monthlyIncome || {},
+                monthlyBalance: settings?.monthlyBalance || {},
+                extras: settings?.extras || {}
+              },
+              bills: (transactions || []).map(t => ({
+                id: t.id,
+                name: t.name,
+                due: t.due,
+                amount: Number(t.amount) || 0,
+                paid_amount: Number(t.paid_amount) || 0,
+                type: t.type,
+                monthKey: t.monthKey,
+                isOverdue: t.isOverdue,
+                cat: t.cat || 'Geral'
+              }))
+            })
           })
         }).catch(() => {});
 
@@ -276,6 +282,7 @@ export default function SettingsPanel({
     try {
       showToast(`Disparando verificação imediata (${mode === 'bills' ? 'Contas' : mode === 'smart' ? 'Inteligente' : 'Completa'})...`, 'warning');
       const sub = await ensureDevicePushSubscription();
+      const snap = getFinancialSnapshot ? getFinancialSnapshot() : null;
 
       const res = await fetch('/api/push/trigger-now', {
         method: 'POST',
@@ -283,24 +290,27 @@ export default function SettingsPanel({
         body: JSON.stringify({ 
           userId: auth.currentUser.uid,
           subscription: sub,
-          settings: {
-            income: baseIncome || settings?.income || 0,
-            balance: baseBalance || settings?.balance || 0,
-            monthlyIncome: settings?.monthlyIncome || {},
-            extras: settings?.extras || {}
-          },
-          bills: (transactions || []).map(t => ({
-            id: t.id,
-            name: t.name,
-            due: t.due,
-            amount: t.amount || t.total_parcelado || 0,
-            paid_amount: t.paid_amount || 0,
-            type: t.type,
-            monthKey: t.monthKey,
-            isOverdue: t.isOverdue,
-            cat: t.cat || 'Geral'
-          })),
-          mode
+          mode,
+          ...(snap || {
+            settings: {
+              income: baseIncome || settings?.income || 0,
+              balance: baseBalance || settings?.balance || 0,
+              monthlyIncome: settings?.monthlyIncome || {},
+              monthlyBalance: settings?.monthlyBalance || {},
+              extras: settings?.extras || {}
+            },
+            bills: (transactions || []).map(t => ({
+              id: t.id,
+              name: t.name,
+              due: t.due,
+              amount: Number(t.amount) || 0,
+              paid_amount: Number(t.paid_amount) || 0,
+              type: t.type,
+              monthKey: t.monthKey,
+              isOverdue: t.isOverdue,
+              cat: t.cat || 'Geral'
+            }))
+          })
         })
       });
       const data = await res.json();
@@ -324,6 +334,7 @@ export default function SettingsPanel({
     try {
       // Always guarantee the device is subscribed and the subscription is sent to the server
       const sub = await ensureDevicePushSubscription();
+      const snap = getFinancialSnapshot ? getFinancialSnapshot() : null;
 
       const res = await fetch('/api/push/test-background', {
         method: 'POST',
@@ -333,23 +344,26 @@ export default function SettingsPanel({
           delaySeconds,
           mode,
           subscription: sub,
-          settings: {
-            income: baseIncome || settings?.income || 0,
-            balance: baseBalance || settings?.balance || 0,
-            monthlyIncome: settings?.monthlyIncome || {},
-            extras: settings?.extras || {}
-          },
-          bills: (transactions || []).map(t => ({
-            id: t.id,
-            name: t.name,
-            due: t.due,
-            amount: t.amount || t.total_parcelado || 0,
-            paid_amount: t.paid_amount || 0,
-            type: t.type,
-            monthKey: t.monthKey,
-            isOverdue: t.isOverdue,
-            cat: t.cat || 'Geral'
-          }))
+          ...(snap || {
+            settings: {
+              income: baseIncome || settings?.income || 0,
+              balance: baseBalance || settings?.balance || 0,
+              monthlyIncome: settings?.monthlyIncome || {},
+              monthlyBalance: settings?.monthlyBalance || {},
+              extras: settings?.extras || {}
+            },
+            bills: (transactions || []).map(t => ({
+              id: t.id,
+              name: t.name,
+              due: t.due,
+              amount: Number(t.amount) || 0,
+              paid_amount: Number(t.paid_amount) || 0,
+              type: t.type,
+              monthKey: t.monthKey,
+              isOverdue: t.isOverdue,
+              cat: t.cat || 'Geral'
+            }))
+          })
         })
       });
       const data = await res.json();

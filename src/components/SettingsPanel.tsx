@@ -4,7 +4,7 @@ import { auth, db } from '../firebase';
 import { useLanguage } from '../utils/i18n';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
-import { Settings, Download, Trash2, ShieldAlert, ShieldCheck, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle, HelpCircle } from 'lucide-react';
+import { Settings, Download, Trash2, ShieldAlert, ShieldCheck, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle, HelpCircle, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportPremiumPDF, exportPremiumSpreadsheet } from '../utils/reportGenerator';
 
@@ -192,6 +192,12 @@ export default function SettingsPanel({
           body: JSON.stringify({
             userId: auth.currentUser.uid,
             subscription: sub,
+            settings: {
+              income: baseIncome || settings?.income || 0,
+              balance: baseBalance || settings?.balance || 0,
+              monthlyIncome: settings?.monthlyIncome || {},
+              extras: settings?.extras || {}
+            },
             bills: (transactions || []).map(t => ({
               id: t.id,
               name: t.name,
@@ -200,7 +206,8 @@ export default function SettingsPanel({
               paid_amount: t.paid_amount || 0,
               type: t.type,
               monthKey: t.monthKey,
-              isOverdue: t.isOverdue
+              isOverdue: t.isOverdue,
+              cat: t.cat || 'Geral'
             }))
           })
         }).catch(() => {});
@@ -276,7 +283,23 @@ export default function SettingsPanel({
         body: JSON.stringify({ 
           userId: auth.currentUser.uid,
           subscription: sub,
-          bills: transactions || [],
+          settings: {
+            income: baseIncome || settings?.income || 0,
+            balance: baseBalance || settings?.balance || 0,
+            monthlyIncome: settings?.monthlyIncome || {},
+            extras: settings?.extras || {}
+          },
+          bills: (transactions || []).map(t => ({
+            id: t.id,
+            name: t.name,
+            due: t.due,
+            amount: t.amount || t.total_parcelado || 0,
+            paid_amount: t.paid_amount || 0,
+            type: t.type,
+            monthKey: t.monthKey,
+            isOverdue: t.isOverdue,
+            cat: t.cat || 'Geral'
+          })),
           mode
         })
       });
@@ -310,6 +333,12 @@ export default function SettingsPanel({
           delaySeconds,
           mode,
           subscription: sub,
+          settings: {
+            income: baseIncome || settings?.income || 0,
+            balance: baseBalance || settings?.balance || 0,
+            monthlyIncome: settings?.monthlyIncome || {},
+            extras: settings?.extras || {}
+          },
           bills: (transactions || []).map(t => ({
             id: t.id,
             name: t.name,
@@ -318,7 +347,8 @@ export default function SettingsPanel({
             paid_amount: t.paid_amount || 0,
             type: t.type,
             monthKey: t.monthKey,
-            isOverdue: t.isOverdue
+            isOverdue: t.isOverdue,
+            cat: t.cat || 'Geral'
           }))
         })
       });
@@ -879,28 +909,49 @@ export default function SettingsPanel({
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={() => triggerDelayedBackgroundPush(10)}
+                    onClick={() => triggerDelayedBackgroundPush(10, 'bills')}
                     disabled={pushLoading || backgroundTestCountdown !== null}
                     className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-950/20 disabled:opacity-50"
+                    title="Receba no aparelho a lista de todas as contas pendentes com app fechado"
                   >
                     <Smartphone className="w-3.5 h-3.5" />
-                    <span>Testar com App Fechado (10s)</span>
+                    <span>Testar Pendências (10s)</span>
                   </button>
                   <button
-                    onClick={() => triggerImmediateNotificationCheck('both')}
+                    onClick={() => triggerDelayedBackgroundPush(10, 'smart')}
+                    disabled={pushLoading || backgroundTestCountdown !== null}
+                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-purple-950/20 disabled:opacity-50"
+                    title="Receba os alertas inteligentes resumidos do dashboard com app fechado"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Testar Alertas Inteligentes (10s)</span>
+                  </button>
+                  <button
+                    onClick={() => triggerDelayedBackgroundPush(10, 'both')}
+                    disabled={pushLoading || backgroundTestCountdown !== null}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-indigo-950/20 disabled:opacity-50"
+                    title="Receba as pendências e os alertas inteligentes sequenciais com app fechado"
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>Testar Ambos (10s)</span>
+                  </button>
+                  <button
+                    onClick={() => triggerImmediateNotificationCheck('smart')}
+                    disabled={pushLoading}
+                    className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/20 font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Executar análise e disparar alerta inteligente imediatamente"
+                  >
+                    {pushLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    <span>Disparar Inteligente Agora</span>
+                  </button>
+                  <button
+                    onClick={() => triggerImmediateNotificationCheck('bills')}
                     disabled={pushLoading}
                     className="bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/20 font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Verificar e disparar lista de contas pendentes imediatamente"
                   >
-                    {pushLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
-                    <span>Disparar Varredura de Contas Agora</span>
-                  </button>
-                  <button
-                    onClick={triggerTestPush}
-                    disabled={pushLoading}
-                    className="bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 font-bold py-2 px-3.5 rounded-xl text-[10px] uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Teste Imediato</span>
+                    {pushLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Disparar Pendências Agora</span>
                   </button>
                 </div>
 

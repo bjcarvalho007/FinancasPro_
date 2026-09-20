@@ -350,6 +350,12 @@ function MainApp() {
         body: JSON.stringify({ 
           userId: user.uid,
           subscription: sub,
+          settings: {
+            income: settings?.income || 0,
+            balance: settings?.balance || 0,
+            monthlyIncome: settings?.monthlyIncome || {},
+            extras: settings?.extras || {}
+          },
           bills: (transactions || []).map(t => ({
             id: t.id,
             name: t.name,
@@ -358,7 +364,8 @@ function MainApp() {
             paid_amount: t.paid_amount || 0,
             type: t.type,
             monthKey: t.monthKey,
-            isOverdue: t.isOverdue
+            isOverdue: t.isOverdue,
+            cat: t.cat || 'Geral'
           }))
         })
       });
@@ -396,6 +403,12 @@ function MainApp() {
           userId: user.uid, 
           delaySeconds,
           subscription: sub,
+          settings: {
+            income: settings?.income || 0,
+            balance: settings?.balance || 0,
+            monthlyIncome: settings?.monthlyIncome || {},
+            extras: settings?.extras || {}
+          },
           bills: (transactions || []).map(t => ({
             id: t.id,
             name: t.name,
@@ -404,7 +417,8 @@ function MainApp() {
             paid_amount: t.paid_amount || 0,
             type: t.type,
             monthKey: t.monthKey,
-            isOverdue: t.isOverdue
+            isOverdue: t.isOverdue,
+            cat: t.cat || 'Geral'
           }))
         })
       });
@@ -779,6 +793,12 @@ function MainApp() {
         body: JSON.stringify({
           userId: currentUser.uid,
           subscription: sub,
+          settings: {
+            income: settings?.income || 0,
+            balance: settings?.balance || 0,
+            monthlyIncome: settings?.monthlyIncome || {},
+            extras: settings?.extras || {}
+          },
           bills: (billsToSend || []).map(t => ({
             id: t.id,
             name: t.name,
@@ -787,7 +807,8 @@ function MainApp() {
             paid_amount: t.paid_amount || 0,
             type: t.type,
             monthKey: t.monthKey,
-            isOverdue: t.isOverdue
+            isOverdue: t.isOverdue,
+            cat: t.cat || 'Geral'
           }))
         })
       });
@@ -1208,6 +1229,12 @@ function MainApp() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: uid,
+            settings: {
+              income: settings?.income || 0,
+              balance: settings?.balance || 0,
+              monthlyIncome: settings?.monthlyIncome || {},
+              extras: settings?.extras || {}
+            },
             bills: items.map(t => ({
               id: t.id,
               name: t.name,
@@ -1215,7 +1242,8 @@ function MainApp() {
               amount: t.amount,
               paid_amount: t.paid_amount || 0,
               type: t.type,
-              monthKey: t.monthKey
+              monthKey: t.monthKey,
+              cat: t.cat || 'Geral'
             }))
           })
         }).catch(() => {});
@@ -1264,6 +1292,21 @@ function MainApp() {
         saveLocalUserCache(uid, 'settings', data);
         if (data.theme) setTheme(data.theme);
         if (data.currency) setCurrency(data.currency);
+
+        // Keep server background checker informed of latest user financial settings
+        fetch('/api/push/sync-bills', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: uid,
+            settings: {
+              income: data.income || 0,
+              balance: data.balance || 0,
+              monthlyIncome: data.monthlyIncome || {},
+              extras: data.extras || {}
+            }
+          })
+        }).catch(() => {});
       } else {
         // Bootstrap standard empty settings if none present
         const initData: Setting = {
@@ -2445,6 +2488,12 @@ function MainApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user.uid,
+          settings: {
+            income: settings?.income || 0,
+            balance: settings?.balance || 0,
+            monthlyIncome: settings?.monthlyIncome || {},
+            extras: settings?.extras || {}
+          },
           bills: (unpaidTransactions.length > 0 ? unpaidTransactions : transactions).map(t => ({
             id: t.id,
             name: t.name,
@@ -2453,7 +2502,8 @@ function MainApp() {
             paid_amount: t.paid_amount || 0,
             type: t.type,
             monthKey: t.monthKey,
-            isOverdue: expiring.some(e => e.item.id === t.id && e.isOverdue)
+            isOverdue: expiring.some(e => e.item.id === t.id && e.isOverdue),
+            cat: t.cat || 'Geral'
           }))
         })
       }).catch(() => {});

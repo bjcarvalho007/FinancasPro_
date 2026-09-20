@@ -192,7 +192,28 @@ async function ensureVapidKeys() {
 // Background Checker & Push Cache File Storage (using /tmp on serverless environments to prevent EROFS)
 const PUSH_SUBS_FILE = path.join(storageBaseDir, "push-subscriptions.json");
 const USER_BILLS_FILE = path.join(storageBaseDir, "user-bills-cache.json");
+const USER_SETTINGS_FILE = path.join(storageBaseDir, "user-settings-cache.json");
 const NOTIFIED_ALERTS_FILE = path.join(storageBaseDir, "notified-alerts-cache.json");
+
+function getLocalUserSettings(): { [userId: string]: any } {
+  try {
+    if (fs.existsSync(USER_SETTINGS_FILE)) {
+      return JSON.parse(fs.readFileSync(USER_SETTINGS_FILE, "utf8")) || {};
+    }
+  } catch (e) {}
+  return {};
+}
+
+function saveLocalUserSettings(userId: string, settings: any) {
+  try {
+    if (!userId || !settings) return;
+    const data = getLocalUserSettings();
+    data[userId] = { ...(data[userId] || {}), ...settings };
+    fs.writeFileSync(USER_SETTINGS_FILE, JSON.stringify(data, null, 2), "utf8");
+  } catch (e) {
+    console.warn("⚠️ Erro ao salvar configurações locais:", e);
+  }
+}
 
 function getLocalSubscriptions(): { [userId: string]: any[] } {
   try {
@@ -328,73 +349,204 @@ function getBrasiliaDate(): { hour: number; minute: number; dateStr: string; tim
   }
 }
 
-interface SmartInsightsData {
+interface DashboardAlertItem {
+  id: string;
+  type: 'error' | 'warning' | 'info' | 'success';
+  title: string;
+  summary: string;
+}
+
+interface DashboardSmartInsightsData {
+  alerts: DashboardAlertItem[];
   topExpense: { name: string; amount: number; category: string } | null;
   totalExpenses: number;
   totalPaid: number;
   totalPending: number;
   paidPercentage: number;
-  topCategory: string | null;
+  leftover: number;
+  spentRatio: number;
+  topCategory: { name: string; amount: number; pct: number } | null;
   expensesCount: number;
 }
 
-function calculateUserSmartInsights(userBills: any[], brYear: number, brMonth: number): SmartInsightsData {
+function generateDashboardSmartAlerts(
+  userBills: any[],
+  userSettings: any,
+  brYear: number,
+  brMonth: number
+): DashboardSmartInsightsData {
   const currentMonthKey = `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
-  let topExpense: { name: string; amount: number; category: string } | null = null;
+  const fmt = (v: number) => (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // 1. Inflows (Renda + Reserva/Mãos + Extras)
+  const income = Number(userSettings?.monthlyIncome?.[currentMonthKey] ?? userSettings?.income ?? 0);
+  const balance = Number(userSettings?.monthlyBalance?.[currentMonthKey] ?? userSettings?.balance ?? 0);
+  const extra = Number(userSettings?.extras?.[currentMonthKey] ?? 0);
+  const totalAvailable = income + balance + extra;
+
+  // 2. Identify month expenses (or fallback to active non-income expenses if monthKey doesn't match)
+  const monthExpenses = userBills.filter(t => {
+    if (!t || !t.name) return false;
+    if (t.type === 'rendas' || t.type === 'entradas' || t.type === 'receita') return false;
+    if (t.is_skipped) return false;
+    if (t.monthKey && t.monthKey !== currentMonthKey) return false;
+    return true;
+  });
+
+  const activeExpenses = monthExpenses.length > 0 
+    ? monthExpenses 
+    : userBills.filter(t => t && t.name && t.type !== 'rendas' && t.type !== 'entradas' && t.type !== 'receita' && !t.is_skipped);
+
   let totalExpenses = 0;
   let totalPaid = 0;
-  const categoryTotals: { [cat: string]: number } = {};
-  let count = 0;
+  let topExpense: { name: string; amount: number; category: string } | null = null;
+  const categoryTotals: Record<string, number> = {};
+  let installmentsTotal = 0;
+  const overdueItems: string[] = [];
 
-  for (const tx of userBills) {
-    if (!tx || !tx.name) continue;
-    if (tx.type === 'rendas' || tx.type === 'entradas' || tx.type === 'receita') continue;
-    if (tx.is_skipped) continue;
-
-    // Consider transactions for current month or active non-month-specific expenses
-    if (tx.monthKey && tx.monthKey !== currentMonthKey) continue;
-
-    const amount = Number(tx.amount) || Number(tx.total_parcelado) || 0;
+  for (const tx of activeExpenses) {
+    const amt = Number(tx.amount) || Number(tx.total_parcelado) || 0;
     const paid = Number(tx.paid_amount) || 0;
-
-    if (amount <= 0 && paid <= 0) continue;
-
-    count++;
-    totalExpenses += amount;
+    totalExpenses += amt;
     totalPaid += paid;
 
-    if (!topExpense || amount > topExpense.amount) {
+    if (!topExpense || amt > topExpense.amount) {
       topExpense = {
         name: tx.name,
-        amount: amount,
+        amount: amt,
         category: tx.cat || tx.category || 'Geral'
       };
     }
 
     const catName = String(tx.cat || tx.category || 'Outros').trim();
-    categoryTotals[catName] = (categoryTotals[catName] || 0) + amount;
-  }
+    categoryTotals[catName] = (categoryTotals[catName] || 0) + amt;
 
-  let topCategory: string | null = null;
-  let topCatAmount = 0;
-  for (const [cat, sum] of Object.entries(categoryTotals)) {
-    if (sum > topCatAmount) {
-      topCatAmount = sum;
-      topCategory = cat;
+    if (tx.type === 'parcelas') {
+      installmentsTotal += amt;
+    }
+    if (tx.isOverdue && (amt - paid) > 0) {
+      overdueItems.push(tx.name);
     }
   }
 
   const totalPending = Math.max(0, totalExpenses - totalPaid);
   const paidPercentage = totalExpenses > 0 ? Math.round((totalPaid / totalExpenses) * 100) : 100;
+  const leftover = totalAvailable > 0 ? totalAvailable - totalExpenses : 0;
+  const spentRatio = totalAvailable > 0 ? (totalExpenses / totalAvailable) * 100 : 0;
+
+  // Build exact Dashboard Alerts (reproducing DashboardAnalytics.tsx)
+  const alerts: DashboardAlertItem[] = [];
+
+  // A. Contas Atrasadas
+  if (overdueItems.length > 0) {
+    alerts.push({
+      id: 'month-overdue',
+      type: 'error',
+      title: `${overdueItems.length} conta(s) em atraso`,
+      summary: `Atenção: ${overdueItems.slice(0, 2).map(n => `"${n}"`).join(', ')}${overdueItems.length > 2 ? ' e outras' : ''} precisam de quitação urgente para evitar juros.`
+    });
+  }
+
+  // B. Orçamento e Sobras (Leftover)
+  if (totalAvailable > 0) {
+    if (leftover < 0) {
+      alerts.push({
+        id: 'month-leftover-deficit',
+        type: 'error',
+        title: `Gasto acima do orçamento em R$ ${fmt(Math.abs(leftover))}`,
+        summary: `Despesas maiores que a renda disponível. Evite gastos extras para reequilibrar o caixa.`
+      });
+    } else if (leftover === 0) {
+      alerts.push({
+        id: 'month-leftover-zero',
+        type: 'warning',
+        title: 'Contas no limite (zero sobras)',
+        summary: 'Todas as receitas cobrem as despesas, mas não resta sobra livre neste ciclo.'
+      });
+    } else {
+      alerts.push({
+        id: 'month-leftover-surplus',
+        type: 'success',
+        title: `Dinheiro Livre: Sobra de R$ ${fmt(leftover)}`,
+        summary: `Saldo livre disponível para reserva ou investimentos após quitar as despesas.`
+      });
+    }
+  }
+
+  // C. Comprometimento de Renda
+  if (spentRatio > 85) {
+    alerts.push({
+      id: 'month-spent-critical',
+      type: 'error',
+      title: `Renda Comprometida: ${Math.round(spentRatio)}% usado`,
+      summary: `Mais de 85% do seu dinheiro disponível já está consumido em despesas.`
+    });
+  } else if (spentRatio > 65) {
+    alerts.push({
+      id: 'month-spent-warning',
+      type: 'warning',
+      title: `Gastos consomem ${Math.round(spentRatio)}% da renda`,
+      summary: `Despesas em nível elevado. Mantenha cautela em novos compromissos.`
+    });
+  }
+
+  // D. Concentração de Categoria (leaks)
+  let topCat: { name: string; amount: number; pct: number } | null = null;
+  for (const [cName, cAmt] of Object.entries(categoryTotals)) {
+    const pct = totalExpenses > 0 ? Math.round((cAmt / totalExpenses) * 100) : 0;
+    if (!topCat || cAmt > topCat.amount) {
+      topCat = { name: cName, amount: cAmt, pct };
+    }
+  }
+  if (topCat && topCat.pct >= 40 && Object.keys(categoryTotals).length > 1) {
+    alerts.push({
+      id: 'month-cat-leak',
+      type: 'warning',
+      title: `Gasto concentrado em ${topCat.name}`,
+      summary: `A categoria "${topCat.name}" consome ${topCat.pct}% de todas as despesas registradas.`
+    });
+  }
+
+  // E. Maior Despesa do Mês
+  if (topExpense) {
+    alerts.push({
+      id: 'month-top-expense',
+      type: 'info',
+      title: `Maior gasto: "${topExpense.name}" (R$ ${fmt(topExpense.amount)})`,
+      summary: `Principal compromisso financeiro deste ciclo (categoria: ${topExpense.category}).`
+    });
+  }
+
+  // F. Parcelas no Cartão
+  const installmentPct = totalExpenses > 0 ? Math.round((installmentsTotal / totalExpenses) * 100) : 0;
+  if (installmentPct >= 40) {
+    alerts.push({
+      id: 'month-installments-high',
+      type: 'warning',
+      title: `Parcelamentos somam ${installmentPct}% das contas`,
+      summary: `R$ ${fmt(installmentsTotal)} comprometidos em compras parceladas de cartão.`
+    });
+  }
+
+  // G. Progresso de Pagamento
+  alerts.push({
+    id: 'month-progress',
+    type: paidPercentage >= 80 ? 'success' : 'info',
+    title: `Progresso: ${paidPercentage}% das contas quitadas`,
+    summary: `R$ ${fmt(totalPaid)} pagos de R$ ${fmt(totalExpenses)} planejados (restam R$ ${fmt(totalPending)}).`
+  });
 
   return {
+    alerts,
     topExpense,
     totalExpenses,
     totalPaid,
     totalPending,
     paidPercentage,
-    topCategory,
-    expensesCount: count
+    leftover,
+    spentRatio,
+    topCategory: topCat,
+    expensesCount: activeExpenses.length
   };
 }
 
@@ -467,14 +619,25 @@ async function runBackgroundPushNotificationChecker(
     if (!subsSnapshot.empty) {
       subsSnapshot.forEach((doc) => {
         const data = doc.data();
-        if (data && data.userId && data.subscription) {
+        const extractedUserId = data?.userId || (doc.id.startsWith("sub_") ? doc.id.replace(/^sub_/, "").split("_")[0] : null);
+        if (data && extractedUserId) {
           try {
-            const subParsed = typeof data.subscription === 'string' ? JSON.parse(data.subscription) : data.subscription;
-            if (!userSubsMap[data.userId]) userSubsMap[data.userId] = [];
-            const ep = subParsed?.endpoint;
-            const exists = userSubsMap[data.userId].some((s: any) => s?.endpoint === ep);
-            if (!exists && ep) {
-              userSubsMap[data.userId].push(subParsed);
+            let subParsed: any = null;
+            if (data.subscription) {
+              subParsed = typeof data.subscription === 'string' ? JSON.parse(data.subscription) : data.subscription;
+            } else if (data.sub) {
+              subParsed = typeof data.sub === 'string' ? JSON.parse(data.sub) : data.sub;
+            } else if (data.endpoint && data.keys) {
+              subParsed = { endpoint: data.endpoint, keys: data.keys };
+            }
+
+            if (subParsed && subParsed.endpoint && subParsed.keys?.p256dh && subParsed.keys?.auth) {
+              if (!userSubsMap[extractedUserId]) userSubsMap[extractedUserId] = [];
+              const ep = subParsed.endpoint;
+              const exists = userSubsMap[extractedUserId].some((s: any) => s?.endpoint === ep);
+              if (!exists) {
+                userSubsMap[extractedUserId].push(subParsed);
+              }
             }
           } catch (e) {}
         }
@@ -489,7 +652,7 @@ async function runBackgroundPushNotificationChecker(
 
   if (userIds.length === 0) {
     console.log("ℹ️ [BACKGROUND SWEEPER] Nenhuma assinatura de Web Push cadastrada.");
-    return { sent: 0, reason: "Nenhuma assinatura de dispositivo registrada." };
+    return { sent: 0, userCount: 0, reason: "Nenhuma assinatura de dispositivo registrada.", users: [] };
   }
 
   const localUserBills = getLocalUserBills();
@@ -497,6 +660,17 @@ async function runBackgroundPushNotificationChecker(
   const now = new Date();
 
   let totalDispatched = 0;
+  const userReports: Array<{
+    userId: string;
+    devices: number;
+    pendingBillsCount: number;
+    overdueCount: number;
+    dueTodayCount: number;
+    smartAlertsCount: number;
+    billsSent: number;
+    smartSent: number;
+    totalSent: number;
+  }> = [];
   const fmt = (v: number) => (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   for (const userId of userIds) {
@@ -504,6 +678,7 @@ async function runBackgroundPushNotificationChecker(
     if (!subs || subs.length === 0) continue;
 
     let userBills = localUserBills[userId] || [];
+    let userSettings = getLocalUserSettings()[userId] || {};
 
     // Try fetching from Firestore if accessible
     try {
@@ -511,6 +686,14 @@ async function runBackgroundPushNotificationChecker(
       const txSnapshot = await db.collection("transactions").where("userId", "==", userId).get();
       if (!txSnapshot.empty) {
         userBills = txSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+      const userDoc = await db.collection("users").doc(userId).get();
+      if (userDoc.exists) {
+        userSettings = { ...userDoc.data(), ...userSettings };
+      }
+      const settingsDoc = await db.collection("settings").doc(userId).get();
+      if (settingsDoc.exists) {
+        userSettings = { ...userSettings, ...settingsDoc.data() };
       }
     } catch (e) {}
 
@@ -520,54 +703,60 @@ async function runBackgroundPushNotificationChecker(
     const brDay = parseInt(br.dateStr.split('-')[2], 10) || now.getDate();
     const brTodayNoon = new Date(brYear, brMonth, brDay, 12, 0, 0);
 
-    // 1. Process expiring and overdue bills
-    const userExpiringBills: Array<{
+    // 1. Process ALL pending bills (not just overdue, but ALL pendencies: overdue, today, and upcoming)
+    const userPendingBills: Array<{
       id: string;
       name: string;
       due: string;
+      amount: number;
+      paid_amount: number;
       remaining: number;
       isOverdue: boolean;
       isDueToday: boolean;
       diffDays: number;
+      cat: string;
+      monthKey?: string;
     }> = [];
 
     for (const tx of userBills) {
-      if (!tx || !tx.name || !tx.due) continue;
+      if (!tx || !tx.name) continue;
       if (tx.type === 'rendas' || tx.type === 'entradas' || tx.type === 'receita') continue;
       if (tx.is_skipped) continue;
 
       const amount = Number(tx.amount) || Number(tx.total_parcelado) || 0;
       const paid_amount = Number(tx.paid_amount) || 0;
-      if (amount > 0 && paid_amount >= amount) continue;
+      const remaining = Math.max(0, amount - paid_amount);
+      // If remaining is 0, this bill is completely paid - not pending!
+      if (amount <= 0 || remaining <= 0) continue;
 
-      let isNearDue = false;
+      const dueStr = tx.due ? String(tx.due).trim() : '';
       let isOverdue = !!tx.isOverdue;
       let isDueToday = false;
       let diffDays = 999;
-
-      const dueStr = String(tx.due).trim();
       let dueDate: Date | null = null;
 
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
-        const parts = dueStr.split("-").map(Number);
-        dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-      } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dueStr)) {
-        const parts = dueStr.split("/").map(Number);
-        dueDate = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
-      } else {
-        const dayMatch = dueStr.match(/\d+/);
-        if (dayMatch) {
-          const dueDay = parseInt(dayMatch[0], 10);
-          let dueYear = brYear;
-          let dueMonth = brMonth;
-          if (tx.monthKey && /^\d{4}-\d{2}$/.test(tx.monthKey)) {
-            const mParts = tx.monthKey.split("-").map(Number);
-            dueYear = mParts[0];
-            dueMonth = mParts[1] - 1;
+      if (dueStr) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
+          const parts = dueStr.split("-").map(Number);
+          dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+        } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dueStr)) {
+          const parts = dueStr.split("/").map(Number);
+          dueDate = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
+        } else {
+          const dayMatch = dueStr.match(/\d+/);
+          if (dayMatch) {
+            const dueDay = parseInt(dayMatch[0], 10);
+            let dueYear = brYear;
+            let dueMonth = brMonth;
+            if (tx.monthKey && /^\d{4}-\d{2}$/.test(tx.monthKey)) {
+              const mParts = tx.monthKey.split("-").map(Number);
+              dueYear = mParts[0];
+              dueMonth = mParts[1] - 1;
+            }
+            const maxDays = new Date(dueYear, dueMonth + 1, 0).getDate();
+            const safeDay = Math.min(Math.max(1, dueDay), maxDays);
+            dueDate = new Date(dueYear, dueMonth, safeDay, 12, 0, 0);
           }
-          const maxDays = new Date(dueYear, dueMonth + 1, 0).getDate();
-          const safeDay = Math.min(Math.max(1, dueDay), maxDays);
-          dueDate = new Date(dueYear, dueMonth, safeDay, 12, 0, 0);
         }
       }
 
@@ -575,40 +764,45 @@ async function runBackgroundPushNotificationChecker(
         diffDays = Math.round((dueDate.getTime() - brTodayNoon.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays < 0) {
           isOverdue = true;
-          isNearDue = true;
         } else if (diffDays === 0) {
           isDueToday = true;
-          isNearDue = true;
-        } else if (diffDays <= 3) {
-          isNearDue = true;
         }
       }
 
       if (tx.isOverdue) {
         isOverdue = true;
-        isNearDue = true;
       }
 
-      if (isNearDue) {
-        userExpiringBills.push({
-          id: tx.id || String(Math.random()),
-          name: tx.name,
-          due: dueStr,
-          remaining: Math.max(0, amount - paid_amount),
-          isOverdue,
-          isDueToday,
-          diffDays
-        });
-      }
+      userPendingBills.push({
+        id: tx.id || String(Math.random()),
+        name: tx.name,
+        due: dueStr,
+        amount,
+        paid_amount,
+        remaining,
+        isOverdue,
+        isDueToday,
+        diffDays,
+        cat: tx.cat || tx.category || 'Geral',
+        monthKey: tx.monthKey
+      });
     }
 
-    userExpiringBills.sort((a, b) => {
-      if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+    // Sort: 1º Overdue, 2º Due Today, 3º Nearest Due Date
+    userPendingBills.sort((a, b) => {
+      if (a.isOverdue && !b.isOverdue) return -1;
+      if (!a.isOverdue && b.isOverdue) return 1;
+      if (a.isDueToday && !b.isDueToday) return -1;
+      if (!a.isDueToday && b.isDueToday) return 1;
       return a.diffDays - b.diffDays;
     });
 
-    // 2. Process Smart Insights for current month (biggest expense, control balance)
-    const insights = calculateUserSmartInsights(userBills, brYear, brMonth);
+    const overdueBills = userPendingBills.filter(b => b.isOverdue);
+    const todayBills = userPendingBills.filter(b => b.isDueToday);
+    const totalRemaining = userPendingBills.reduce((acc, b) => acc + (b.remaining || 0), 0);
+
+    // 2. Generate Dashboard Smart Alerts matching DashboardAnalytics.tsx
+    const dashboard = generateDashboardSmartAlerts(userBills, userSettings, brYear, brMonth);
 
     // Keys for anti-spam tracking
     // Bills Slots: 08:00, 12:00, 20:00
@@ -651,106 +845,93 @@ async function runBackgroundPushNotificationChecker(
     const isSmart13Trigger = !forceNow && targetMode !== 'bills' && br.hour === 13 && !notifiedAlerts[smart13Key]?.notified;
     const isSmart21Trigger = !forceNow && targetMode !== 'bills' && br.hour === 21 && !notifiedAlerts[smart21Key]?.notified;
 
-    const overdueBills = userExpiringBills.filter(b => b.isOverdue);
-    const todayBills = userExpiringBills.filter(b => !b.isOverdue && b.isDueToday);
-    const totalRemaining = userExpiringBills.reduce((acc, b) => acc + (b.remaining || 0), 0);
-
     // ==========================================
     // A) DISPATCH BILLS NOTIFICATION (08h, 12h, 20h)
     // ==========================================
     const shouldSendBills = 
-      (forceNow && targetMode !== 'smart') || 
+      (forceNow && (targetMode === 'bills' || targetMode === 'both')) || 
       isBills08Trigger || 
       isBills12Trigger || 
       isBills20Trigger;
 
+    let billsSentCount = 0;
     if (shouldSendBills) {
       let billsSlotName = 'manual';
       let billsTitle = '';
       let billsBody = '';
 
+      let statusSummary = '';
+      if (overdueBills.length > 0 && todayBills.length > 0) {
+        statusSummary = ` (${overdueBills.length} atrasada(s), ${todayBills.length} vence(m) hoje)`;
+      } else if (overdueBills.length > 0) {
+        statusSummary = ` (${overdueBills.length} em atraso!)`;
+      } else if (todayBills.length > 0) {
+        statusSummary = ` (${todayBills.length} vence(m) hoje)`;
+      }
+
       if (forceNow) {
         billsSlotName = 'teste';
-        if (overdueBills.length > 0) {
-          billsTitle = `🚨 [TESTE] ${overdueBills.length} Conta(s) em Atraso`;
-        } else if (todayBills.length > 0) {
-          billsTitle = `⚠️ [TESTE] ${todayBills.length} Conta(s) Vence(m) Hoje`;
-        } else if (userExpiringBills.length > 0) {
-          billsTitle = `⚠️ [TESTE] ${userExpiringBills.length} Conta(s) a Vencer`;
+        if (userPendingBills.length > 0) {
+          billsTitle = `📋 [TESTE] ${userPendingBills.length} Conta(s) Pendente(s)${statusSummary}`;
         } else {
-          billsTitle = "✅ [TESTE] Contas em Dia!";
+          billsTitle = "✅ [TESTE] Contas em Dia (Zero Pendências)";
         }
       } else if (isBills08Trigger) {
         billsSlotName = '08h';
-        if (overdueBills.length > 0) {
-          billsTitle = `🚨 ALERTA MATINAL (08:00): ${overdueBills.length} Conta(s) Atrasada(s)`;
-        } else if (todayBills.length > 0) {
-          billsTitle = `⚠️ BOM DIA (08:00): ${todayBills.length} Conta(s) Vence(m) Hoje`;
-        } else if (userExpiringBills.length > 0) {
-          billsTitle = `⚠️ RADAR DO DIA (08:00): ${userExpiringBills.length} Conta(s) a Vencer`;
+        if (userPendingBills.length > 0) {
+          billsTitle = `📋 MANHÃ (08:00): ${userPendingBills.length} Conta(s) Pendente(s)${statusSummary}`;
         } else {
-          billsTitle = "✅ CONTAS EM DIA (08:00): Tudo organizado!";
+          billsTitle = "✅ MANHÃ (08:00): Contas em dia, zero pendências!";
         }
       } else if (isBills12Trigger) {
         billsSlotName = '12h';
-        if (overdueBills.length > 0) {
-          billsTitle = `🚨 MEIO-DIA (12:00): ${overdueBills.length} Conta(s) em Atraso`;
-        } else if (todayBills.length > 0) {
-          billsTitle = `☀️ REFORÇO DO ALMOÇO (12:00): ${todayBills.length} Vence(m) Hoje`;
-        } else if (userExpiringBills.length > 0) {
-          billsTitle = `☀️ MEIO-DIA (12:00): ${userExpiringBills.length} Conta(s) Pendente(s)`;
+        if (userPendingBills.length > 0) {
+          billsTitle = `☀️ MEIO-DIA (12:00): ${userPendingBills.length} Conta(s) Pendente(s)${statusSummary}`;
         } else {
-          billsTitle = "✅ CONTAS EM DIA (12:00): Suas finanças estão tranquilas!";
+          billsTitle = "✅ MEIO-DIA (12:00): Tudo quitado e em dia!";
         }
       } else if (isBills20Trigger) {
         billsSlotName = '20h';
-        if (overdueBills.length > 0 || todayBills.length > 0) {
-          billsTitle = `🌙 8 DA NOITE (20:00): ${overdueBills.length + todayBills.length} Pendência(s) de Atenção`;
-        } else if (userExpiringBills.length > 0) {
-          billsTitle = `🌙 RADAR NOTURNO (20:00): Contas dos próximos dias`;
+        if (userPendingBills.length > 0) {
+          billsTitle = `🌙 8 DA NOITE (20:00): ${userPendingBills.length} Conta(s) Pendente(s)${statusSummary}`;
         } else {
-          billsTitle = "✨ NOITE TRANQUILA (20:00): Nenhuma conta atrasada!";
+          billsTitle = "✨ NOITE TRANQUILA (20:00): Nenhuma conta pendente!";
         }
       }
 
-      if (userExpiringBills.length === 0) {
-        billsBody = "Parabéns! Nenhuma conta atrasada ou próxima do vencimento. Seus alertas diários continuam agendados às 08:00, 12:00 e 20:00.";
-      } else if (userExpiringBills.length === 1) {
-        const b = userExpiringBills[0];
-        const valStr = b.remaining > 0 ? ` de R$ ${fmt(b.remaining)}` : '';
-        if (b.isOverdue) {
-          billsBody = `A despesa "${b.name}"${valStr} está ATRASADA (${b.due}). Abra o app para regularizar e evitar juros.`;
-        } else if (b.isDueToday) {
-          billsBody = `Lembrete: A despesa "${b.name}"${valStr} VENCE HOJE (${b.due}). Aproveite para quitar agora.`;
-        } else {
-          billsBody = `Lembrete: A despesa "${b.name}"${valStr} vence em ${b.diffDays} dia(s) (${b.due}).`;
-        }
+      if (userPendingBills.length === 0) {
+        billsBody = "Parabéns! Todas as suas despesas cadastradas estão 100% quitadas. Nenhuma pendência em aberto.";
       } else {
         const maxDisplay = 5;
         const lines: string[] = [];
-        for (const b of userExpiringBills.slice(0, maxDisplay)) {
-          const valStr = b.remaining > 0 ? ` - R$ ${fmt(b.remaining)}` : '';
-          let tag = ` (${b.due})`;
-          if (b.isOverdue) tag = ' [ATRASADA]';
-          else if (b.isDueToday) tag = ' [VENCE HOJE]';
-          else if (b.diffDays !== 999) tag = ` [Em ${b.diffDays}d]`;
-          lines.push(`• ${b.name}${valStr}${tag}`);
+        for (const b of userPendingBills.slice(0, maxDisplay)) {
+          const valStr = `R$ ${fmt(b.remaining)}`;
+          let statusLabel = '';
+          if (b.isOverdue) {
+            statusLabel = ' [ATRASADA]';
+          } else if (b.isDueToday) {
+            statusLabel = ' [VENCE HOJE]';
+          } else if (b.due) {
+            statusLabel = ` [Venc: ${b.due}]`;
+          }
+          lines.push(`• ${b.name}: ${valStr}${statusLabel}`);
         }
-        if (userExpiringBills.length > maxDisplay) {
-          lines.push(`... e mais ${userExpiringBills.length - maxDisplay} conta(s) pendente(s).`);
+        if (userPendingBills.length > maxDisplay) {
+          lines.push(`... e mais ${userPendingBills.length - maxDisplay} conta(s) pendente(s).`);
         }
-        const totalStr = totalRemaining > 0 ? ` Total pendente: R$ ${fmt(totalRemaining)}.` : '';
-        billsBody = `Você tem ${userExpiringBills.length} contas para acompanhar.${totalStr}\n` + lines.join('\n');
+
+        const header = `Total a quitar: R$ ${fmt(totalRemaining)} (${userPendingBills.length} pendência${userPendingBills.length > 1 ? 's' : ''}):\n`;
+        billsBody = header + lines.join('\n');
       }
 
       const billsTag = forceNow ? `financaspro-bills-test-${Date.now()}` : `financaspro-bills-${billsSlotName}-${br.dateStr}`;
-      const sent = await dispatchPushToSubscriptions(userId, subs, billsTitle, billsBody, billsTag);
-      totalDispatched += sent;
+      billsSentCount = await dispatchPushToSubscriptions(userId, subs, billsTitle, billsBody, billsTag);
+      totalDispatched += billsSentCount;
 
       // Mark slot notified
-      if (isBills08Trigger) markLocalAlertNotified(bills08Key, { slot: 'bills_08h', count: userExpiringBills.length });
-      if (isBills12Trigger) markLocalAlertNotified(bills12Key, { slot: 'bills_12h', count: userExpiringBills.length });
-      if (isBills20Trigger) markLocalAlertNotified(bills20Key, { slot: 'bills_20h', count: userExpiringBills.length });
+      if (isBills08Trigger) markLocalAlertNotified(bills08Key, { slot: 'bills_08h', count: userPendingBills.length });
+      if (isBills12Trigger) markLocalAlertNotified(bills12Key, { slot: 'bills_12h', count: userPendingBills.length });
+      if (isBills20Trigger) markLocalAlertNotified(bills20Key, { slot: 'bills_20h', count: userPendingBills.length });
 
       try {
         const db = admin.firestore();
@@ -760,66 +941,83 @@ async function runBackgroundPushNotificationChecker(
             userId,
             slot: billsSlotName,
             type: "bills",
-            count: userExpiringBills.length,
+            count: userPendingBills.length,
+            totalRemaining,
             dispatchedAt: new Date().toISOString()
           });
         }
       } catch (e) {}
 
-      console.log(`✅ [BILLS PUSH] Alerta das ${billsSlotName} entregue para ${sent} aparelho(s) do usuário ${userId}.`);
+      console.log(`✅ [BILLS PUSH] Alerta das ${billsSlotName} entregue para ${billsSentCount} aparelho(s) do usuário ${userId}.`);
+    }
+
+    // Small delay between alerts during manual test if both are requested
+    if (shouldSendBills && forceNow && targetMode === 'both' && billsSentCount > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1200));
     }
 
     // ====================================================
     // B) DISPATCH SMART INSIGHTS NOTIFICATION (09h, 13h, 21h)
     // ====================================================
     const shouldSendSmart = 
-      (forceNow && targetMode === 'smart') || 
+      (forceNow && (targetMode === 'smart' || targetMode === 'both')) || 
       isSmart09Trigger || 
       isSmart13Trigger || 
       isSmart21Trigger;
 
+    let smartSentCount = 0;
     if (shouldSendSmart) {
       let smartSlotName = 'manual';
       let smartTitle = '';
       let smartBody = '';
 
+      // Select up to 3 priority alerts from DashboardAnalytics logic
+      const chosenAlerts = dashboard.alerts.slice(0, 3);
+      const alertLines = chosenAlerts.map(a => `• ${a.title}: ${a.summary}`);
+
       if (forceNow) {
         smartSlotName = 'teste';
-        smartTitle = "💡 [TESTE] Informações Inteligentes & Maior Gasto";
-        if (insights.topExpense) {
-          smartBody = `📊 Maior gasto do mês: "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n🎯 Progresso: ${insights.paidPercentage}% quitado. Mantenha seus limites diários para proteger seu saldo!`;
+        smartTitle = `💡 [TESTE] Análise Inteligente do Dashboard`;
+        if (alertLines.length > 0) {
+          smartBody = `Resumo das Análises do Dashboard:\n` + alertLines.join('\n');
         } else {
-          smartBody = "💡 Dica de Ouro: Registre seus gastos no FinançasPro para manter sua meta e orçamento sob controle!";
+          smartBody = `💡 Dica Inteligente: Seu orçamento está equilibrado e sem alertas críticos no momento!`;
         }
       } else if (isSmart09Trigger) {
         smartSlotName = '09h';
-        smartTitle = "💡 CONTROLE INTELIGENTE (09:00)";
-        if (insights.topExpense) {
-          smartBody = `📊 Maior gasto do mês: "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n🎯 Meta de hoje: Mantenha seus limites diários e priorize o que é essencial para proteger seu saldo!`;
+        smartTitle = "💡 MANHÃ (09:00): CONTROLE INTELIGENTE";
+        if (alertLines.length > 0) {
+          smartBody = `Raio-X de Início de Dia:\n` + alertLines.join('\n') + `\n💡 Meta de hoje: Mantenha seus limites para proteger seu saldo!`;
         } else {
           smartBody = "💡 Dica de Ouro: Comece o dia no controle! Registre qualquer novo gasto no FinançasPro para manter sua meta em dia.";
         }
       } else if (isSmart13Trigger) {
         smartSlotName = '13h';
-        smartTitle = "🎯 RAIO-X FINANCEIRO (13:00)";
-        const topStr = insights.topExpense ? `\nMaior despesa: ${insights.topExpense.name} (R$ ${fmt(insights.topExpense.amount)}).` : '';
-        smartBody = `Progresso do mês: ${insights.paidPercentage}% das despesas pagas (R$ ${fmt(insights.totalPaid)} de R$ ${fmt(insights.totalExpenses)}).${topStr}\n💡 Dica: Acompanhe seus gastos na pausa do almoço para evitar excessos à tarde.`;
+        smartTitle = "🎯 TARDE (13:00): RAIO-X & CONTROLE";
+        if (alertLines.length > 0) {
+          smartBody = `Análise do Dashboard no Almoço:\n` + alertLines.join('\n') + `\n💡 Dica: Acompanhe seus gastos para evitar excessos à tarde.`;
+        } else {
+          smartBody = `Progresso do mês: ${dashboard.paidPercentage}% das despesas pagas (R$ ${fmt(dashboard.totalPaid)} de R$ ${fmt(dashboard.totalExpenses)}).\n💡 Dica: Mantenha a disciplina nos gastos do turno da tarde.`;
+        }
       } else if (isSmart21Trigger) {
         smartSlotName = '21h';
-        smartTitle = "✨ 9 DA NOITE - FECHAMENTO INTELIGENTE (21:00)";
-        const topStr = insights.topExpense ? `Sua maior fatura neste mês é "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n` : '';
-        const pendStr = insights.totalPending > 0 ? `Restam R$ ${fmt(insights.totalPending)} em despesas pendentes no mês.\n` : 'Todas as despesas do mês já estão quitadas!\n';
-        smartBody = `${topStr}${pendStr}🌙 Dica da noite: Registre pequenas compras do dia antes de dormir para garantir tranquilidade financeira amanhã!`;
+        smartTitle = "✨ 9 DA NOITE (21:00): FECHAMENTO INTELIGENTE";
+        if (alertLines.length > 0) {
+          smartBody = `Fechamento do Dia:\n` + alertLines.join('\n') + `\n🌙 Dica da noite: Registre pequenas compras do dia antes de descansar!`;
+        } else {
+          const pendStr = dashboard.totalPending > 0 ? `Restam R$ ${fmt(dashboard.totalPending)} em despesas pendentes neste ciclo.\n` : 'Todas as despesas deste ciclo já foram quitadas!\n';
+          smartBody = `${pendStr}🌙 Dica da noite: Registre seus gastos do dia antes de dormir para garantir tranquilidade amanhã!`;
+        }
       }
 
       const smartTag = forceNow ? `financaspro-smart-test-${Date.now()}` : `financaspro-smart-${smartSlotName}-${br.dateStr}`;
-      const sent = await dispatchPushToSubscriptions(userId, subs, smartTitle, smartBody, smartTag);
-      totalDispatched += sent;
+      smartSentCount = await dispatchPushToSubscriptions(userId, subs, smartTitle, smartBody, smartTag);
+      totalDispatched += smartSentCount;
 
       // Mark slot notified
-      if (isSmart09Trigger) markLocalAlertNotified(smart09Key, { slot: 'smart_09h', count: insights.expensesCount });
-      if (isSmart13Trigger) markLocalAlertNotified(smart13Key, { slot: 'smart_13h', count: insights.expensesCount });
-      if (isSmart21Trigger) markLocalAlertNotified(smart21Key, { slot: 'smart_21h', count: insights.expensesCount });
+      if (isSmart09Trigger) markLocalAlertNotified(smart09Key, { slot: 'smart_09h', count: dashboard.alerts.length });
+      if (isSmart13Trigger) markLocalAlertNotified(smart13Key, { slot: 'smart_13h', count: dashboard.alerts.length });
+      if (isSmart21Trigger) markLocalAlertNotified(smart21Key, { slot: 'smart_21h', count: dashboard.alerts.length });
 
       try {
         const db = admin.firestore();
@@ -829,18 +1027,37 @@ async function runBackgroundPushNotificationChecker(
             userId,
             slot: smartSlotName,
             type: "smart",
-            topExpense: insights.topExpense,
-            totalExpenses: insights.totalExpenses,
+            topExpense: dashboard.topExpense,
+            totalExpenses: dashboard.totalExpenses,
+            alertsCount: dashboard.alerts.length,
             dispatchedAt: new Date().toISOString()
           });
         }
       } catch (e) {}
 
-      console.log(`✅ [SMART PUSH] Alerta inteligente das ${smartSlotName} entregue para ${sent} aparelho(s) do usuário ${userId}.`);
+      console.log(`✅ [SMART PUSH] Alerta inteligente das ${smartSlotName} entregue para ${smartSentCount} aparelho(s) do usuário ${userId}.`);
     }
+
+    userReports.push({
+      userId,
+      devices: subs.length,
+      pendingBillsCount: userPendingBills.length,
+      overdueCount: overdueBills.length,
+      dueTodayCount: todayBills.length,
+      smartAlertsCount: dashboard.alerts.length,
+      billsSent: billsSentCount,
+      smartSent: smartSentCount,
+      totalSent: billsSentCount + smartSentCount
+    });
   }
 
-  return { sent: totalDispatched, userCount: userIds.length };
+  return { 
+    sent: totalDispatched, 
+    userCount: userIds.length,
+    users: userReports,
+    brasiliaTime: br.timeStr,
+    brasiliaDate: br.dateStr
+  };
 }
 
 if (!process.env.VERCEL) {
@@ -1493,7 +1710,7 @@ app.get("/api/push/vapid-public-key", async (req, res) => {
 // API route: Save PWA Web Push Subscription for background alerts when app is closed
 app.post("/api/push/subscribe", async (req, res) => {
   try {
-    const { userId, subscription, bills } = req.body;
+    const { userId, subscription, bills, settings } = req.body;
     if (!userId || !subscription) {
       return res.status(400).json({ error: "userId e subscription são obrigatórios." });
     }
@@ -1502,6 +1719,9 @@ app.post("/api/push/subscribe", async (req, res) => {
 
     if (Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
+    }
+    if (settings) {
+      saveLocalUserSettings(userId, settings);
     }
 
     // Backup to Firestore if permitted
@@ -1529,17 +1749,22 @@ app.post("/api/push/subscribe", async (req, res) => {
 // API route: Synchronize user unpaid bills so server can sweep when app is closed
 app.post("/api/push/sync-bills", async (req, res) => {
   try {
-    const { userId, bills } = req.body;
-    if (!userId || !Array.isArray(bills)) {
-      return res.status(400).json({ error: "userId e faturas são obrigatórios." });
+    const { userId, bills, settings } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: "userId é obrigatório." });
     }
 
-    saveLocalUserBills(userId, bills);
+    if (Array.isArray(bills)) {
+      saveLocalUserBills(userId, bills);
+    }
+    if (settings) {
+      saveLocalUserSettings(userId, settings);
+    }
 
-    // Run check immediately to trigger push if any bill is due/overdue right now
+    // Run check in background to trigger push if appropriate
     runBackgroundPushNotificationChecker().catch((e) => console.warn("Background push check err:", e));
 
-    res.json({ success: true, syncedCount: bills.length });
+    res.json({ success: true, syncedCount: Array.isArray(bills) ? bills.length : 0 });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "Erro interno" });
   }
@@ -1549,7 +1774,7 @@ app.post("/api/push/sync-bills", async (req, res) => {
 app.post("/api/push/test-background", async (req, res) => {
   try {
     await ensureVapidKeys();
-    const { userId, delaySeconds = 10, subscription, bills, mode = 'both' } = req.body;
+    const { userId, delaySeconds = 10, subscription, bills, settings, mode = 'both' } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
@@ -1560,6 +1785,9 @@ app.post("/api/push/test-background", async (req, res) => {
     }
     if (bills && Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
+    }
+    if (settings) {
+      saveLocalUserSettings(userId, settings);
     }
 
     let allSubs = getLocalSubscriptions();
@@ -1684,10 +1912,64 @@ app.get("/api/push/status/:userId", (req, res) => {
   }
 });
 
+// API route: Get overall push system status across all registered active users
+app.get("/api/push/all-users-status", (req, res) => {
+  try {
+    const allSubs = getLocalSubscriptions();
+    const allBills = getLocalUserBills();
+    const allSettings = getLocalUserSettings();
+    const notifiedAlerts = getLocalNotifiedAlerts();
+    const br = getBrasiliaDate();
+
+    const userIds = Object.keys(allSubs);
+    const usersSummary = userIds.map(uid => {
+      const subs = allSubs[uid] || [];
+      const bills = allBills[uid] || [];
+      const settings = allSettings[uid] || null;
+
+      const bills08Key = `push_bills_08h_${uid}_${br.dateStr}`;
+      const bills12Key = `push_bills_12h_${uid}_${br.dateStr}`;
+      const bills20Key = `push_bills_20h_${uid}_${br.dateStr}`;
+      const smart09Key = `push_smart_09h_${uid}_${br.dateStr}`;
+      const smart13Key = `push_smart_13h_${uid}_${br.dateStr}`;
+      const smart21Key = `push_smart_21h_${uid}_${br.dateStr}`;
+
+      return {
+        userId: uid,
+        deviceCount: subs.length,
+        billsCount: bills.length,
+        hasSettings: Boolean(settings),
+        income: settings?.income || 0,
+        balance: settings?.balance || 0,
+        slots: {
+          bills08: Boolean(notifiedAlerts[bills08Key]?.notified),
+          smart09: Boolean(notifiedAlerts[smart09Key]?.notified),
+          bills12: Boolean(notifiedAlerts[bills12Key]?.notified),
+          smart13: Boolean(notifiedAlerts[smart13Key]?.notified),
+          bills20: Boolean(notifiedAlerts[bills20Key]?.notified),
+          smart21: Boolean(notifiedAlerts[smart21Key]?.notified)
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      totalRegisteredUsers: userIds.length,
+      currentBrasiliaTime: br.timeStr,
+      currentBrasiliaDate: br.dateStr,
+      users: usersSummary,
+      backgroundSweeperActive: !process.env.VERCEL,
+      sweepInterval: "2 minutos"
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Erro ao consultar status geral" });
+  }
+});
+
 // API route: Immediately trigger notification check for a user (bypassing time constraint)
 app.post("/api/push/trigger-now", async (req, res) => {
   try {
-    const { userId, subscription, bills, mode = 'both' } = req.body;
+    const { userId, subscription, bills, settings, mode = 'both' } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
@@ -1696,6 +1978,9 @@ app.post("/api/push/trigger-now", async (req, res) => {
     }
     if (bills && Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
+    }
+    if (settings) {
+      saveLocalUserSettings(userId, settings);
     }
     const testMode = (mode === 'bills' || mode === 'smart' ? mode : 'both') as 'bills' | 'smart' | 'both';
     const result = await runBackgroundPushNotificationChecker(true, userId, testMode);

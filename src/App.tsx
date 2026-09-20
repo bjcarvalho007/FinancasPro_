@@ -1235,20 +1235,8 @@ function MainApp() {
       setTransactions(items);
       saveLocalUserCache(uid, 'txs', items);
 
-      // Synchronize current month transactions with server for background push notifications
+      // Re-ensure push subscription is synced with latest bills
       if (items.length > 0) {
-        if (getFinancialSnapshotRef.current) {
-          const snap = getFinancialSnapshotRef.current();
-          if (snap) {
-            fetch('/api/push/sync-bills', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(snap)
-            }).catch(() => {});
-          }
-        }
-
-        // Re-ensure push subscription is synced with latest bills
         silentAutoSubscribe(user, items);
       }
     }, (error) => {
@@ -2528,6 +2516,21 @@ function MainApp() {
   useEffect(() => {
     getFinancialSnapshotRef.current = buildFinancialSnapshot;
   }, [buildFinancialSnapshot]);
+
+  // Automatically synchronize financial snapshot with backend for push notifications
+  useEffect(() => {
+    if (!user) return;
+    if (transactions.length > 0 && activeMonthTransactions.length === 0) return;
+
+    const snap = buildFinancialSnapshot();
+    if (!snap) return;
+
+    fetch('/api/push/sync-bills', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(snap)
+    }).catch((e) => console.warn('[PUSH-SYNC] Erro ao sincronizar contas:', e));
+  }, [user, buildFinancialSnapshot, activeMonthTransactions, settings, currentMonthKey, transactions.length]);
 
   // Alert triggers: Monitor upcoming / overdue bills strictly for the current active month
   useEffect(() => {

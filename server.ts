@@ -264,18 +264,39 @@ function saveLocalUserBills(userId: string, data: any) {
   try {
     const store = getLocalUserBills();
     if (Array.isArray(data)) {
-      store[userId] = {
-        userId,
-        bills: data,
-        monthBills: data,
-        pendingBills: data.filter(b => ((Number(b.amount) || 0) - (Number(b.paid_amount) || 0)) > 0),
-        updatedAt: new Date().toISOString()
-      };
+      if (data.length > 0 || !store[userId]) {
+        store[userId] = {
+          userId,
+          bills: data,
+          monthBills: data,
+          pendingBills: data.filter(b => ((Number(b.amount) || 0) - (Number(b.paid_amount) || 0)) > 0),
+          updatedAt: new Date().toISOString()
+        };
+      }
     } else if (data && typeof data === 'object') {
       const existing = (store[userId] && typeof store[userId] === 'object' && !Array.isArray(store[userId])) ? store[userId] : {};
+      
+      const newMonthBills = (Array.isArray(data.monthBills) && data.monthBills.length > 0)
+        ? data.monthBills
+        : (Array.isArray(data.bills) && data.bills.length > 0 ? data.bills : existing.monthBills || []);
+
+      const newPendingBills = (Array.isArray(data.pendingBills) && data.pendingBills.length > 0)
+        ? data.pendingBills
+        : (Array.isArray(data.monthBills) && data.monthBills.length > 0 
+            ? data.monthBills.filter((b: any) => ((Number(b.amount) || 0) - (Number(b.paid_amount) || 0)) > 0) 
+            : existing.pendingBills || []);
+
+      let newSummary = data.summary;
+      if (!newSummary || (Number(newSummary.totalSpentMonth) === 0 && existing.summary && Number(existing.summary.totalSpentMonth) > 0)) {
+        newSummary = existing.summary || data.summary;
+      }
+
       store[userId] = {
         ...existing,
         ...data,
+        monthBills: newMonthBills,
+        pendingBills: newPendingBills,
+        summary: newSummary,
         userId,
         updatedAt: new Date().toISOString()
       };
@@ -375,6 +396,7 @@ interface DashboardAlertItem {
 interface DashboardSmartInsightsData {
   alerts: DashboardAlertItem[];
   topExpense: { name: string; amount: number; category: string } | null;
+  totalAvailable: number;
   totalExpenses: number;
   totalPaid: number;
   totalPending: number;
@@ -396,7 +418,7 @@ function generateDashboardSmartAlerts(
     : `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
   const fmt = (v: number) => (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // 1. Inflows (Renda + Reserva/Mãos + Extras)
+  // 1. Inflows (Total de Entrada = Renda + Saldo em mãos/Reserva + Extras)
   const income = Number(userSettings?.monthlyIncome?.[currentMonthKey] ?? userSettings?.income ?? 0);
   const balance = Number(userSettings?.monthlyBalance?.[currentMonthKey] ?? userSettings?.balance ?? 0);
   const extra = Number(userSettings?.extras?.[currentMonthKey] ?? 0);
@@ -425,9 +447,18 @@ function generateDashboardSmartAlerts(
   let installmentsTotal = 0;
   const overdueItems: string[] = [];
 
-  if (storedSummary?.totalSpentMonth !== undefined && storedSummary?.totalPaidMonth !== undefined) {
-    totalExpenses = Number(storedSummary.totalSpentMonth) || 0;
+  if (storedSummary?.totalSpentMonth !== undefined && Number(storedSummary.totalSpentMonth) > 0) {
+    totalExpenses = Number(storedSummary.totalSpentMonth);
     totalPaid = Number(storedSummary.totalPaidMonth) || 0;
+  } else {
+    for (const tx of activeExpenses) {
+      const amt = Number(tx.amount) > 0 
+        ? Number(tx.amount) 
+        : (Number(tx.total_parcelado) > 0 && tx.installmentsCount ? (Number(tx.total_parcelado) / Number(tx.installmentsCount)) : (Number(tx.total_parcelado) || 0));
+      const paid = Number(tx.paid_amount) || 0;
+      totalExpenses += amt;
+      totalPaid += paid;
+    }
   }
 
   for (const tx of activeExpenses) {
@@ -435,11 +466,6 @@ function generateDashboardSmartAlerts(
       ? Number(tx.amount) 
       : (Number(tx.total_parcelado) > 0 && tx.installmentsCount ? (Number(tx.total_parcelado) / Number(tx.installmentsCount)) : (Number(tx.total_parcelado) || 0));
     const paid = Number(tx.paid_amount) || 0;
-
-    if (storedSummary?.totalSpentMonth === undefined) {
-      totalExpenses += amt;
-      totalPaid += paid;
-    }
 
     if (!topExpense || amt > topExpense.amount) {
       topExpense = {
@@ -462,12 +488,21 @@ function generateDashboardSmartAlerts(
     }
   }
 
-  const totalPending = Math.max(0, totalExpenses - totalPaid);
-  const paidPercentage = totalExpenses > 0 ? Math.round((totalPaid / totalExpenses) * 100) : 100;
-  const leftover = (storedSummary?.leftover !== undefined) ? Number(storedSummary.leftover) : (totalAvailable - totalExpenses);
+  // Total a pagar pendente é o que falta pagar
+  const totalPending = (storedSummary?.totalUnpaidMonth !== undefined)
+    ? Number(storedSummary.totalUnpaidMonth)
+    : Math.max(0, totalExpenses - totalPaid);
+
+  const paidPercentage = totalExpenses > 0 ? Math.round((totalPaid / totalExpenses) * 100) : (totalPending === 0 ? 100 : 0);
+
+  // Sobras Estimada de Caixa é o que sobrou (Total de Entrada - Total de Despesas do Mês)
+  const leftover = (storedSummary?.leftover !== undefined && (storedSummary?.totalSpentMonth !== undefined ? Number(storedSummary.totalSpentMonth) > 0 : true))
+    ? Number(storedSummary.leftover)
+    : (totalAvailable - totalExpenses);
+
   const spentRatio = totalAvailable > 0 ? (totalExpenses / totalAvailable) * 100 : 0;
 
-  // Build exact Dashboard Alerts (reproducing DashboardAnalytics.tsx)
+  // Build exact Dashboard Alerts
   const alerts: DashboardAlertItem[] = [];
 
   // A. Contas Atrasadas
@@ -480,30 +515,48 @@ function generateDashboardSmartAlerts(
     });
   }
 
-  // B. Orçamento e Sobras (Leftover)
-  if (totalAvailable > 0 || totalExpenses > 0) {
+  // B. Total a Pagar Pendente (o que falta pagar)
+  if (totalPending > 0) {
+    alerts.push({
+      id: 'month-pending-unpaid',
+      type: overdueItems.length > 0 ? 'error' : 'warning',
+      title: `Total a Pagar Pendente: R$ ${fmt(totalPending)}`,
+      summary: `É o que falta pagar no mês (R$ ${fmt(totalPaid)} já quitado de R$ ${fmt(totalExpenses)}).`
+    });
+  }
+
+  // C. Sobras Estimada de Caixa (o que sobrou)
+  // CRITICAL: Só gera alerta de sobra se houver despesas no mês para evitar confundir Total de Entrada com Sobra!
+  if (totalExpenses > 0) {
     if (leftover < 0) {
       alerts.push({
         id: 'month-leftover-deficit',
         type: 'error',
-        title: `Gasto acima do orçamento em R$ ${fmt(Math.abs(leftover))}`,
-        summary: `Despesas maiores que a renda disponível. Evite gastos extras para reequilibrar o caixa.`
+        title: `Déficit de Caixa: -R$ ${fmt(Math.abs(leftover))}`,
+        summary: `Despesas maiores que as entradas no mês em R$ ${fmt(Math.abs(leftover))}. Evite novos gastos para restabelecer o equilíbrio.`
       });
     } else if (leftover === 0) {
       alerts.push({
         id: 'month-leftover-zero',
         type: 'warning',
-        title: 'Contas no limite (zero sobras)',
-        summary: 'Todas as receitas cobrem as despesas, mas não resta sobra livre neste ciclo.'
+        title: 'Contas no Limite (Zero Sobras)',
+        summary: 'Todas as receitas cobrem exatamente as despesas, sem sobra livre no caixa.'
       });
     } else {
       alerts.push({
         id: 'month-leftover-surplus',
         type: 'success',
-        title: `Muito bem! Sobrou R$ ${fmt(leftover)} no mês`,
-        summary: `Você gastou menos do que tinha disponível neste ciclo! Saldo livre disponível para guardar ou investir.`
+        title: `Sobra Estimada de Caixa: R$ ${fmt(leftover)}`,
+        summary: `É o que sobrou livre após todas as despesas do mês (Entradas de R$ ${fmt(totalAvailable)} - Despesas de R$ ${fmt(totalExpenses)}).`
       });
     }
+  } else if (totalAvailable > 0) {
+    alerts.push({
+      id: 'month-inflows-ready',
+      type: 'info',
+      title: `Total de Entrada: R$ ${fmt(totalAvailable)}`,
+      summary: `Receita registrada no mês. Lance suas despesas para calcular o que falta pagar e a sobra de caixa.`
+    });
   }
 
   // C. Comprometimento de Renda
@@ -572,6 +625,7 @@ function generateDashboardSmartAlerts(
   return {
     alerts,
     topExpense,
+    totalAvailable,
     totalExpenses,
     totalPaid,
     totalPending,
@@ -937,8 +991,13 @@ async function runBackgroundPushNotificationChecker(
       else if (forceNow) billsSlotName = 'teste';
 
       if (userPendingBills.length === 0) {
-        billsTitle = "✅ Finanças do Mês em Dia";
-        billsBody = "Parabéns! Todas as contas do mês atual estão quitadas. Nenhuma pendência em aberto.";
+        if (sourceArrays.length === 0) {
+          billsTitle = "ℹ️ Sincronize suas Contas";
+          billsBody = "Abra o aplicativo para sincronizar suas despesas do mês com o servidor.";
+        } else {
+          billsTitle = "✅ Finanças do Mês em Dia";
+          billsBody = "Parabéns! Todas as contas do mês atual estão quitadas. Nenhuma pendência em aberto.";
+        }
       } else {
         if (overdueBills.length > 0 && todayBills.length > 0) {
           billsTitle = `⚠️ ${overdueBills.length} em Atraso e ${todayBills.length} Vencendo Hoje`;
@@ -973,7 +1032,7 @@ async function runBackgroundPushNotificationChecker(
           lines.push(`... e mais ${userPendingBills.length - maxDisplay} conta(s) do mês.`);
         }
 
-        const header = `Total a pagar no mês: R$ ${fmt(totalRemaining)} (${userPendingBills.length} pendência${userPendingBills.length > 1 ? 's' : ''}):\n`;
+        const header = `Total a pagar pendente: R$ ${fmt(totalRemaining)} (o que falta pagar):\n`;
         billsBody = header + lines.join('\n');
       }
 
@@ -1030,39 +1089,38 @@ async function runBackgroundPushNotificationChecker(
       const chosenAlerts = dashboard.alerts.slice(0, 3);
       const alertLines = chosenAlerts.map(a => `• ${a.title}: ${a.summary}`);
 
+      const sobraText = dashboard.totalExpenses > 0
+        ? (dashboard.leftover >= 0
+            ? `💎 Sobra Estimada de Caixa: R$ ${fmt(dashboard.leftover)} (o que sobrou)`
+            : `🚨 Déficit de Caixa: -R$ ${fmt(Math.abs(dashboard.leftover))}`)
+        : `💎 Sobra Estimada: Aguardando lançamento de despesas`;
+
+      const summaryOverview = [
+        `💵 Total de Entrada: R$ ${fmt(dashboard.totalAvailable)}`,
+        `⏳ Total a Pagar Pendente: R$ ${fmt(dashboard.totalPending)} (o que falta pagar)`,
+        `✅ Total Já Pago: R$ ${fmt(dashboard.totalPaid)}`,
+        sobraText
+      ].join('\n');
+
+      const diagAlerts = alertLines.filter(l => !l.includes('Sobra Estimada') && !l.includes('Total a Pagar') && !l.includes('Déficit') && !l.includes('Total de Entrada'));
+      const diagSection = diagAlerts.length > 0 ? `\n\n📌 Alertas:\n` + diagAlerts.slice(0, 2).join('\n') : '';
+
       if (forceNow) {
         smartSlotName = 'teste';
-        smartTitle = `💡 Análise Inteligente do Dashboard`;
-        if (alertLines.length > 0) {
-          smartBody = `Resumo das Análises do Dashboard:\n` + alertLines.join('\n');
-        } else {
-          smartBody = `💡 Dica Inteligente: Seu orçamento está equilibrado e sem alertas críticos no momento!`;
-        }
+        smartTitle = `💡 Análise do Dashboard (Mês Atual)`;
+        smartBody = summaryOverview + diagSection;
       } else if (isSmart09Trigger) {
         smartSlotName = '09h';
-        smartTitle = "💡 Controle Inteligente de Gastos";
-        if (alertLines.length > 0) {
-          smartBody = `Raio-X de Início de Dia:\n` + alertLines.join('\n') + `\n💡 Meta de hoje: Mantenha seus limites para proteger seu saldo!`;
-        } else {
-          smartBody = "💡 Dica de Ouro: Comece o dia no controle! Registre qualquer novo gasto no FinançasPro para manter sua meta em dia.";
-        }
+        smartTitle = "💡 Análise do Dashboard (Mês Atual)";
+        smartBody = summaryOverview + diagSection;
       } else if (isSmart13Trigger) {
         smartSlotName = '13h';
-        smartTitle = "🎯 Raio-X & Controle Financeiro";
-        if (alertLines.length > 0) {
-          smartBody = `Análise do Dashboard no Almoço:\n` + alertLines.join('\n') + `\n💡 Dica: Acompanhe seus gastos para evitar excessos à tarde.`;
-        } else {
-          smartBody = `Progresso do mês: ${dashboard.paidPercentage}% das despesas pagas (R$ ${fmt(dashboard.totalPaid)} de R$ ${fmt(dashboard.totalExpenses)}).\n💡 Dica: Mantenha a disciplina nos gastos do turno da tarde.`;
-        }
+        smartTitle = "🎯 Análise do Dashboard (Mês Atual)";
+        smartBody = summaryOverview + diagSection;
       } else if (isSmart21Trigger) {
         smartSlotName = '21h';
-        smartTitle = "✨ Fechamento Financeiro do Dia";
-        if (alertLines.length > 0) {
-          smartBody = `Fechamento do Dia:\n` + alertLines.join('\n') + `\n🌙 Dica da noite: Registre pequenas compras do dia antes de descansar!`;
-        } else {
-          const pendStr = dashboard.totalPending > 0 ? `Restam R$ ${fmt(dashboard.totalPending)} em despesas pendentes neste ciclo.\n` : 'Todas as despesas deste ciclo já foram quitadas!\n';
-          smartBody = `${pendStr}🌙 Dica da noite: Registre seus gastos do dia antes de dormir para garantir tranquilidade amanhã!`;
-        }
+        smartTitle = "✨ Análise do Dashboard (Mês Atual)";
+        smartBody = summaryOverview + diagSection;
       }
 
       const smartTag = forceNow ? `financaspro-smart-test-${Date.now()}` : `financaspro-smart-${smartSlotName}-${br.dateStr}`;

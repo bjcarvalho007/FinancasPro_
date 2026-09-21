@@ -195,13 +195,47 @@ const USER_BILLS_FILE = path.join(storageBaseDir, "user-bills-cache.json");
 const USER_SETTINGS_FILE = path.join(storageBaseDir, "user-settings-cache.json");
 const NOTIFIED_ALERTS_FILE = path.join(storageBaseDir, "notified-alerts-cache.json");
 
-function getLocalUserSettings(): { [userId: string]: any } {
+function readJsonFileSafe(filePath: string, fallbacks: string[] = []): any {
   try {
-    if (fs.existsSync(USER_SETTINGS_FILE)) {
-      return JSON.parse(fs.readFileSync(USER_SETTINGS_FILE, "utf8")) || {};
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+        return data;
+      }
     }
-  } catch (e) {}
+  } catch (_) {}
+
+  for (const fb of fallbacks) {
+    try {
+      if (fb && fb !== filePath && fs.existsSync(fb)) {
+        const data = JSON.parse(fs.readFileSync(fb, "utf8"));
+        if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+          return data;
+        }
+      }
+    } catch (_) {}
+  }
   return {};
+}
+
+function writeJsonFileSafe(filePath: string, data: any, backupPath?: string) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
+    if (backupPath && backupPath !== filePath) {
+      try {
+        fs.writeFileSync(backupPath, JSON.stringify(data, null, 2), "utf8");
+      } catch (_) {}
+    }
+  } catch (e) {
+    console.warn(`⚠️ [CACHE] Falha ao gravar ${filePath}:`, e);
+  }
+}
+
+function getLocalUserSettings(): { [userId: string]: any } {
+  return readJsonFileSafe(USER_SETTINGS_FILE, [
+    path.join(process.cwd(), "user-settings-cache.json"),
+    "/tmp/user-settings-cache.json"
+  ]);
 }
 
 function saveLocalUserSettings(userId: string, settings: any) {
@@ -209,19 +243,17 @@ function saveLocalUserSettings(userId: string, settings: any) {
     if (!userId || !settings) return;
     const data = getLocalUserSettings();
     data[userId] = { ...(data[userId] || {}), ...settings };
-    fs.writeFileSync(USER_SETTINGS_FILE, JSON.stringify(data, null, 2), "utf8");
+    writeJsonFileSafe(USER_SETTINGS_FILE, data, path.join(process.cwd(), "user-settings-cache.json"));
   } catch (e) {
     console.warn("⚠️ Erro ao salvar configurações locais:", e);
   }
 }
 
 function getLocalSubscriptions(): { [userId: string]: any[] } {
-  try {
-    if (fs.existsSync(PUSH_SUBS_FILE)) {
-      return JSON.parse(fs.readFileSync(PUSH_SUBS_FILE, "utf8")) || {};
-    }
-  } catch (e) {}
-  return {};
+  return readJsonFileSafe(PUSH_SUBS_FILE, [
+    path.join(process.cwd(), "push-subscriptions.json"),
+    "/tmp/push-subscriptions.json"
+  ]);
 }
 
 function saveLocalSubscription(userId: string, subscription: any) {
@@ -244,7 +276,7 @@ function saveLocalSubscription(userId: string, subscription: any) {
     } else {
       data[userId].push(subObj);
     }
-    fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(data, null, 2), "utf8");
+    writeJsonFileSafe(PUSH_SUBS_FILE, data, path.join(process.cwd(), "push-subscriptions.json"));
     console.log(`💾 [SUBS] Dispositivo registrado com sucesso para usuário ${userId}. Total registrado: ${data[userId].length}`);
   } catch (e) {
     console.warn("⚠️ Erro ao salvar assinatura local:", e);
@@ -252,56 +284,67 @@ function saveLocalSubscription(userId: string, subscription: any) {
 }
 
 function getLocalUserBills(): { [userId: string]: any } {
-  try {
-    if (fs.existsSync(USER_BILLS_FILE)) {
-      return JSON.parse(fs.readFileSync(USER_BILLS_FILE, "utf8")) || {};
-    }
-  } catch (e) {}
-  return {};
+  return readJsonFileSafe(USER_BILLS_FILE, [
+    path.join(process.cwd(), "user-bills-cache.json"),
+    "/tmp/user-bills-cache.json"
+  ]);
 }
 
 function saveLocalUserBills(userId: string, data: any) {
   try {
     const store = getLocalUserBills();
+    const existing = (store[userId] && typeof store[userId] === 'object' && !Array.isArray(store[userId])) ? store[userId] : {};
+
     if (Array.isArray(data)) {
-      if (data.length > 0 || !store[userId]) {
+      if (data.length > 0 || !existing.monthBills || existing.monthBills.length === 0) {
         store[userId] = {
+          ...existing,
           userId,
           bills: data,
           monthBills: data,
-          pendingBills: data.filter(b => ((Number(b.amount) || 0) - (Number(b.paid_amount) || 0)) > 0),
+          pendingBills: data.filter((b: any) => ((Number(b.amount) || 0) - (Number(b.paid_amount) || 0)) > 0),
           updatedAt: new Date().toISOString()
         };
       }
     } else if (data && typeof data === 'object') {
-      const existing = (store[userId] && typeof store[userId] === 'object' && !Array.isArray(store[userId])) ? store[userId] : {};
-      
-      const newMonthBills = (Array.isArray(data.monthBills) && data.monthBills.length > 0)
+      const incomingMonthBills = Array.isArray(data.monthBills) && data.monthBills.length > 0
         ? data.monthBills
-        : (Array.isArray(data.bills) && data.bills.length > 0 ? data.bills : existing.monthBills || []);
+        : (Array.isArray(data.bills) && data.bills.length > 0 ? data.bills : null);
 
-      const newPendingBills = (Array.isArray(data.pendingBills) && data.pendingBills.length > 0)
+      // Preserve existing bills if incoming is empty/missing
+      const finalMonthBills = incomingMonthBills || existing.monthBills || existing.bills || [];
+
+      const incomingPendingBills = Array.isArray(data.pendingBills) && data.pendingBills.length > 0
         ? data.pendingBills
-        : (Array.isArray(data.monthBills) && data.monthBills.length > 0 
-            ? data.monthBills.filter((b: any) => ((Number(b.amount) || 0) - (Number(b.paid_amount) || 0)) > 0) 
-            : existing.pendingBills || []);
+        : (incomingMonthBills
+            ? incomingMonthBills.filter((b: any) => ((Number(b.amount) || 0) - (Number(b.paid_amount) || 0)) > 0)
+            : null);
 
-      let newSummary = data.summary;
-      if (!newSummary || (Number(newSummary.totalSpentMonth) === 0 && existing.summary && Number(existing.summary.totalSpentMonth) > 0)) {
-        newSummary = existing.summary || data.summary;
+      const finalPendingBills = incomingPendingBills || existing.pendingBills || [];
+
+      let finalSummary = data.summary;
+      // If incoming summary is zeroed out or missing, but existing has non-zero summary, preserve existing!
+      if (!finalSummary || (Number(finalSummary.totalSpentMonth) === 0 && existing.summary && Number(existing.summary.totalSpentMonth) > 0)) {
+        finalSummary = existing.summary || data.summary;
       }
+
+      const finalRawTransactions = (Array.isArray(data.rawTransactions) && data.rawTransactions.length > 0)
+        ? data.rawTransactions
+        : (existing.rawTransactions || []);
 
       store[userId] = {
         ...existing,
         ...data,
-        monthBills: newMonthBills,
-        pendingBills: newPendingBills,
-        summary: newSummary,
+        monthBills: finalMonthBills,
+        pendingBills: finalPendingBills,
+        bills: finalMonthBills,
+        summary: finalSummary,
+        rawTransactions: finalRawTransactions,
         userId,
         updatedAt: new Date().toISOString()
       };
     }
-    fs.writeFileSync(USER_BILLS_FILE, JSON.stringify(store, null, 2), "utf8");
+    writeJsonFileSafe(USER_BILLS_FILE, store, path.join(process.cwd(), "user-bills-cache.json"));
   } catch (e) {
     console.warn("⚠️ Erro ao salvar dados financeiros locais:", e);
   }
@@ -407,6 +450,101 @@ interface DashboardSmartInsightsData {
   expensesCount: number;
 }
 
+function computeServerMonthFinancials(rawTransactions: any[], targetMonthKey: string) {
+  if (!Array.isArray(rawTransactions) || rawTransactions.length === 0) {
+    return null;
+  }
+
+  // Real transactions in the target month
+  const realThisMonth = rawTransactions.filter(t => t.monthKey === targetMonthKey && !t.is_skipped);
+  const normalizedReal = realThisMonth.map(t => {
+    if (t.type === 'parcelas') {
+      const masterId = t.masterId || t.id;
+      const masterTx = rawTransactions.find(m => m.id === masterId) || t;
+      const extraGasto = Number(masterTx.extra_gasto) || 0;
+      const totalOriginalBase = Number(masterTx.total_parcelado) || Number(masterTx.amount) || 0;
+      const count = Number(masterTx.installmentsCount) || 1;
+      const baseInstallment = (Number(masterTx.amount) > 0 && Number(masterTx.amount) !== totalOriginalBase)
+        ? Number(masterTx.amount)
+        : (totalOriginalBase / count);
+      return {
+        ...t,
+        amount: baseInstallment + (extraGasto / count),
+        paid_amount: Number(t.paid_amount) || 0
+      };
+    }
+    return {
+      ...t,
+      amount: Number(t.amount) || 0,
+      paid_amount: Number(t.paid_amount) || 0
+    };
+  });
+
+  // Unique master transactions for fixos & parcelas
+  const masterTransactions = rawTransactions.filter(t => (t.type === 'fixos' || t.type === 'parcelas') && !String(t.id).startsWith('v_'));
+  const mastersMap = new Map<string, any>();
+  for (const tx of masterTransactions) {
+    const key = tx.masterId || `name_${String(tx.name || '').trim().toLowerCase()}`;
+    if (!mastersMap.has(key)) {
+      mastersMap.set(key, tx);
+    }
+  }
+
+  const enriched = [...normalizedReal];
+
+  mastersMap.forEach(masterTx => {
+    const exists = normalizedReal.some(t => {
+      if (t.id === masterTx.id) return true;
+      if (masterTx.masterId && t.masterId === masterTx.masterId) return true;
+      if (t.masterId === masterTx.id) return true;
+      if (String(t.name || '').trim().toLowerCase() === String(masterTx.name || '').trim().toLowerCase()) return true;
+      return false;
+    });
+
+    if (!exists) {
+      const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? String(masterTx.createdAt).substring(0, 7) : targetMonthKey);
+      const [sY, sM] = startMonthKey.split('-').map(Number);
+      const [tY, tM] = targetMonthKey.split('-').map(Number);
+      const monthsDiff = (tY - sY) * 12 + (tM - sM);
+      if (monthsDiff < 0) return;
+
+      if (masterTx.type === 'parcelas') {
+        const count = Number(masterTx.installmentsCount) || 1;
+        if (monthsDiff >= count) return;
+      }
+
+      let amount = Number(masterTx.amount) || 0;
+      if (masterTx.type === 'parcelas') {
+        const count = Number(masterTx.installmentsCount) || 1;
+        const totalBase = Number(masterTx.total_parcelado) || amount;
+        amount = totalBase / count;
+      }
+
+      enriched.push({
+        ...masterTx,
+        id: `v_${masterTx.masterId || masterTx.id}_${targetMonthKey}`,
+        monthKey: targetMonthKey,
+        amount,
+        paid_amount: 0
+      });
+    }
+  });
+
+  const monthBills = enriched.filter(t => t.type !== 'rendas' && t.type !== 'entradas' && t.type !== 'receita' && !t.is_skipped);
+  const pendingBills = monthBills.filter(t => (Number(t.amount) - Number(t.paid_amount)) > 0);
+  const totalSpent = monthBills.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const totalPaid = monthBills.reduce((acc, t) => acc + (Number(t.paid_amount) || 0), 0);
+  const totalUnpaid = Math.max(0, totalSpent - totalPaid);
+
+  return {
+    monthBills,
+    pendingBills,
+    totalSpent,
+    totalPaid,
+    totalUnpaid
+  };
+}
+
 function generateDashboardSmartAlerts(
   userData: any,
   userSettings: any,
@@ -426,9 +564,17 @@ function generateDashboardSmartAlerts(
   const totalAvailable = (storedSummary?.totalAvailable !== undefined) ? Number(storedSummary.totalAvailable) : (income + balance + extra);
 
   // 2. Identify month expenses
-  const rawList: any[] = (userData && typeof userData === 'object')
+  let rawList: any[] = (userData && typeof userData === 'object')
     ? (userData.monthBills || userData.bills || (Array.isArray(userData) ? userData : []))
     : (Array.isArray(userData) ? userData : []);
+
+  // If rawList is empty, check if we can compute from rawTransactions
+  if (rawList.length === 0 && userData && Array.isArray(userData.rawTransactions) && userData.rawTransactions.length > 0) {
+    const projected = computeServerMonthFinancials(userData.rawTransactions, currentMonthKey);
+    if (projected && projected.monthBills.length > 0) {
+      rawList = projected.monthBills;
+    }
+  }
 
   const monthExpenses = rawList.filter(t => {
     if (!t || !t.name) return false;
@@ -614,13 +760,15 @@ function generateDashboardSmartAlerts(
     });
   }
 
-  // G. Progresso de Pagamento
-  alerts.push({
-    id: 'month-progress',
-    type: paidPercentage >= 80 ? 'success' : 'info',
-    title: `Progresso: ${paidPercentage}% das contas quitadas`,
-    summary: `R$ ${fmt(totalPaid)} pagos de R$ ${fmt(totalExpenses)} planejados (restam R$ ${fmt(totalPending)}).`
-  });
+  // G. Progresso de Pagamento (somente se houver despesas planejadas no mês)
+  if (totalExpenses > 0) {
+    alerts.push({
+      id: 'month-progress',
+      type: paidPercentage >= 80 ? 'success' : 'info',
+      title: `Progresso: ${paidPercentage}% das contas quitadas`,
+      summary: `R$ ${fmt(totalPaid)} pagos de R$ ${fmt(totalExpenses)} planejados (restam R$ ${fmt(totalPending)}).`
+    });
+  }
 
   return {
     alerts,
@@ -799,6 +947,14 @@ async function runBackgroundPushNotificationChecker(
       if (Array.isArray(userStored.bills)) sourceArrays.push(...userStored.bills);
     } else if (Array.isArray(userStored)) {
       sourceArrays.push(...userStored);
+    }
+
+    // If sourceArrays is empty, check if we can compute from rawTransactions
+    if (sourceArrays.length === 0 && userStored && Array.isArray(userStored.rawTransactions) && userStored.rawTransactions.length > 0) {
+      const projected = computeServerMonthFinancials(userStored.rawTransactions, userCurrentMonthKey);
+      if (projected && projected.monthBills.length > 0) {
+        sourceArrays.push(...projected.monthBills);
+      }
     }
 
     // Deduplicate by unique id or name+due+monthKey
@@ -1079,8 +1235,13 @@ async function runBackgroundPushNotificationChecker(
       isSmart13Trigger || 
       isSmart21Trigger;
 
+    // Suppress scheduled smart insights if no expenses are recorded for the month to prevent sending all-zero reports!
+    if (!forceNow && shouldSendSmart && dashboard.totalExpenses === 0) {
+      console.log(`ℹ️ [SMART PUSH] Usuário ${userId} sem despesas registradas no mês atual. Alerta de análise suprimido para evitar envio de dados zerados.`);
+    }
+
     let smartSentCount = 0;
-    if (shouldSendSmart) {
+    if (shouldSendSmart && (dashboard.totalExpenses > 0 || forceNow)) {
       let smartSlotName = 'manual';
       let smartTitle = '';
       let smartBody = '';
@@ -1092,8 +1253,10 @@ async function runBackgroundPushNotificationChecker(
       const sobraText = dashboard.totalExpenses > 0
         ? (dashboard.leftover >= 0
             ? `💎 Sobra Estimada de Caixa: R$ ${fmt(dashboard.leftover)} (o que sobrou)`
-            : `🚨 Déficit de Caixa: -R$ ${fmt(Math.abs(dashboard.leftover))}`)
-        : `💎 Sobra Estimada: Aguardando lançamento de despesas`;
+            : `🚨 Déficit de Caixa: -R$ ${fmt(Math.abs(dashboard.leftover))} (despesas superam entradas)`)
+        : (dashboard.leftover > 0 && forceNow
+            ? `💎 Sobra Estimada de Caixa: R$ ${fmt(dashboard.leftover)} (o que sobrou)`
+            : `💎 Sobra Estimada: R$ 0,00`);
 
       const summaryOverview = [
         `💵 Total de Entrada: R$ ${fmt(dashboard.totalAvailable)}`,
@@ -1102,7 +1265,13 @@ async function runBackgroundPushNotificationChecker(
         sobraText
       ].join('\n');
 
-      const diagAlerts = alertLines.filter(l => !l.includes('Sobra Estimada') && !l.includes('Total a Pagar') && !l.includes('Déficit') && !l.includes('Total de Entrada'));
+      const diagAlerts = alertLines.filter(l => 
+        !l.includes('Sobra Estimada') && 
+        !l.includes('Total a Pagar') && 
+        !l.includes('Déficit') && 
+        !l.includes('Total de Entrada') &&
+        !l.includes('0,00 planejados')
+      );
       const diagSection = diagAlerts.length > 0 ? `\n\n📌 Alertas:\n` + diagAlerts.slice(0, 2).join('\n') : '';
 
       if (forceNow) {
@@ -1871,18 +2040,19 @@ app.post("/api/push/subscribe", async (req, res) => {
 // API route: Synchronize user unpaid bills so server can sweep when app is closed
 app.post("/api/push/sync-bills", async (req, res) => {
   try {
-    const { userId, bills, monthBills, pendingBills, summary, currentMonthKey, settings } = req.body;
+    const { userId, bills, monthBills, pendingBills, summary, currentMonthKey, settings, rawTransactions } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
 
-    if (monthBills || pendingBills || summary || currentMonthKey) {
+    if (monthBills || pendingBills || summary || currentMonthKey || rawTransactions) {
       saveLocalUserBills(userId, {
         userId,
         currentMonthKey,
         monthBills: monthBills || bills || [],
         pendingBills: pendingBills || [],
         summary,
+        rawTransactions: Array.isArray(rawTransactions) ? rawTransactions : [],
         bills: monthBills || bills || []
       });
     } else if (Array.isArray(bills)) {
@@ -1891,9 +2061,6 @@ app.post("/api/push/sync-bills", async (req, res) => {
     if (settings) {
       saveLocalUserSettings(userId, settings);
     }
-
-    // Run check in background to trigger push if appropriate
-    runBackgroundPushNotificationChecker().catch((e) => console.warn("Background push check err:", e));
 
     res.json({ success: true, syncedCount: Array.isArray(monthBills || bills) ? (monthBills || bills).length : 0 });
   } catch (err: any) {
@@ -1905,7 +2072,7 @@ app.post("/api/push/sync-bills", async (req, res) => {
 app.post("/api/push/test-background", async (req, res) => {
   try {
     await ensureVapidKeys();
-    const { userId, delaySeconds = 10, subscription, bills, monthBills, pendingBills, summary, currentMonthKey, settings, mode = 'both' } = req.body;
+    const { userId, delaySeconds = 10, subscription, bills, monthBills, pendingBills, summary, currentMonthKey, settings, rawTransactions, mode = 'both' } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
@@ -1914,13 +2081,14 @@ app.post("/api/push/test-background", async (req, res) => {
     if (subscription) {
       saveLocalSubscription(userId, subscription);
     }
-    if (monthBills || pendingBills || summary || currentMonthKey) {
+    if (monthBills || pendingBills || summary || currentMonthKey || rawTransactions) {
       saveLocalUserBills(userId, {
         userId,
         currentMonthKey,
         monthBills: monthBills || bills || [],
         pendingBills: pendingBills || [],
         summary,
+        rawTransactions: Array.isArray(rawTransactions) ? rawTransactions : [],
         bills: monthBills || bills || []
       });
     } else if (bills && Array.isArray(bills)) {

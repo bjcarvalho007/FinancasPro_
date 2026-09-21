@@ -160,6 +160,7 @@ function MainApp() {
   
   // App Data State loaded directly from Firestore
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [hasLoadedTransactions, setHasLoadedTransactions] = useState<boolean>(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [settings, setSettings] = useState<Setting | null>(null);
@@ -181,6 +182,7 @@ function MainApp() {
     const cachedTxs = getLocalUserCache(uid, 'txs', null);
     if (cachedTxs && Array.isArray(cachedTxs) && cachedTxs.length > 0) {
       setTransactions(cachedTxs);
+      setHasLoadedTransactions(true);
     }
 
     const cachedCats = getLocalUserCache(uid, 'cats', null);
@@ -1233,6 +1235,7 @@ function MainApp() {
         items.push(docSnap.data() as Transaction);
       });
       setTransactions(items);
+      setHasLoadedTransactions(true);
       saveLocalUserCache(uid, 'txs', items);
 
       // Re-ensure push subscription is synced with latest bills
@@ -1280,21 +1283,6 @@ function MainApp() {
         saveLocalUserCache(uid, 'settings', data);
         if (data.theme) setTheme(data.theme);
         if (data.currency) setCurrency(data.currency);
-
-        // Keep server background checker informed of latest user financial settings
-        fetch('/api/push/sync-bills', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: uid,
-            settings: {
-              income: data.income || 0,
-              balance: data.balance || 0,
-              monthlyIncome: data.monthlyIncome || {},
-              extras: data.extras || {}
-            }
-          })
-        }).catch(() => {});
       } else {
         // Bootstrap standard empty settings if none present
         const initData: Setting = {
@@ -2509,9 +2497,27 @@ function MainApp() {
       monthBills: normMonthBills,
       pendingBills: normPendingBills,
       allBills: normMonthBills,
-      bills: normPendingBills
+      bills: normPendingBills,
+      rawTransactions: transactions.map(t => ({
+        id: t.id,
+        name: t.name,
+        amount: Number(t.amount) || 0,
+        paid_amount: Number(t.paid_amount) || 0,
+        type: t.type,
+        cat: t.cat,
+        due: t.due,
+        monthKey: t.monthKey,
+        isOverdue: t.isOverdue,
+        is_skipped: t.is_skipped,
+        total_parcelado: t.total_parcelado,
+        installmentsCount: t.installmentsCount,
+        masterId: t.masterId,
+        extra_gasto: t.extra_gasto,
+        createdAt: t.createdAt,
+        updatedAt: t.updatedAt
+      }))
     };
-  }, [user, settings, currentMonthKey, activeMonthTransactions, calendarDate]);
+  }, [user, settings, currentMonthKey, activeMonthTransactions, calendarDate, transactions]);
 
   useEffect(() => {
     getFinancialSnapshotRef.current = buildFinancialSnapshot;
@@ -2519,7 +2525,7 @@ function MainApp() {
 
   // Automatically synchronize financial snapshot with backend for push notifications
   useEffect(() => {
-    if (!user) return;
+    if (!user || !hasLoadedTransactions) return;
     if (transactions.length > 0 && activeMonthTransactions.length === 0) return;
 
     const snap = buildFinancialSnapshot();
@@ -2530,7 +2536,7 @@ function MainApp() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(snap)
     }).catch((e) => console.warn('[PUSH-SYNC] Erro ao sincronizar contas:', e));
-  }, [user, buildFinancialSnapshot, activeMonthTransactions, settings, currentMonthKey, transactions.length]);
+  }, [user, hasLoadedTransactions, buildFinancialSnapshot, activeMonthTransactions, settings, currentMonthKey, transactions.length]);
 
   // Alert triggers: Monitor upcoming / overdue bills strictly for the current active month
   useEffect(() => {
@@ -2633,17 +2639,7 @@ function MainApp() {
       }).catch(e => console.warn('SW Ready check failed:', e));
     }
 
-    // Sync full financial snapshot to Express backend for accurate background OS push sweeps
-    if (user) {
-      const snap = buildFinancialSnapshot();
-      if (snap) {
-        fetch('/api/push/sync-bills', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(snap)
-        }).catch(() => {});
-      }
-    }
+    // Note: Financial snapshot synchronization with backend is handled by dedicated guarded useEffect above
 
     if (expiring.length > 0) {
       // Auto-display prominent modal on load/sync if not snoozed or disabled

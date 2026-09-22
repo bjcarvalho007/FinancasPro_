@@ -130,6 +130,9 @@
       "schema": "notification",
       "description": "User notifications regarding approaching bills or events"
     },
+    "/push_registry/{docId}": {
+      "description": "Push notification subscriptions and scheduled alert snapshots"
+    },
     "/tokens_pagos/{tokenId}": {
       "schema": "token_pago",
       "description": "Secure paid tokens for restricted registrations"

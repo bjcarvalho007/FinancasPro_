@@ -835,6 +835,127 @@ async function dispatchPushToSubscriptions(
   return sentCount;
 }
 
+function getFirebaseWebConfig() {
+  let config: any = {};
+  try {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(configPath)) {
+      config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    }
+  } catch (e) {}
+  return {
+    projectId: process.env.FIREBASE_PROJECT_ID || config.projectId || "financaspro-bcbb4",
+    apiKey: process.env.FIREBASE_API_KEY || config.apiKey || "AIzaSyCJBEyT3saaWEdNhABwnLvGvPcgDJy18j0"
+  };
+}
+
+// Resilient Firestore REST synchronizer ensuring subscriptions and financial snapshots persist across serverless instances and cold starts
+async function syncFromFirestoreRegistry(userSubsMap: { [userId: string]: any[] }) {
+  const { projectId, apiKey } = getFirebaseWebConfig();
+  if (!apiKey || !projectId) return;
+
+  try {
+    const indexUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/push_registry/_index?key=${apiKey}`;
+    const res = await fetch(indexUrl);
+    if (!res.ok) return;
+
+    const indexData: any = await res.json();
+    const rawValues = indexData?.fields?.userIds?.arrayValue?.values || [];
+    const userIds: string[] = rawValues.map((v: any) => v?.stringValue).filter(Boolean);
+
+    for (const uid of userIds) {
+      try {
+        const userUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/push_registry/${uid}?key=${apiKey}`;
+        const uRes = await fetch(userUrl);
+        if (!uRes.ok) continue;
+
+        const uDoc: any = await uRes.json();
+        const payloadStr = uDoc?.fields?.payload?.stringValue;
+        if (payloadStr) {
+          const parsed = JSON.parse(payloadStr);
+          if (parsed.subscription) {
+            saveLocalSubscription(uid, parsed.subscription);
+            if (!userSubsMap[uid]) userSubsMap[uid] = [];
+            const subObj = typeof parsed.subscription === 'string' ? JSON.parse(parsed.subscription) : parsed.subscription;
+            if (subObj?.endpoint && !userSubsMap[uid].some(s => s?.endpoint === subObj.endpoint)) {
+              userSubsMap[uid].push(subObj);
+            }
+          }
+          if (parsed.monthBills || parsed.pendingBills || parsed.currentMonthKey) {
+            saveLocalUserBills(uid, {
+              userId: uid,
+              currentMonthKey: parsed.currentMonthKey,
+              monthBills: parsed.monthBills || [],
+              pendingBills: parsed.pendingBills || [],
+              summary: parsed.summary,
+              rawTransactions: Array.isArray(parsed.rawTransactions) ? parsed.rawTransactions : [],
+              bills: parsed.monthBills || []
+            });
+          }
+          if (parsed.settings) {
+            saveLocalUserSettings(uid, parsed.settings);
+          }
+        }
+      } catch (uErr) {
+        console.warn(`[REGISTRY SYNC] Falha ao processar dados de push do usuário ${uid}:`, uErr);
+      }
+    }
+    if (userIds.length > 0) {
+      console.log(`✅ [REGISTRY SYNC] Sincronização via Firestore REST concluída para ${userIds.length} usuário(s).`);
+    }
+  } catch (err: any) {
+    console.warn("⚠️ [REGISTRY SYNC] Falha ao consultar push_registry:", err?.message || err);
+  }
+}
+
+async function syncNotifiedAlertsWithFirestore(keys: string[], notifiedAlerts: { [alertKey: string]: AlertRecord }) {
+  const { projectId, apiKey } = getFirebaseWebConfig();
+  if (!apiKey || !projectId) return;
+
+  for (const k of keys) {
+    if (!notifiedAlerts[k]?.notified) {
+      try {
+        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/notified_alerts/${k}?key=${apiKey}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const doc: any = await res.json();
+          notifiedAlerts[k] = {
+            notified: true,
+            timestamp: doc?.fields?.dispatchedAt?.stringValue || new Date().toISOString(),
+            timeStr: doc?.fields?.timeStr?.stringValue || '',
+            slot: doc?.fields?.slot?.stringValue || 'cloud',
+            count: Number(doc?.fields?.count?.integerValue || 0)
+          };
+        }
+      } catch (_) {}
+    }
+  }
+}
+
+async function recordAlertInFirestore(alertKey: string, meta: { userId: string; slot: string; type: string; count: number; totalRemaining?: number }) {
+  const { projectId, apiKey } = getFirebaseWebConfig();
+  if (!apiKey || !projectId) return;
+
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/notified_alerts/${alertKey}?key=${apiKey}`;
+    await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fields: {
+          notified: { booleanValue: true },
+          userId: { stringValue: meta.userId },
+          slot: { stringValue: meta.slot },
+          type: { stringValue: meta.type },
+          count: { integerValue: String(meta.count) },
+          totalRemaining: { doubleValue: meta.totalRemaining || 0 },
+          dispatchedAt: { stringValue: new Date().toISOString() }
+        }
+      })
+    });
+  } catch (_) {}
+}
+
 // Background Checker Task for push notifications when browser is closed
 async function runBackgroundPushNotificationChecker(
   forceNow: boolean = false, 
@@ -847,7 +968,10 @@ async function runBackgroundPushNotificationChecker(
 
   const userSubsMap: { [userId: string]: any[] } = getLocalSubscriptions();
 
-  // Supplement with Firestore subscriptions if accessible
+  // 1. First supplement with Firestore REST registry to guarantee persistence across cold starts & container restarts
+  await syncFromFirestoreRegistry(userSubsMap);
+
+  // 2. Supplement with Firestore Admin SDK subscriptions if accessible
   try {
     const db = admin.firestore();
     const subsSnapshot = await db.collection("push_subscriptions").get();
@@ -934,9 +1058,8 @@ async function runBackgroundPushNotificationChecker(
     const brDay = parseInt(br.dateStr.split('-')[2], 10) || now.getDate();
     const brTodayNoon = new Date(brYear, brMonth, brDay, 12, 0, 0);
 
-    const userCurrentMonthKey = (userStored && typeof userStored === 'object' && userStored.currentMonthKey)
-      ? userStored.currentMonthKey
-      : `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
+    const realBrasiliaMonthKey = `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
+    const userCurrentMonthKey = realBrasiliaMonthKey;
 
     // 1. Gather all potential bill sources to ensure no overdue or pending bill is missed
     const sourceArrays: any[] = [];
@@ -989,11 +1112,6 @@ async function runBackgroundPushNotificationChecker(
       if (tx.type === 'rendas' || tx.type === 'entradas' || tx.type === 'receita') continue;
       if (tx.is_skipped) continue;
 
-      // STRICTLY CURRENT MONTH: all alerts and notifications are about the current active month only!
-      if (tx.monthKey && tx.monthKey !== userCurrentMonthKey) {
-        continue;
-      }
-
       const amount = Number(tx.amount) > 0 
         ? Number(tx.amount) 
         : (Number(tx.total_parcelado) > 0 && tx.installmentsCount ? (Number(tx.total_parcelado) / Number(tx.installmentsCount)) : (Number(tx.total_parcelado) || 0));
@@ -1003,38 +1121,54 @@ async function runBackgroundPushNotificationChecker(
       // If remaining is 0, this bill is completely paid - not pending!
       if (amount <= 0 || remaining <= 0) continue;
 
+      // Filter out bills from future months
+      if (tx.monthKey && tx.monthKey > userCurrentMonthKey) {
+        continue;
+      }
+
       const dueStr = tx.due ? String(tx.due).trim() : '';
       let isOverdue = false;
       let isDueToday = false;
       let diffDays = 999;
       let dueDate: Date | null = null;
 
+      // If from a past month and still unpaid, it is an overdue debt!
+      if (tx.monthKey && tx.monthKey < userCurrentMonthKey) {
+        isOverdue = true;
+        diffDays = -1;
+      }
+
       if (dueStr) {
         if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
           const parts = dueStr.split("-").map(Number);
           const dueMKey = `${parts[0]}-${String(parts[1]).padStart(2, '0')}`;
-          if (dueMKey !== userCurrentMonthKey) {
-            continue; // Belongs to a different month
+          if (dueMKey > userCurrentMonthKey) {
+            continue; // Belongs to a future month
           }
-          dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+          if (dueMKey < userCurrentMonthKey) {
+            isOverdue = true;
+            diffDays = -1;
+          } else {
+            dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+          }
         } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dueStr)) {
           const parts = dueStr.split("/").map(Number);
           const dueMKey = `${parts[2]}-${String(parts[1]).padStart(2, '0')}`;
-          if (dueMKey !== userCurrentMonthKey) {
-            continue; // Belongs to a different month
+          if (dueMKey > userCurrentMonthKey) {
+            continue; // Belongs to a future month
           }
-          dueDate = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
+          if (dueMKey < userCurrentMonthKey) {
+            isOverdue = true;
+            diffDays = -1;
+          } else {
+            dueDate = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
+          }
         } else {
           const dayMatch = dueStr.match(/\d+/);
           if (dayMatch) {
             const dueDay = parseInt(dayMatch[0], 10);
-            let dueYear = brYear;
-            let dueMonth = brMonth;
-            if (userCurrentMonthKey && /^\d{4}-\d{2}$/.test(userCurrentMonthKey)) {
-              const mParts = userCurrentMonthKey.split("-").map(Number);
-              dueYear = mParts[0];
-              dueMonth = mParts[1] - 1;
-            }
+            const dueYear = brYear;
+            const dueMonth = brMonth;
             const maxDays = new Date(dueYear, dueMonth + 1, 0).getDate();
             const safeDay = Math.min(Math.max(1, dueDay), maxDays);
             dueDate = new Date(dueYear, dueMonth, safeDay, 12, 0, 0);
@@ -1096,10 +1230,11 @@ async function runBackgroundPushNotificationChecker(
     const smart13Key = `push_smart_13h_${userId}_${br.dateStr}`;
     const smart21Key = `push_smart_21h_${userId}_${br.dateStr}`;
 
-    // Sync with Firestore notified_alerts to guarantee persistent memory across restarts
+    // Sync with Firestore notified_alerts (both REST and Admin SDK) to guarantee persistent memory across cold starts
+    const keysToCheck = [bills08Key, bills12Key, bills20Key, smart09Key, smart13Key, smart21Key];
+    await syncNotifiedAlertsWithFirestore(keysToCheck, notifiedAlerts);
     try {
       const db = admin.firestore();
-      const keysToCheck = [bills08Key, bills12Key, bills20Key, smart09Key, smart13Key, smart21Key];
       for (const k of keysToCheck) {
         if (!notifiedAlerts[k]?.notified) {
           const docSnap = await db.collection("notified_alerts").doc(k).get();
@@ -1201,10 +1336,17 @@ async function runBackgroundPushNotificationChecker(
       if (isBills12Trigger) markLocalAlertNotified(bills12Key, { slot: 'bills_12h', count: userPendingBills.length });
       if (isBills20Trigger) markLocalAlertNotified(bills20Key, { slot: 'bills_20h', count: userPendingBills.length });
 
-      try {
-        const db = admin.firestore();
-        const activeSlotKey = isBills08Trigger ? bills08Key : (isBills12Trigger ? bills12Key : (isBills20Trigger ? bills20Key : null));
-        if (activeSlotKey) {
+      const activeSlotKey = isBills08Trigger ? bills08Key : (isBills12Trigger ? bills12Key : (isBills20Trigger ? bills20Key : null));
+      if (activeSlotKey) {
+        await recordAlertInFirestore(activeSlotKey, {
+          userId,
+          slot: billsSlotName,
+          type: "bills",
+          count: userPendingBills.length,
+          totalRemaining
+        });
+        try {
+          const db = admin.firestore();
           await db.collection("notified_alerts").doc(activeSlotKey).set({
             userId,
             slot: billsSlotName,
@@ -1213,12 +1355,24 @@ async function runBackgroundPushNotificationChecker(
             totalRemaining,
             dispatchedAt: new Date().toISOString()
           });
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
 
       console.log(`✅ [BILLS PUSH] Alerta entregue para ${billsSentCount} aparelho(s) do usuário ${userId}.`);
     } else if (shouldSendBills && userPendingBills.length === 0) {
-      console.log(`ℹ️ [BILLS PUSH] Usuário ${userId} está com todas as contas quitadas. Alerta programado suprimido.`);
+      if (isBills08Trigger && sourceArrays.length > 0) {
+        // At 08:00 AM, send positive confirmation if user has bills configured and all are paid!
+        const billsTag = `financas_bills_quitadas_08h_${br.dateStr}`;
+        const billsTitle = "✅ Finanças do Mês em Dia!";
+        const billsBody = "Todas as suas contas cadastradas para este mês estão quitadas. Nenhuma pendência para hoje.";
+        billsSentCount = await dispatchPushToSubscriptions(userId, subs, billsTitle, billsBody, billsTag);
+        totalDispatched += billsSentCount;
+        markLocalAlertNotified(bills08Key, { slot: 'bills_08h', count: 0 });
+        await recordAlertInFirestore(bills08Key, { userId, slot: '08h', type: 'bills_all_paid', count: 0 });
+        console.log(`✅ [BILLS PUSH] Confirmação de contas quitadas entregue às 08h para usuário ${userId}.`);
+      } else {
+        console.log(`ℹ️ [BILLS PUSH] Usuário ${userId} está com todas as contas quitadas. Alerta programado suprimido.`);
+      }
     }
 
     // Small delay between alerts during manual test if both are requested
@@ -1301,10 +1455,16 @@ async function runBackgroundPushNotificationChecker(
       if (isSmart13Trigger) markLocalAlertNotified(smart13Key, { slot: 'smart_13h', count: dashboard.alerts.length });
       if (isSmart21Trigger) markLocalAlertNotified(smart21Key, { slot: 'smart_21h', count: dashboard.alerts.length });
 
-      try {
-        const db = admin.firestore();
-        const activeSmartSlotKey = isSmart09Trigger ? smart09Key : (isSmart13Trigger ? smart13Key : (isSmart21Trigger ? smart21Key : null));
-        if (activeSmartSlotKey) {
+      const activeSmartSlotKey = isSmart09Trigger ? smart09Key : (isSmart13Trigger ? smart13Key : (isSmart21Trigger ? smart21Key : null));
+      if (activeSmartSlotKey) {
+        await recordAlertInFirestore(activeSmartSlotKey, {
+          userId,
+          slot: smartSlotName,
+          type: "smart",
+          count: dashboard.alerts.length
+        });
+        try {
+          const db = admin.firestore();
           await db.collection("notified_alerts").doc(activeSmartSlotKey).set({
             userId,
             slot: smartSlotName,
@@ -1314,8 +1474,8 @@ async function runBackgroundPushNotificationChecker(
             alertsCount: dashboard.alerts.length,
             dispatchedAt: new Date().toISOString()
           });
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
 
       console.log(`✅ [SMART PUSH] Alerta inteligente das ${smartSlotName} entregue para ${smartSentCount} aparelho(s) do usuário ${userId}.`);
     }
@@ -2040,9 +2200,13 @@ app.post("/api/push/subscribe", async (req, res) => {
 // API route: Synchronize user unpaid bills so server can sweep when app is closed
 app.post("/api/push/sync-bills", async (req, res) => {
   try {
-    const { userId, bills, monthBills, pendingBills, summary, currentMonthKey, settings, rawTransactions } = req.body;
+    const { userId, subscription, bills, monthBills, pendingBills, summary, currentMonthKey, settings, rawTransactions } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
+    }
+
+    if (subscription) {
+      saveLocalSubscription(userId, subscription);
     }
 
     if (monthBills || pendingBills || summary || currentMonthKey || rawTransactions) {

@@ -171,6 +171,22 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidId(subId) && existing().userId == request.auth.uid && incoming().userId == request.auth.uid;
     }
 
+    // Resilient push notification registry supporting serverless sweeps and background alarms
+    match /push_registry/{docId} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if isSignedIn() && (docId == request.auth.uid || docId == '_index');
+      allow delete: if isSignedIn() && docId == request.auth.uid;
+    }
+
+    // Slot execution records to prevent duplicate push alerts across serverless cold starts
+    match /notified_alerts/{alertId} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if true;
+      allow delete: if false;
+    }
+
     match /registrations/{registrationId} {
       allow get: if true;
       allow create: if isSignedIn() && isValidId(registrationId) && isValidRegistration(incoming());

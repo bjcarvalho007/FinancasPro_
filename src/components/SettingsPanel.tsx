@@ -3,7 +3,7 @@ import { Transaction } from '../types';
 import { auth, db } from '../firebase';
 import { useLanguage } from '../utils/i18n';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
-import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, setDoc, doc, arrayUnion } from 'firebase/firestore';
 import { Settings, Download, Trash2, ShieldAlert, ShieldCheck, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle, HelpCircle, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportPremiumPDF, exportPremiumSpreadsheet } from '../utils/reportGenerator';
@@ -218,7 +218,12 @@ export default function SettingsPanel({
           })
         }).catch(() => {});
 
-        // 2. Backup to Firestore
+        // 2. Cache locally
+        try {
+          localStorage.setItem('financaspro_active_sub', JSON.stringify(sub));
+        } catch (_) {}
+
+        // 3. Backup to Firestore push_subscriptions
         try {
           const cleanEndpoint = sub.endpoint
             .replace(/[^a-zA-Z0-9]/g, '_')
@@ -233,6 +238,52 @@ export default function SettingsPanel({
             updatedAt: new Date().toISOString()
           });
         } catch (e) {}
+
+        // 4. Backup to resilient push_registry for background sweeps
+        try {
+          const snap = getFinancialSnapshot ? getFinancialSnapshot() : null;
+          const currentYear = new Date().getFullYear();
+          const currentMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+          const defaultMonthKey = `${currentYear}-${currentMonth}`;
+
+          const registryPayload = JSON.stringify({
+            userId: auth.currentUser.uid,
+            subscription: sub,
+            currentMonthKey: snap?.currentMonthKey || defaultMonthKey,
+            settings: snap?.settings || {
+              income: baseIncome || settings?.income || 0,
+              balance: baseBalance || settings?.balance || 0,
+              monthlyIncome: settings?.monthlyIncome || {},
+              monthlyBalance: settings?.monthlyBalance || {},
+              extras: settings?.extras || {}
+            },
+            monthBills: (transactions || []).map(t => ({
+              id: t.id,
+              name: t.name,
+              due: t.due,
+              amount: Number(t.amount) || 0,
+              paid_amount: Number(t.paid_amount) || 0,
+              type: t.type,
+              monthKey: t.monthKey,
+              isOverdue: t.isOverdue,
+              cat: t.cat || 'Geral'
+            })),
+            updatedAt: new Date().toISOString()
+          });
+
+          await setDoc(doc(db, 'push_registry', auth.currentUser.uid), {
+            userId: auth.currentUser.uid,
+            payload: registryPayload,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+
+          await setDoc(doc(db, 'push_registry', '_index'), {
+            userIds: arrayUnion(auth.currentUser.uid),
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        } catch (regErr) {
+          console.warn('Falha silenciosa ao registrar push_registry no Firestore:', regErr);
+        }
       }
 
       setIsPushSubscribed(true);

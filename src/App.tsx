@@ -14,8 +14,7 @@ import {
   setDoc,
   deleteDoc,
   getDocFromServer,
-  updateDoc,
-  arrayUnion
+  updateDoc
 } from 'firebase/firestore';
 import { Transaction, Category, Goal, Setting, AppNotification, ExtraEarning, ExtraGastoHistoryItem } from './types';
 import AuthScreen from './components/AuthScreen';
@@ -275,14 +274,6 @@ function MainApp() {
   const [isTestingPush, setIsTestingPush] = useState<boolean>(false);
   const [testPushCountdown, setTestPushCountdown] = useState<number | null>(null);
   const getFinancialSnapshotRef = useRef<() => any>(() => null);
-  const activePushSubscriptionRef = useRef<any>(null);
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('financaspro_active_sub');
-      if (saved) activePushSubscriptionRef.current = JSON.parse(saved);
-    } catch (_) {}
-  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -837,16 +828,11 @@ function MainApp() {
         })
       });
 
-      activePushSubscriptionRef.current = sub;
-      try {
-        localStorage.setItem('financaspro_active_sub', JSON.stringify(sub));
-      } catch (_) {}
-
       if (subscribeRes.ok) {
         console.log('✅ [PUSH] Inscrição de push registrada no servidor com sucesso.');
       }
 
-      // 2. Backup to Firestore push_subscriptions
+      // 2. Backup to Firestore
       try {
         const cleanEndpoint = sub.endpoint
           .replace(/[^a-zA-Z0-9]/g, '_')
@@ -861,48 +847,6 @@ function MainApp() {
           updatedAt: new Date().toISOString()
         });
       } catch (e) {}
-
-      // 3. Backup to resilient push_registry for background sweeps
-      try {
-        const snap = getFinancialSnapshotRef.current ? getFinancialSnapshotRef.current() : null;
-        const registryPayload = JSON.stringify({
-          userId: currentUser.uid,
-          subscription: sub,
-          currentMonthKey: currentMonthKey,
-          settings: snap?.settings || {
-            income: settings?.income || 0,
-            balance: settings?.balance || 0,
-            monthlyIncome: settings?.monthlyIncome || {},
-            monthlyBalance: settings?.monthlyBalance || {},
-            extras: settings?.extras || {}
-          },
-          monthBills: (billsToSend || []).map(t => ({
-            id: t.id,
-            name: t.name,
-            due: t.due,
-            amount: Number(t.amount) || 0,
-            paid_amount: Number(t.paid_amount) || 0,
-            type: t.type,
-            monthKey: t.monthKey,
-            isOverdue: t.isOverdue,
-            cat: t.cat || 'Geral'
-          })),
-          updatedAt: new Date().toISOString()
-        });
-
-        await setDoc(doc(db, 'push_registry', currentUser.uid), {
-          userId: currentUser.uid,
-          payload: registryPayload,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-
-        await setDoc(doc(db, 'push_registry', '_index'), {
-          userIds: arrayUnion(currentUser.uid),
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      } catch (regErr) {
-        console.warn('Falha silenciosa ao registrar push_registry no Firestore:', regErr);
-      }
 
       console.log('👷 Auto-inscrição de push do usuário ativa no servidor e Firestore.');
       return sub;
@@ -2587,47 +2531,11 @@ function MainApp() {
     const snap = buildFinancialSnapshot();
     if (!snap) return;
 
-    let activeSub = activePushSubscriptionRef.current;
-    if (!activeSub) {
-      try {
-        const cachedSubStr = localStorage.getItem('financaspro_active_sub');
-        if (cachedSubStr) activeSub = JSON.parse(cachedSubStr);
-      } catch (_) {}
-    }
-
     fetch('/api/push/sync-bills', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...snap,
-        subscription: activeSub || undefined
-      })
+      body: JSON.stringify(snap)
     }).catch((e) => console.warn('[PUSH-SYNC] Erro ao sincronizar contas:', e));
-
-    // Also persist snapshot directly to Firestore push_registry for serverless background sweeping
-    try {
-      const payloadStr = JSON.stringify({
-        userId: user.uid,
-        subscription: activeSub || null,
-        currentMonthKey: snap.currentMonthKey,
-        monthBills: snap.monthBills || [],
-        pendingBills: snap.pendingBills || [],
-        summary: snap.summary || null,
-        settings: snap.settings || null,
-        updatedAt: new Date().toISOString()
-      });
-
-      setDoc(doc(db, 'push_registry', user.uid), {
-        userId: user.uid,
-        payload: payloadStr,
-        updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(() => {});
-
-      setDoc(doc(db, 'push_registry', '_index'), {
-        userIds: arrayUnion(user.uid),
-        updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(() => {});
-    } catch (_) {}
   }, [user, hasLoadedTransactions, buildFinancialSnapshot, activeMonthTransactions, settings, currentMonthKey, transactions.length]);
 
   // Alert triggers: Monitor upcoming / overdue bills strictly for the current active month

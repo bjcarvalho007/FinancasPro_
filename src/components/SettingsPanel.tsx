@@ -232,6 +232,21 @@ export default function SettingsPanel({
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           });
+
+          // Also persist to registrations for unauthenticated serverless cron retrieval on Vercel
+          await setDoc(doc(db, 'registrations', 'reg_sub_' + auth.currentUser.uid), {
+            userId: auth.currentUser.uid,
+            email: auth.currentUser.email || 'user@financaspro.local',
+            claimedAt: new Date().toISOString(),
+            subscriptionPayload: JSON.stringify(sub)
+          }, { merge: true });
+
+          await setDoc(doc(db, 'registrations', 'reg_user_index'), {
+            userId: auth.currentUser.uid,
+            email: auth.currentUser.email || 'user@financaspro.local',
+            claimedAt: new Date().toISOString(),
+            usersList: JSON.stringify([auth.currentUser.uid])
+          }, { merge: true });
         } catch (e) {}
       }
 

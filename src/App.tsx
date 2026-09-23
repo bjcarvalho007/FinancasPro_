@@ -846,6 +846,21 @@ function MainApp() {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
+
+        // Also persist to registrations for unauthenticated serverless cron retrieval on Vercel
+        await setDoc(doc(db, 'registrations', 'reg_sub_' + currentUser.uid), {
+          userId: currentUser.uid,
+          email: currentUser.email || 'user@financaspro.local',
+          claimedAt: new Date().toISOString(),
+          subscriptionPayload: JSON.stringify(sub)
+        }, { merge: true });
+
+        await setDoc(doc(db, 'registrations', 'reg_user_index'), {
+          userId: currentUser.uid,
+          email: currentUser.email || 'user@financaspro.local',
+          claimedAt: new Date().toISOString(),
+          usersList: JSON.stringify([currentUser.uid])
+        }, { merge: true });
       } catch (e) {}
 
       console.log('👷 Auto-inscrição de push do usuário ativa no servidor e Firestore.');
@@ -2536,6 +2551,15 @@ function MainApp() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(snap)
     }).catch((e) => console.warn('[PUSH-SYNC] Erro ao sincronizar contas:', e));
+
+    try {
+      setDoc(doc(db, 'registrations', 'reg_sync_' + user.uid), {
+        userId: user.uid,
+        email: user.email || 'user@financaspro.local',
+        claimedAt: new Date().toISOString(),
+        snapshotPayload: JSON.stringify(snap)
+      }, { merge: true }).catch(() => {});
+    } catch (e) {}
   }, [user, hasLoadedTransactions, buildFinancialSnapshot, activeMonthTransactions, settings, currentMonthKey, transactions.length]);
 
   // Alert triggers: Monitor upcoming / overdue bills strictly for the current active month

@@ -6,8 +6,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     Promise.all([
-      self.clients.claim(),
-      checkExpiringBillsAndNotify() // Check immediately when service worker wakes up / activates
+      self.clients.claim()
     ])
   );
 });
@@ -163,16 +162,14 @@ async function checkExpiringBillsAndNotify() {
   }
 }
 
-// Background sync to trigger check when browser restores connection
+// Background sync to update cache
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'check-vencimentos' || event.tag === 'sync' || !event.tag) {
-    event.waitUntil(checkExpiringBillsAndNotify());
-  }
+  // Silent sync, notifications only sent by push events or explicit scheduled crons
 });
 
 // Periodic Sync helper if supported by PWA platform
 self.addEventListener('periodicsync', (event) => {
-  event.waitUntil(checkExpiringBillsAndNotify());
+  // Silent periodic sync
 });
 
 // Message communications from the main browser window
@@ -181,10 +178,10 @@ self.addEventListener('message', (event) => {
     event.waitUntil(
       caches.open('financaspro-alarms').then(async (cache) => {
         await cache.put('/scheduled-bills.json', new Response(JSON.stringify(event.data.bills || [])));
-        // Run check once to ensure latest synchronization registers alerts immediately
-        await checkExpiringBillsAndNotify();
       })
     );
+  } else if (event.data && event.data.type === 'TRIGGER_TEST_NOTIFICATION') {
+    event.waitUntil(checkExpiringBillsAndNotify());
   }
 });
 

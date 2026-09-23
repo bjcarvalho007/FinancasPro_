@@ -12,18 +12,18 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // Initialize Firebase Admin SDK for secure server-side Firestore operations
+let firebaseAppConfig: any = {};
 try {
-  let config: any = {};
   try {
     const configPath = path.join(process.cwd(), "firebase-applet-config.json");
     if (fs.existsSync(configPath)) {
-      config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+      firebaseAppConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
     }
   } catch (e) {
     console.warn("⚠️ Não foi possível carregar firebase-applet-config.json:", e);
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID || config.projectId || "financaspro-bcbb4";
+  const projectId = process.env.FIREBASE_PROJECT_ID || firebaseAppConfig.projectId || "financaspro-bcbb4";
   
   if (!admin.apps.length) {
     console.log(`🚀 Inicializando Firebase Admin SDK para o projeto: ${projectId}`);
@@ -835,19 +835,61 @@ async function dispatchPushToSubscriptions(
   return sentCount;
 }
 
+// Helper to query Firestore via REST API with web API key (works on Vercel serverless without service account)
+async function fetchFirestoreDocumentRest(docPath: string): Promise<any> {
+  try {
+    const projectId = process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || firebaseAppConfig.projectId;
+    const apiKey = process.env.VITE_FIREBASE_API_KEY || firebaseAppConfig.apiKey;
+    if (!projectId || !apiKey) return null;
+
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${docPath}?key=${apiKey}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !data.fields) return null;
+
+    const parseFields = (fields: any): any => {
+      if (!fields) return null;
+      const result: any = {};
+      for (const [k, v] of Object.entries(fields) as [string, any][]) {
+        if (v.stringValue !== undefined) result[k] = v.stringValue;
+        else if (v.integerValue !== undefined) result[k] = Number(v.integerValue);
+        else if (v.doubleValue !== undefined) result[k] = Number(v.doubleValue);
+        else if (v.booleanValue !== undefined) result[k] = v.booleanValue;
+        else if (v.mapValue?.fields !== undefined) result[k] = parseFields(v.mapValue.fields);
+        else if (v.arrayValue?.values !== undefined) {
+          result[k] = v.arrayValue.values.map((item: any) => 
+            item.stringValue !== undefined ? item.stringValue :
+            item.integerValue !== undefined ? Number(item.integerValue) :
+            item.doubleValue !== undefined ? Number(item.doubleValue) :
+            item.booleanValue !== undefined ? item.booleanValue :
+            item.mapValue?.fields ? parseFields(item.mapValue.fields) : null
+          );
+        }
+      }
+      return result;
+    };
+
+    return parseFields(data.fields);
+  } catch (err) {
+    return null;
+  }
+}
+
 // Background Checker Task for push notifications when browser is closed
 async function runBackgroundPushNotificationChecker(
   forceNow: boolean = false, 
   targetUserId?: string,
-  targetMode: 'bills' | 'smart' | 'both' = 'both'
+  targetMode: 'bills' | 'smart' | 'both' = 'both',
+  targetSlot?: string
 ) {
   await ensureVapidKeys();
   const br = getBrasiliaDate();
-  console.log(`⏰ [BACKGROUND SWEEPER] Varredura em 2º plano (Horário de Brasília: ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}, Data: ${br.dateStr}, Forçar: ${forceNow}, Modo: ${targetMode})...`);
+  console.log(`⏰ [BACKGROUND SWEEPER] Varredura em 2º plano (Horário de Brasília: ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}, Data: ${br.dateStr}, Forçar: ${forceNow}, Modo: ${targetMode}, Slot: ${targetSlot || 'auto'})...`);
 
   const userSubsMap: { [userId: string]: any[] } = getLocalSubscriptions();
 
-  // Supplement with Firestore subscriptions if accessible
+  // Supplement with Firestore subscriptions if accessible via Admin SDK
   try {
     const db = admin.firestore();
     const subsSnapshot = await db.collection("push_subscriptions").get();
@@ -878,9 +920,41 @@ async function runBackgroundPushNotificationChecker(
         }
       });
     }
-  } catch (dbErr: any) {
-    // Firestore admin service account key not provided, using local subscription cache
-  }
+  } catch (dbErr: any) {}
+
+  // Fallback on Vercel: fetch subscriptions from registrations via Firestore REST
+  try {
+    const regIndex = await fetchFirestoreDocumentRest("registrations/reg_user_index");
+    const uidsToInspect: string[] = [];
+    if (regIndex?.usersList) {
+      try {
+        const parsed = typeof regIndex.usersList === 'string' ? JSON.parse(regIndex.usersList) : regIndex.usersList;
+        if (Array.isArray(parsed)) uidsToInspect.push(...parsed);
+      } catch (_) {}
+    }
+    if (regIndex?.userId && !uidsToInspect.includes(regIndex.userId)) {
+      uidsToInspect.push(regIndex.userId);
+    }
+    if (targetUserId && !uidsToInspect.includes(targetUserId)) {
+      uidsToInspect.push(targetUserId);
+    }
+
+    for (const uid of uidsToInspect) {
+      if (!userSubsMap[uid] || userSubsMap[uid].length === 0) {
+        const subDoc = await fetchFirestoreDocumentRest(`registrations/reg_sub_${uid}`);
+        if (subDoc?.subscriptionPayload) {
+          try {
+            const parsedSub = typeof subDoc.subscriptionPayload === 'string' ? JSON.parse(subDoc.subscriptionPayload) : subDoc.subscriptionPayload;
+            if (parsedSub && parsedSub.endpoint && parsedSub.keys?.p256dh && parsedSub.keys?.auth) {
+              if (!userSubsMap[uid]) userSubsMap[uid] = [];
+              userSubsMap[uid].push(parsedSub);
+              saveLocalSubscription(uid, parsedSub);
+            }
+          } catch (_) {}
+        }
+      }
+    }
+  } catch (_) {}
 
   const allUserIds = Object.keys(userSubsMap);
   const userIds = targetUserId ? allUserIds.filter(id => id === targetUserId) : allUserIds;
@@ -912,7 +986,21 @@ async function runBackgroundPushNotificationChecker(
     const subs = userSubsMap[userId];
     if (!subs || subs.length === 0) continue;
 
-    const userStored = localUserBills[userId];
+    let userStored = localUserBills[userId];
+    // Fallback: load snapshot from registrations if not found in local cache
+    if (!userStored || !userStored.monthBills || userStored.monthBills.length === 0) {
+      try {
+        const syncDoc = await fetchFirestoreDocumentRest(`registrations/reg_sync_${userId}`);
+        if (syncDoc?.snapshotPayload) {
+          const snap = typeof syncDoc.snapshotPayload === 'string' ? JSON.parse(syncDoc.snapshotPayload) : syncDoc.snapshotPayload;
+          if (snap) {
+            saveLocalUserBills(userId, snap);
+            userStored = snap;
+          }
+        }
+      } catch (_) {}
+    }
+
     let userSettings = getLocalUserSettings()[userId] || {};
 
     // Try fetching from Firestore if accessible
@@ -1117,14 +1205,21 @@ async function runBackgroundPushNotificationChecker(
     } catch (e) {}
 
     // STRICT EXACT-HOUR SCHEDULE RULES (As requested: 08:00, 12:00, 20:00 for Bills; 09:00, 13:00, 21:00 for Smart Insights)
-    // No drift, no overlapping, and NEVER fire outside the exact scheduled hour!
-    const isBills08Trigger = !forceNow && targetMode !== 'smart' && br.hour === 8 && !notifiedAlerts[bills08Key]?.notified;
-    const isBills12Trigger = !forceNow && targetMode !== 'smart' && br.hour === 12 && !notifiedAlerts[bills12Key]?.notified;
-    const isBills20Trigger = !forceNow && targetMode !== 'smart' && br.hour === 20 && !notifiedAlerts[bills20Key]?.notified;
+    // 5-minute pre-window allowed to absorb serverless cron execution jitter
+    const is08Window = (br.hour === 8) || (br.hour === 7 && br.minute >= 55);
+    const is09Window = (br.hour === 9) || (br.hour === 8 && br.minute >= 55);
+    const is12Window = (br.hour === 12) || (br.hour === 11 && br.minute >= 55);
+    const is13Window = (br.hour === 13) || (br.hour === 12 && br.minute >= 55);
+    const is20Window = (br.hour === 20) || (br.hour === 19 && br.minute >= 55);
+    const is21Window = (br.hour === 21) || (br.hour === 20 && br.minute >= 55);
 
-    const isSmart09Trigger = !forceNow && targetMode !== 'bills' && br.hour === 9 && !notifiedAlerts[smart09Key]?.notified;
-    const isSmart13Trigger = !forceNow && targetMode !== 'bills' && br.hour === 13 && !notifiedAlerts[smart13Key]?.notified;
-    const isSmart21Trigger = !forceNow && targetMode !== 'bills' && br.hour === 21 && !notifiedAlerts[smart21Key]?.notified;
+    const isBills08Trigger = !forceNow && targetMode !== 'smart' && (targetSlot === '08h' || (!targetSlot && is08Window)) && !notifiedAlerts[bills08Key]?.notified;
+    const isBills12Trigger = !forceNow && targetMode !== 'smart' && (targetSlot === '12h' || (!targetSlot && is12Window)) && !notifiedAlerts[bills12Key]?.notified;
+    const isBills20Trigger = !forceNow && targetMode !== 'smart' && (targetSlot === '20h' || (!targetSlot && is20Window)) && !notifiedAlerts[bills20Key]?.notified;
+
+    const isSmart09Trigger = !forceNow && targetMode !== 'bills' && (targetSlot === '09h' || (!targetSlot && is09Window)) && !notifiedAlerts[smart09Key]?.notified;
+    const isSmart13Trigger = !forceNow && targetMode !== 'bills' && (targetSlot === '13h' || (!targetSlot && is13Window)) && !notifiedAlerts[smart13Key]?.notified;
+    const isSmart21Trigger = !forceNow && targetMode !== 'bills' && (targetSlot === '21h' || (!targetSlot && is21Window)) && !notifiedAlerts[smart21Key]?.notified;
 
     // ==========================================
     // A) DISPATCH BILLS NOTIFICATION (08h, 12h, 20h)
@@ -1343,11 +1438,7 @@ async function runBackgroundPushNotificationChecker(
 }
 
 if (!process.env.VERCEL) {
-  setTimeout(() => {
-    runBackgroundPushNotificationChecker().catch((e) => console.warn("⚠️ Background push checker error:", e?.message || e));
-  }, 5000);
-
-  // Check every 2 minutes so 08:00 AM is hit with high precision
+  // Check periodically so scheduled hours (08:00, 09:00, 12:00, 13:00, 20:00, 21:00) are hit with precision
   setInterval(() => {
     runBackgroundPushNotificationChecker().catch((e) => console.warn("⚠️ Background push checker error:", e?.message || e));
   }, 1000 * 60 * 2);
@@ -2313,8 +2404,9 @@ app.all("/api/cron/check-alerts", async (req, res) => {
     await ensureVapidKeys();
     const force = req.query.force === 'true' || req.body?.force === true;
     const mode = (req.query.mode || req.body?.mode || 'both') as 'bills' | 'smart' | 'both';
-    const result = await runBackgroundPushNotificationChecker(force, undefined, mode);
-    res.json({ success: true, message: "Varredura de notificações executada com sucesso.", mode, result, timestamp: new Date().toISOString() });
+    const slot = (req.query.slot || req.body?.slot || undefined) as string | undefined;
+    const result = await runBackgroundPushNotificationChecker(force, undefined, mode, slot);
+    res.json({ success: true, message: "Varredura de notificações executada com sucesso.", mode, slot, result, timestamp: new Date().toISOString() });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || String(err) });
   }

@@ -103,32 +103,6 @@
         "usedAt": { "type": "string", "format": "date-time", "description": "Claim/usage timestamp" }
       },
       "required": ["token", "email", "used"]
-    },
-    "push_subscription": {
-      "title": "Push Subscription",
-      "description": "Stores Web Push subscriptions for background push notifications",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "userId": { "type": "string" },
-        "subscription": { "type": "string" },
-        "updatedAt": { "type": "string" }
-      },
-      "required": ["id", "userId", "subscription"]
-    },
-    "user_sync_cache": {
-      "title": "User Sync Cache",
-      "description": "Financial snapshot synchronized from client for background push notification delivery",
-      "type": "object",
-      "properties": {
-        "userId": { "type": "string" },
-        "currentMonthKey": { "type": "string" },
-        "summary": { "type": "object" },
-        "monthBills": { "type": "array" },
-        "pendingBills": { "type": "array" },
-        "updatedAt": { "type": "string" }
-      },
-      "required": ["userId"]
     }
   },
   "firestore": {
@@ -159,14 +133,6 @@
     "/tokens_pagos/{tokenId}": {
       "schema": "token_pago",
       "description": "Secure paid tokens for restricted registrations"
-    },
-    "/push_subscriptions/{subId}": {
-      "schema": "push_subscription",
-      "description": "Web push subscription collection"
-    },
-    "/user_sync_cache/{userId}": {
-      "schema": "user_sync_cache",
-      "description": "Persistent financial cache for background notifications"
     }
   }
 }

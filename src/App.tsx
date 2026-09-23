@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import {
   onAuthStateChanged,
@@ -64,9 +64,7 @@ import {
   EyeOff,
   AlertTriangle,
   Smartphone,
-  RefreshCw,
-  Sun,
-  Moon
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LANGUAGES, Language, useLanguage, LanguageProvider } from './utils/i18n';
@@ -162,7 +160,6 @@ function MainApp() {
   
   // App Data State loaded directly from Firestore
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [hasLoadedTransactions, setHasLoadedTransactions] = useState<boolean>(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [settings, setSettings] = useState<Setting | null>(null);
@@ -184,7 +181,6 @@ function MainApp() {
     const cachedTxs = getLocalUserCache(uid, 'txs', null);
     if (cachedTxs && Array.isArray(cachedTxs) && cachedTxs.length > 0) {
       setTransactions(cachedTxs);
-      setHasLoadedTransactions(true);
     }
 
     const cachedCats = getLocalUserCache(uid, 'cats', null);
@@ -275,7 +271,6 @@ function MainApp() {
   });
   const [isTestingPush, setIsTestingPush] = useState<boolean>(false);
   const [testPushCountdown, setTestPushCountdown] = useState<number | null>(null);
-  const getFinancialSnapshotRef = useRef<() => any>(() => null);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -348,7 +343,6 @@ function MainApp() {
 
       // Re-register push subscription and sync bills first
       const sub = await silentAutoSubscribe(user, transactions);
-      const snapshot = getFinancialSnapshotRef.current ? getFinancialSnapshotRef.current() : null;
 
       const res = await fetch('/api/push/trigger-now', {
         method: 'POST',
@@ -356,26 +350,16 @@ function MainApp() {
         body: JSON.stringify({ 
           userId: user.uid,
           subscription: sub,
-          ...(snapshot || {
-            settings: {
-              income: settings?.income || 0,
-              balance: settings?.balance || 0,
-              monthlyIncome: settings?.monthlyIncome || {},
-              monthlyBalance: settings?.monthlyBalance || {},
-              extras: settings?.extras || {}
-            },
-            bills: (transactions || []).map(t => ({
-              id: t.id,
-              name: t.name,
-              due: t.due,
-              amount: Number(t.amount) || 0,
-              paid_amount: Number(t.paid_amount) || 0,
-              type: t.type,
-              monthKey: t.monthKey,
-              isOverdue: t.isOverdue,
-              cat: t.cat || 'Geral'
-            }))
-          })
+          bills: (transactions || []).map(t => ({
+            id: t.id,
+            name: t.name,
+            due: t.due,
+            amount: t.amount || t.total_parcelado || 0,
+            paid_amount: t.paid_amount || 0,
+            type: t.type,
+            monthKey: t.monthKey,
+            isOverdue: t.isOverdue
+          }))
         })
       });
       const data = await res.json();
@@ -404,7 +388,6 @@ function MainApp() {
     try {
       setIsTestingPush(true);
       const sub = await silentAutoSubscribe(user, transactions);
-      const snapshot = getFinancialSnapshotRef.current ? getFinancialSnapshotRef.current() : null;
 
       const res = await fetch('/api/push/test-background', {
         method: 'POST',
@@ -413,26 +396,16 @@ function MainApp() {
           userId: user.uid, 
           delaySeconds,
           subscription: sub,
-          ...(snapshot || {
-            settings: {
-              income: settings?.income || 0,
-              balance: settings?.balance || 0,
-              monthlyIncome: settings?.monthlyIncome || {},
-              monthlyBalance: settings?.monthlyBalance || {},
-              extras: settings?.extras || {}
-            },
-            bills: (transactions || []).map(t => ({
-              id: t.id,
-              name: t.name,
-              due: t.due,
-              amount: Number(t.amount) || 0,
-              paid_amount: Number(t.paid_amount) || 0,
-              type: t.type,
-              monthKey: t.monthKey,
-              isOverdue: t.isOverdue,
-              cat: t.cat || 'Geral'
-            }))
-          })
+          bills: (transactions || []).map(t => ({
+            id: t.id,
+            name: t.name,
+            due: t.due,
+            amount: t.amount || t.total_parcelado || 0,
+            paid_amount: t.paid_amount || 0,
+            type: t.type,
+            monthKey: t.monthKey,
+            isOverdue: t.isOverdue
+          }))
         })
       });
       const data = await res.json();
@@ -800,33 +773,22 @@ function MainApp() {
 
       // 1. Post subscription and current bills to Express backend for OS background push
       const billsToSend = (currentBills && currentBills.length > 0) ? currentBills : transactions;
-      const snapshot = getFinancialSnapshotRef.current ? getFinancialSnapshotRef.current() : null;
       const subscribeRes = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: currentUser.uid,
           subscription: sub,
-          ...(snapshot || {
-            settings: {
-              income: settings?.income || 0,
-              balance: settings?.balance || 0,
-              monthlyIncome: settings?.monthlyIncome || {},
-              monthlyBalance: settings?.monthlyBalance || {},
-              extras: settings?.extras || {}
-            },
-            bills: (billsToSend || []).map(t => ({
-              id: t.id,
-              name: t.name,
-              due: t.due,
-              amount: Number(t.amount) || 0,
-              paid_amount: Number(t.paid_amount) || 0,
-              type: t.type,
-              monthKey: t.monthKey,
-              isOverdue: t.isOverdue,
-              cat: t.cat || 'Geral'
-            }))
-          })
+          bills: (billsToSend || []).map(t => ({
+            id: t.id,
+            name: t.name,
+            due: t.due,
+            amount: t.amount || t.total_parcelado || 0,
+            paid_amount: t.paid_amount || 0,
+            type: t.type,
+            monthKey: t.monthKey,
+            isOverdue: t.isOverdue
+          }))
         })
       });
 
@@ -848,21 +810,6 @@ function MainApp() {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
-
-        // Also persist to registrations for unauthenticated serverless cron retrieval on Vercel
-        await setDoc(doc(db, 'registrations', 'reg_sub_' + currentUser.uid), {
-          userId: currentUser.uid,
-          email: currentUser.email || 'user@financaspro.local',
-          claimedAt: new Date().toISOString(),
-          subscriptionPayload: JSON.stringify(sub)
-        }, { merge: true });
-
-        await setDoc(doc(db, 'registrations', 'reg_user_index'), {
-          userId: currentUser.uid,
-          email: currentUser.email || 'user@financaspro.local',
-          claimedAt: new Date().toISOString(),
-          usersList: JSON.stringify([currentUser.uid])
-        }, { merge: true });
       } catch (e) {}
 
       console.log('👷 Auto-inscrição de push do usuário ativa no servidor e Firestore.');
@@ -1252,11 +1199,28 @@ function MainApp() {
         items.push(docSnap.data() as Transaction);
       });
       setTransactions(items);
-      setHasLoadedTransactions(true);
       saveLocalUserCache(uid, 'txs', items);
 
-      // Re-ensure push subscription is synced with latest bills
+      // Synchronize unpaid transactions with server for OS background push notifications when app is closed
       if (items.length > 0) {
+        fetch('/api/push/sync-bills', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: uid,
+            bills: items.map(t => ({
+              id: t.id,
+              name: t.name,
+              due: t.due,
+              amount: t.amount,
+              paid_amount: t.paid_amount || 0,
+              type: t.type,
+              monthKey: t.monthKey
+            }))
+          })
+        }).catch(() => {});
+
+        // Re-ensure push subscription is synced with latest bills
         silentAutoSubscribe(user, items);
       }
     }, (error) => {
@@ -2383,188 +2347,7 @@ function MainApp() {
     return enrichedTransactions.filter(t => !t.is_skipped);
   }, [transactions, currentMonthKey]);
 
-  const buildFinancialSnapshot = useCallback(() => {
-    if (!user) return null;
-    const thresholdDays = settings?.alertThresholdDays !== undefined ? settings.alertThresholdDays : 3;
-
-    const incVal = settings?.monthlyIncome?.[currentMonthKey] ?? settings?.income ?? 0;
-    const balVal = settings?.monthlyBalance?.[currentMonthKey] ?? settings?.balance ?? 0;
-    const extVal = settings?.extras?.[currentMonthKey] ?? 0;
-    const totalAvail = incVal + balVal + extVal;
-
-    const totalSpent = activeMonthTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-    const totalPaid = activeMonthTransactions.reduce((sum, t) => sum + (Number(t.paid_amount) || 0), 0);
-    const totalUnpaid = Math.max(0, totalSpent - totalPaid);
-    const paidPct = totalSpent > 0 ? Math.round((totalPaid / totalSpent) * 100) : 100;
-    const leftoverVal = totalAvail - totalSpent;
-    const spentRatioVal = totalAvail > 0 ? (totalSpent / totalAvail) * 100 : 0;
-
-    const today = new Date();
-    today.setHours(12, 0, 0, 0);
-
-    const parseDueDate = (dueStr?: string, monthKeyStr?: string) => {
-      if (!dueStr) return null;
-      const s = dueStr.trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-        const parts = s.split('-').map(Number);
-        return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-      }
-      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
-        const parts = s.split('/').map(Number);
-        return new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
-      }
-      const dayMatch = s.match(/\d+/);
-      if (dayMatch) {
-        const day = parseInt(dayMatch[0], 10);
-        let year = calendarDate.getFullYear();
-        let month = calendarDate.getMonth();
-        if (monthKeyStr && /^\d{4}-\d{2}$/.test(monthKeyStr)) {
-          const parts = monthKeyStr.split('-').map(Number);
-          year = parts[0];
-          month = parts[1] - 1;
-        }
-        const maxDays = new Date(year, month + 1, 0).getDate();
-        const safeDay = Math.min(Math.max(1, day), maxDays);
-        return new Date(year, month, safeDay, 12, 0, 0);
-      }
-      return null;
-    };
-
-    // 1. Process active month bills (strictly current month)
-    const normMonthBills = activeMonthTransactions.map(t => {
-      const amt = Number(t.amount) || 0;
-      const paid = Number(t.paid_amount) || 0;
-      const rem = Math.max(0, amt - paid);
-      const dueDate = parseDueDate(t.due, t.monthKey || currentMonthKey);
-      let diffDays = 999;
-      let isOverdue = false;
-      let isDueToday = false;
-
-      if (dueDate) {
-        diffDays = Math.round((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffDays < 0) isOverdue = true;
-        else if (diffDays === 0) isDueToday = true;
-      } else if (t.isOverdue) {
-        isOverdue = true;
-        diffDays = -1;
-      }
-
-      return {
-        id: t.id,
-        name: t.name,
-        due: t.due || '',
-        amount: amt,
-        paid_amount: paid,
-        remaining: rem,
-        type: t.type || 'variaveis',
-        monthKey: t.monthKey || currentMonthKey,
-        isOverdue,
-        isDueToday,
-        diffDays,
-        cat: t.cat || 'Geral'
-      };
-    });
-
-    // Strictly current month pending bills
-    const normPendingBills = normMonthBills.filter(b => b.remaining > 0);
-    normPendingBills.sort((a, b) => {
-      if (a.isOverdue && !b.isOverdue) return -1;
-      if (!a.isOverdue && b.isOverdue) return 1;
-      if (a.isDueToday && !b.isDueToday) return -1;
-      if (!a.isDueToday && b.isDueToday) return 1;
-      return a.diffDays - b.diffDays;
-    });
-
-    let topExp: { name: string; amount: number; category: string } | null = null;
-    for (const b of normMonthBills) {
-      if (!topExp || b.amount > topExp.amount) {
-        topExp = { name: b.name, amount: b.amount, category: b.cat };
-      }
-    }
-
-    const catTotals: Record<string, number> = {};
-    normMonthBills.forEach(b => {
-      catTotals[b.cat] = (catTotals[b.cat] || 0) + b.amount;
-    });
-
-    return {
-      userId: user.uid,
-      currentMonthKey,
-      settings: {
-        income: settings?.income || 0,
-        balance: settings?.balance || 0,
-        monthlyIncome: settings?.monthlyIncome || {},
-        monthlyBalance: settings?.monthlyBalance || {},
-        extras: settings?.extras || {},
-        alertThresholdDays: thresholdDays
-      },
-      summary: {
-        totalAvailable: totalAvail,
-        totalSpentMonth: totalSpent,
-        totalPaidMonth: totalPaid,
-        totalUnpaidMonth: totalUnpaid,
-        paidPercentage: paidPct,
-        leftover: leftoverVal,
-        spentRatio: spentRatioVal,
-        topExpense: topExp,
-        categoryTotals: catTotals,
-        overdueCount: normPendingBills.filter(b => b.isOverdue).length,
-        dueTodayCount: normPendingBills.filter(b => b.isDueToday).length
-      },
-      monthBills: normMonthBills,
-      pendingBills: normPendingBills,
-      allBills: normMonthBills,
-      bills: normPendingBills,
-      rawTransactions: transactions.map(t => ({
-        id: t.id,
-        name: t.name,
-        amount: Number(t.amount) || 0,
-        paid_amount: Number(t.paid_amount) || 0,
-        type: t.type,
-        cat: t.cat,
-        due: t.due,
-        monthKey: t.monthKey,
-        isOverdue: t.isOverdue,
-        is_skipped: t.is_skipped,
-        total_parcelado: t.total_parcelado,
-        installmentsCount: t.installmentsCount,
-        masterId: t.masterId,
-        extra_gasto: t.extra_gasto,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt
-      }))
-    };
-  }, [user, settings, currentMonthKey, activeMonthTransactions, calendarDate, transactions]);
-
-  useEffect(() => {
-    getFinancialSnapshotRef.current = buildFinancialSnapshot;
-  }, [buildFinancialSnapshot]);
-
-  // Automatically synchronize financial snapshot with backend for push notifications
-  useEffect(() => {
-    if (!user || !hasLoadedTransactions) return;
-    if (transactions.length > 0 && activeMonthTransactions.length === 0) return;
-
-    const snap = buildFinancialSnapshot();
-    if (!snap) return;
-
-    fetch('/api/push/sync-bills', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(snap)
-    }).catch((e) => console.warn('[PUSH-SYNC] Erro ao sincronizar contas:', e));
-
-    try {
-      setDoc(doc(db, 'registrations', 'reg_sync_' + user.uid), {
-        userId: user.uid,
-        email: user.email || 'user@financaspro.local',
-        claimedAt: new Date().toISOString(),
-        snapshotPayload: JSON.stringify(snap)
-      }, { merge: true }).catch(() => {});
-    } catch (e) {}
-  }, [user, hasLoadedTransactions, buildFinancialSnapshot, activeMonthTransactions, settings, currentMonthKey, transactions.length]);
-
-  // Alert triggers: Monitor upcoming / overdue bills strictly for the current active month
+  // Alert triggers: Monitor upcoming / overdue bills due on mounting/ledger updates using activeMonthTransactions (enables virtual/projection compatibility)
   useEffect(() => {
     if (activeMonthTransactions.length === 0) {
       setExpiringBillsList([]);
@@ -2574,6 +2357,7 @@ function MainApp() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const expiring: { item: Transaction; diffInDays: number; isOverdue: boolean }[] = [];
+
     const thresholdDays = settings?.alertThresholdDays !== undefined ? settings.alertThresholdDays : 3;
 
     activeMonthTransactions.forEach(item => {
@@ -2584,49 +2368,39 @@ function MainApp() {
       const remainingDeficit = itemAmount - (item.paid_amount || 0);
 
       if (remainingDeficit > 0 && item.due) {
-        let diffInDays = 999;
+        let diffInDays = 0;
         let isOverdue = false;
         let isWithinUpcomingThreshold = false;
 
-        let dueDate: Date | null = null;
-        const s = item.due.trim();
-        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-          const parts = s.split('-').map(Number);
-          const itemMKey = `${parts[0]}-${String(parts[1]).padStart(2, '0')}`;
-          if (itemMKey === currentMonthKey) {
-            dueDate = new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0);
-          }
-        } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
-          const parts = s.split('/').map(Number);
-          const itemMKey = `${parts[2]}-${String(parts[1]).padStart(2, '0')}`;
-          if (itemMKey === currentMonthKey) {
-            dueDate = new Date(parts[2], parts[1] - 1, parts[0], 0, 0, 0);
-          }
-        } else {
-          const dayMatch = s.match(/\d+/);
-          if (dayMatch) {
-            const dueDay = parseInt(dayMatch[0], 10);
-            let dueYear = calendarDate.getFullYear();
-            let dueMonth = calendarDate.getMonth();
-            if (item.monthKey && /^\d{4}-\d{2}$/.test(item.monthKey)) {
-              const mParts = item.monthKey.split('-').map(Number);
-              dueYear = mParts[0];
-              dueMonth = mParts[1] - 1;
-            }
-            const maxDays = new Date(dueYear, dueMonth + 1, 0).getDate();
-            const safeDueDay = Math.min(Math.max(1, dueDay), maxDays);
-            dueDate = new Date(dueYear, dueMonth, safeDueDay, 0, 0, 0);
-          }
-        }
+        if (/^\d{4}-\d{2}-\d{2}$/.test(item.due.trim())) {
+          const parts = item.due.trim().split('-');
+          const dueYear = parseInt(parts[0], 10);
+          const dueMonth = parseInt(parts[1], 10) - 1;
+          const dueDay = parseInt(parts[2], 10);
+          const dueDate = new Date(dueYear, dueMonth, dueDay);
+          dueDate.setHours(0, 0, 0, 0);
 
-        if (dueDate) {
           const diffInMs = dueDate.getTime() - today.getTime();
           diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
           isOverdue = diffInDays < 0;
           isWithinUpcomingThreshold = diffInDays >= 0 && diffInDays <= thresholdDays;
-        } else if (item.isOverdue) {
-          isOverdue = true;
-          diffInDays = -1;
+        } else {
+          const dayMatch = item.due.match(/\d+/);
+          if (dayMatch) {
+            const dueDay = parseInt(dayMatch[0], 10);
+            const currentYear = calendarDate.getFullYear();
+            const currentMonth = calendarDate.getMonth();
+            const maxDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const safeDueDay = Math.min(Math.max(1, dueDay), maxDays);
+
+            const dueDate = new Date(currentYear, currentMonth, safeDueDay);
+            dueDate.setHours(0, 0, 0, 0);
+
+            const diffInMs = dueDate.getTime() - today.getTime();
+            diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
+            isOverdue = diffInDays < 0;
+            isWithinUpcomingThreshold = diffInDays >= 0 && diffInDays <= thresholdDays;
+          }
         }
 
         if (isOverdue || isWithinUpcomingThreshold) {
@@ -2655,9 +2429,7 @@ function MainApp() {
               id: e.item.id,
               name: e.item.name,
               due: e.item.due,
-              amount: Number(e.item.amount) || 0,
-              paid_amount: Number(e.item.paid_amount) || 0,
-              remaining: Math.max(0, (Number(e.item.amount) || 0) - (Number(e.item.paid_amount) || 0)),
+              amount: e.item.amount || e.item.total_parcelado || 0,
               isOverdue: e.isOverdue
             }))
           });
@@ -2665,7 +2437,27 @@ function MainApp() {
       }).catch(e => console.warn('SW Ready check failed:', e));
     }
 
-    // Note: Financial snapshot synchronization with backend is handled by dedicated guarded useEffect above
+    // Sync to Express backend so server can send OS notifications when app is completely closed
+    if (user && transactions.length > 0) {
+      const unpaidTransactions = transactions.filter(t => ((Number(t.amount) || Number(t.total_parcelado) || 0) - (Number(t.paid_amount) || 0)) > 0);
+      fetch('/api/push/sync-bills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.uid,
+          bills: (unpaidTransactions.length > 0 ? unpaidTransactions : transactions).map(t => ({
+            id: t.id,
+            name: t.name,
+            due: t.due,
+            amount: t.amount || t.total_parcelado || 0,
+            paid_amount: t.paid_amount || 0,
+            type: t.type,
+            monthKey: t.monthKey,
+            isOverdue: expiring.some(e => e.item.id === t.id && e.isOverdue)
+          }))
+        })
+      }).catch(() => {});
+    }
 
     if (expiring.length > 0) {
       // Auto-display prominent modal on load/sync if not snoozed or disabled
@@ -2941,7 +2733,7 @@ function MainApp() {
 
   const renderSupportWidget = () => {
     return (
-      <div className="fixed bottom-20 right-4 md:right-6 z-[60] flex flex-col items-end gap-3 font-sans">
+      <div className="fixed bottom-24 lg:bottom-6 right-4 md:right-6 z-[60] flex flex-col items-end gap-3 font-sans">
         <AnimatePresence>
           {isSupportOpen && (
             <motion.div
@@ -3305,10 +3097,155 @@ function MainApp() {
   return (
     <div 
       data-theme={theme}
-      className={`h-screen h-[100dvh] w-full flex flex-col overflow-hidden transition-colors duration-300 ${
+      className={`h-screen h-[100dvh] w-full flex flex-col lg:flex-row overflow-hidden transition-colors duration-300 ${
         theme === 'light' ? 'theme-light bg-[#f4f7fa] text-slate-900 font-sans' : 'theme-dark bg-[#070a13] text-slate-100 font-sans'
       }`}
     >
+
+      {/* PROFESSIONAL DESKTOP SIDEBAR PANEL (SITE VIEW) */}
+      <aside className={`hidden lg:flex w-60 h-full flex-col justify-between border-r shrink-0 transition-colors duration-300 ${
+        theme === 'light' 
+          ? 'bg-white border-slate-200/85 text-slate-900' 
+          : 'bg-[#0b0f1a] border-white/5 text-slate-100'
+      } p-4 select-none z-30`}>
+        
+        {/* Top: Branding */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2.5 px-1 pt-0.5">
+            <img 
+              src="/app_icon.png" 
+              alt="FinançasPro Logo" 
+              className="w-8.5 h-8.5 rounded-xl object-cover border border-white/5 shrink-0 shadow-md"
+              referrerPolicy="no-referrer"
+            />
+            <div className="min-w-0">
+              <h1 className="font-display font-black text-sm tracking-tight leading-none">
+                FINANÇAS<span className="text-emerald-400 font-extrabold ml-0.5">PRO</span>
+              </h1>
+              {isVIP ? (
+                <span className="inline-flex items-center gap-1 text-[8.5px] text-emerald-400 font-bold tracking-normal mt-1">
+                  ★ Membro VIP
+                </span>
+              ) : hasActiveSubscription ? (
+                <span className="inline-flex items-center gap-1 text-[8.5px] text-indigo-400 font-bold tracking-normal mt-1">
+                  ★ Assinante PRO
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[8.5px] text-amber-500 font-bold tracking-normal mt-1">
+                  ⚡ Conta Grátis
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Web Navigation Menu */}
+          <nav className="space-y-1 pt-1.5">
+            {( () => {
+              const menuItems = [
+                { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
+                { id: 'contas', label: t('contasFixas'), icon: Receipt },
+                { id: 'variaveis', label: t('gastoVariavel'), icon: Coins },
+                { id: 'parcelas', label: t('parcelados'), icon: CreditCard },
+                { id: 'goals', label: t('metas'), icon: Target },
+                { id: 'settings', label: t('configuracoes'), icon: Settings },
+                ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: Crown }] : [])
+              ];
+              return menuItems;
+            })().map((item) => {
+              const isSelected = activeTab === item.id;
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id as any)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12px] font-bold tracking-tight transition-all border text-left cursor-pointer ${
+                    isSelected
+                      ? theme === 'light'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/20'
+                        : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30 shadow-sm shadow-indigo-500/10'
+                      : theme === 'light'
+                        ? 'text-slate-600 border-transparent hover:bg-slate-100 hover:text-slate-900'
+                        : 'text-slate-400 border-transparent hover:bg-white/5 hover:text-slate-200'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 shrink-0 transition-colors ${isSelected ? (theme === 'light' ? 'text-white' : 'text-indigo-400') : 'text-slate-400'}`} />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Bottom Section */}
+        <div className="space-y-2.5 pt-2">
+          
+          {/* Theme switcher */}
+          <div className={`p-0.5 rounded-xl border flex items-center transition-all ${
+            theme === 'light' ? 'bg-slate-100 border-slate-200' : 'bg-white/5 border-white/5'
+          }`}>
+            <button
+              onClick={() => handleThemeModify('light')}
+              className={`flex-1 py-1 rounded-lg text-[9.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                theme === 'light'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              ☀️ Claro
+            </button>
+            <button
+              onClick={() => handleThemeModify('dark')}
+              className={`flex-1 py-1 rounded-lg text-[9.5px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                theme === 'dark'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-indigo-400'
+              }`}
+            >
+              🌙 Escuro
+            </button>
+          </div>
+
+          {/* Active User Level Info */}
+          <div className={`p-2 rounded-xl border flex items-center justify-between gap-2 ${
+            theme === 'light' ? 'bg-slate-50 border-slate-200/60' : 'bg-white/5 border-white/5'
+          }`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center font-bold text-[10px] shrink-0 select-none ${
+                isVIP 
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : hasActiveSubscription
+                  ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                  : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+              }`}>
+                {user.email ? user.email.substring(0, 2).toUpperCase() : 'US'}
+              </div>
+              <div className="min-w-0 text-left">
+                <span className={`text-[8px] font-bold tracking-tight block leading-tight ${
+                  isVIP ? 'text-emerald-400' : hasActiveSubscription ? 'text-indigo-400' : 'text-amber-500'
+                }`}>
+                  {isVIP ? 'Membro VIP' : hasActiveSubscription ? 'Assinante' : 'Grátis'}
+                </span>
+                <p className="text-[9.5px] font-bold truncate leading-tight text-slate-400 max-w-[105px]" title={user.email || ''}>
+                  {user.email || 'Usuário'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleUserLogout}
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer border ${
+                theme === 'light'
+                  ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-700'
+                  : 'bg-rose-500/5 hover:bg-rose-500/15 border-rose-500/10 text-rose-450'
+              }`}
+              title="Sair"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+        </div>
+      </aside>
 
       {/* Right Content Container */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
@@ -3604,14 +3541,8 @@ function MainApp() {
           ? 'bg-white/95 border-slate-200/80 shadow-xs' 
           : 'bg-[#0b0f1a]/95 border-white/5 shadow-xs'
       }`}>
-        {/* Left Side: Logo & Greeting & User Name & Membership Badge */}
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2">
-          <img 
-            src="/app_icon.png" 
-            alt="FinançasPro Logo" 
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border border-white/10 shrink-0 shadow-md shadow-emerald-500/10 glow-emerald"
-            referrerPolicy="no-referrer"
-          />
+        {/* Left Side: Greeting & User Name & Membership Badge */}
+        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
           <div className="min-w-0 flex flex-col justify-center">
             {/* Line 1: Time Greeting */}
             <span className={`text-xs xs:text-sm font-medium tracking-wide ${
@@ -3621,7 +3552,7 @@ function MainApp() {
             </span>
 
             {/* Line 2: User Name */}
-            <h2 className={`font-display font-black text-sm xs:text-base sm:text-lg lg:text-xl tracking-tight leading-snug truncate max-w-[150px] xs:max-w-[200px] sm:max-w-md ${
+            <h2 className={`font-display font-black text-sm xs:text-base sm:text-lg lg:text-xl tracking-tight leading-snug truncate max-w-[180px] xs:max-w-[240px] sm:max-w-md ${
               theme === 'light' ? 'text-slate-900' : 'text-white'
             }`} title={formattedUserName}>
               <span className="text-emerald-400 font-extrabold">
@@ -3630,7 +3561,7 @@ function MainApp() {
             </h2>
             
             {/* Line 3: Membership Status Badge */}
-            <div className="mt-0.5 flex items-center">
+            <div className="mt-1 flex items-center">
               {isVIP ? (
                 <span className="inline-flex items-center gap-1 text-[9px] xs:text-[9.5px] text-emerald-400 font-extrabold uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
                   <Sparkles className="w-2.5 h-2.5 text-emerald-400 animate-pulse shrink-0" />
@@ -3657,40 +3588,6 @@ function MainApp() {
             </div>
           </div>
         </div>
-
-        {/* Center Desktop Navigation Tabs (PC/Tablet View) */}
-        <nav className="hidden md:flex items-center gap-1 bg-slate-100/90 dark:bg-white/5 p-1 rounded-2xl border border-slate-200/70 dark:border-white/5 mx-2">
-          {[
-            { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
-            { id: 'contas', label: t('fixas'), icon: Receipt },
-            { id: 'variaveis', label: t('variados'), icon: Coins },
-            { id: 'parcelas', label: t('parcelados'), icon: CreditCard },
-            { id: 'goals', label: t('metas'), icon: Target },
-            { id: 'settings', label: t('ajustes'), icon: Settings },
-            ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: Crown }] : [])
-          ].map((tab) => {
-            const isSelected = activeTab === tab.id;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  isSelected
-                    ? theme === 'light'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 shadow-xs'
-                    : theme === 'light'
-                      ? 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5 shrink-0" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </nav>
 
         {/* Top Right Controls - Pro visual layout */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
@@ -3784,20 +3681,6 @@ function MainApp() {
             </AnimatePresence>
           </div>
           
-          {/* Theme Toggle Button */}
-          <button
-            type="button"
-            onClick={() => handleThemeModify(theme === 'light' ? 'dark' : 'light')}
-            className={`w-9.5 h-9.5 rounded-xl flex items-center justify-center transition-all cursor-pointer border shrink-0 ${
-              theme === 'light' 
-                ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-2xs' 
-                : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/10'
-            }`}
-            title={theme === 'light' ? 'Mudar para Tema Escuro' : 'Mudar para Tema Claro'}
-          >
-            {theme === 'light' ? <Moon className="w-4 h-4 text-slate-600" /> : <Sun className="w-4 h-4 text-amber-300" />}
-          </button>
-
           {/* Logout Button */}
           <button
             onClick={handleUserLogout}
@@ -3830,7 +3713,7 @@ function MainApp() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto pb-28 scroll-smooth"
+        className="flex-1 overflow-y-auto pb-28 lg:pb-12 scroll-smooth"
       >
         <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6 md:py-8 space-y-6">
           {isFirebaseOffline && (
@@ -4236,7 +4119,9 @@ function MainApp() {
               className="w-full"
             >
               {activeTab !== 'dashboard' && activeTab !== 'goals' && activeTab !== 'settings' && activeTab !== 'admin' ? (
-                <div className="w-full space-y-4">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Main lists column */}
+              <div className="lg:col-span-8 space-y-4">
                 <main className="space-y-4 pt-1">
                   {/* Controls Bar for layout style and sorting */}
                   <div className={`p-3 rounded-2xl border flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 ${
@@ -5038,6 +4923,30 @@ function MainApp() {
                   </div>
                 </main>
               </div>
+
+              {/* Sidebar metrics persistent column for PC view */}
+              <div className="hidden lg:flex flex-col gap-4 lg:col-span-4 sticky top-6">
+                
+                {/* Local Advisory / Quick guidance on PC */}
+                <div className={`p-5 rounded-3xl border ${
+                  theme === 'light' 
+                    ? 'bg-slate-50 border-slate-200 text-slate-600' 
+                    : 'bg-white/2 border-white/5 text-slate-400'
+                } text-xs space-y-2`}>
+                  <p className="font-bold text-indigo-400 uppercase tracking-wider text-[9px] flex items-center gap-1 leading-none">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> {t('dificuldadesCaixa', 'Dificuldades de caixa?')}
+                  </p>
+                  <p className="font-light leading-relaxed text-[11px]">
+                    {transactions.length === 0 
+                      ? t('adicioneDespesasRecorrentesAuditar', 'Adicione despesas recorrentes e parcelas para auditar suas margens de sobrevivência líquidas.')
+                      : leftoverCash < 0 
+                        ? t('alertaCriticoExcederam', 'Alerta crítico: Suas despesas excederam seus ganhos. Tente parcializar faturas ou reduzir despesas variáveis.')
+                        : t('organizacaoEmDia', 'Organização em dia! Seu caixa está limpo e suas obrigações orçamentárias estão controladas.')
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
           ) : (
             /* Dashboard, Goals, Settings screens occupy the full 12 column grid */
             <div className="w-full">
@@ -5098,7 +5007,6 @@ function MainApp() {
                     alertThresholdDays={settings?.alertThresholdDays !== undefined ? settings.alertThresholdDays : 3}
                     settings={settings}
                     onOpenTutorial={() => setIsTutorialOpen(true)}
-                    getFinancialSnapshot={buildFinancialSnapshot}
                   />
                 )}
               </main>
@@ -5581,7 +5489,7 @@ function MainApp() {
         )}
       </AnimatePresence>
       {/* UNIFIED FULLY-RESPONSIVE DOCKED BOTTOM BAR (BOTH PC & MOBILE) */}
-      <div className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl transition-all duration-300 ${
+      <div className={`fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl transition-all duration-300 lg:hidden ${
         theme === 'light' 
           ? 'bg-white/95 border-slate-200/80 shadow-[0_-8px_30px_rgb(0,0,0,0.04)] text-slate-850' 
           : 'bg-[#090d1af5] border-white/5 shadow-[0_-8px_30px_rgb(0,0,0,0.4)] text-slate-100'
@@ -5804,7 +5712,7 @@ function MainApp() {
               setQuickInstallmentValueStr('');
             }
           }}
-          className="fixed bottom-52 right-4 md:right-6 z-[50] bg-pink-600 hover:bg-pink-700 text-white font-black px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 cursor-pointer transition-all border border-pink-500/20 text-[11px] uppercase tracking-wider font-display"
+          className="fixed bottom-52 lg:bottom-20 right-4 md:right-6 z-[50] bg-pink-600 hover:bg-pink-700 text-white font-black px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 cursor-pointer transition-all border border-pink-500/20 text-[11px] uppercase tracking-wider font-display"
           title="Definir Valor da Parcela do Mês"
           id="btn-quick-installment-trigger"
           style={{
@@ -6366,7 +6274,7 @@ function MainApp() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setIsRecentItemsOpen(true)}
-            className="fixed bottom-36 right-4 md:right-6 z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-4.5 py-3 rounded-full flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30 transition-all font-black text-xs uppercase tracking-wider border-none"
+            className="fixed bottom-[148px] lg:bottom-6 right-4 md:right-6 lg:right-[215px] z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-4.5 py-3 rounded-full flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30 transition-all font-black text-xs uppercase tracking-wider border-none"
             title={t('ultimosLancamentos', 'Últimos Lançamentos')}
             style={{
               boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.45)"
@@ -6652,7 +6560,7 @@ function MainApp() {
             whileTap={{ scale: 0.9 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25 }}
             onClick={scrollToTop}
-            className={`fixed bottom-20 left-4 sm:left-6 z-[55] w-12 h-12 rounded-full shadow-2xl flex items-center justify-center cursor-pointer border backdrop-blur-xl transition-all ${
+            className={`fixed bottom-24 lg:bottom-8 left-4 sm:left-6 z-[55] w-12 h-12 rounded-full shadow-2xl flex items-center justify-center cursor-pointer border backdrop-blur-xl transition-all ${
               theme === 'light'
                 ? 'bg-slate-900/90 text-white border-slate-700/60 shadow-slate-900/30 hover:bg-slate-800'
                 : 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-emerald-500/40 hover:bg-emerald-400'

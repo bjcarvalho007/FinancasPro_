@@ -304,49 +304,29 @@ export default function DashboardAnalytics({
   }
 
   // Notificações do Mês Focado
-  const monthAlerts: { id: string; type: 'error' | 'warning' | 'success' | 'info'; text: string; details?: string }[] = [];
+  const monthAlerts: { id: string; type: 'error' | 'warning' | 'success'; text: string; details?: string }[] = [];
 
-  // 1. Total a Pagar Pendente (o que falta pagar)
-  if (totalUnpaidMonth > 0) {
+  // Explicar se sobrou e destacar a boa gestão
+  if (leftover > 0) {
     monthAlerts.push({
-      id: 'month-unpaid-pending',
-      type: overdueMonthTransactions.length > 0 ? 'error' : 'warning',
-      text: `Total a Pagar Pendente: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalUnpaidMonth)} (o que falta pagar)`,
-      details: `Você tem ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalUnpaidMonth)} em aberto para quitar neste mês.${overdueMonthTransactions.length > 0 ? ` Atenção: ${overdueMonthTransactions.length} conta(s) estão em atraso!` : ''}`
+      id: 'month-leftover-management-success',
+      type: 'success',
+      text: `Muito bem! Sobrou ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(leftover)} no mês`,
+      details: `Você gastou menos do que tinha disponível neste mês de ${formatMonthKey(currentMonthKey)}! Esse dinheiro que sobrou livre pode ser guardado, investido ou usado para realizar suas metas.`
     });
-  }
-
-  // 2. Sobras Estimada de Caixa (o que sobrou)
-  // CRITICAL: Só gera alerta de sobra se houver despesas registradas no mês
-  if (totalSpentMonth > 0) {
-    if (leftover > 0) {
-      monthAlerts.push({
-        id: 'month-leftover-management-success',
-        type: 'success',
-        text: `Sobra Estimada de Caixa: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(leftover)} (o que sobrou)`,
-        details: `Você gastou menos do que tinha disponível no mês de ${formatMonthKey(currentMonthKey)}! Total de entradas: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAvailable)} | Total de despesas: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalSpentMonth)}. Essa sobra livre pode ser guardada ou investida.`
-      });
-    } else if (leftover < 0) {
-      monthAlerts.push({
-        id: 'month-leftover-management-deficit',
-        type: 'error',
-        text: `Déficit de Caixa: -${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(leftover))}`,
-        details: `Seus gastos e contas neste mês foram maiores que sua renda disponível. Tente reduzir as despesas extras nas próximas semanas.`
-      });
-    } else {
-      monthAlerts.push({
-        id: 'month-leftover-management-even',
-        type: 'warning',
-        text: 'Contas no limite (zero sobras)',
-        details: 'Você conseguiu quitar todas as contas, mas não sobrou nenhum valor livre após os pagamentos deste mês.'
-      });
-    }
+  } else if (leftover < 0) {
+    monthAlerts.push({
+      id: 'month-leftover-management-deficit',
+      type: 'error',
+      text: `Gasto acima do orçamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(leftover))}`,
+      details: `Seus gastos e contas neste mês foram maiores que sua renda disponível. Tente reduzir as despesas extras nas próximas semanas.`
+    });
   } else if (totalAvailable > 0) {
     monthAlerts.push({
-      id: 'month-inflows-ready',
-      type: 'info',
-      text: `Total de Entrada Disponível: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalAvailable)}`,
-      details: 'Suas receitas do mês estão registradas. Lance suas despesas e contas para acompanhar o total a pagar e a sobra de caixa.'
+      id: 'month-leftover-management-even',
+      type: 'warning',
+      text: 'Contas no limite (zero sobras)',
+      details: 'Você conseguiu pagar tudo em dia, mas não sobrou nenhum dinheirinho livre após quitar as contas deste mês.'
     });
   }
 
@@ -354,7 +334,7 @@ export default function DashboardAnalytics({
     monthAlerts.push({
       id: 'month-overdue',
       type: 'error',
-      text: `${overdueMonthTransactions.length} conta(s) em atraso neste mês`,
+      text: `${overdueMonthTransactions.length} contas atrasadas neste mês`,
       details: `Por favor, lembre-se de conferir e marcar como pagas as seguintes contas: ${overdueMonthTransactions.map(t => `'${t.name}'`).join(', ')}.`
     });
   }
@@ -1899,7 +1879,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>{isScopeMonth ? t('totalAPagarPendente', 'Total a Pagar Pendente') : t('totalDevedorParcelado', 'Total Devedor Parcelado')}</span>
+                }`}>{isScopeMonth ? t('aPagarPendente', 'A Pagar Pendente') : t('totalDevedorParcelado', 'Total Devedor Parcelado')}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   isLight ? 'text-orange-600' : 'text-orange-400'
                 }`}>
@@ -1909,7 +1889,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                {isScopeMonth ? t('oQueFaltaPagar', 'O que falta pagar') : t('saldoDevedorRestante', 'Saldo devedor restante simples')}
+                {isScopeMonth ? t('pendenteQuitacaoMes', 'Pendente de quitação no mês') : t('saldoDevedorRestante', 'Saldo devedor restante simples')}
               </span>
             </div>
 
@@ -1919,7 +1899,7 @@ export default function DashboardAnalytics({
               <div>
                 <span className={`text-[10px] font-black uppercase tracking-widest block mb-1 font-black ${
                   isLight ? 'text-slate-500' : 'text-slate-400'
-                }`}>{isScopeMonth ? t('sobraEstimadaDeCaixa', 'Sobras Estimada de Caixa') : t('sobraMediaEstimada', 'Sobra Média Estimada')}</span>
+                }`}>{isScopeMonth ? t('sobraEstimada', 'Sobra Estimada') : t('sobraMediaEstimada', 'Sobra Média Estimada')}</span>
                 <span className={`text-base font-mono font-extrabold block mb-0.5 ${
                   estimatedSurplus >= 0 
                     ? isLight ? 'text-emerald-600' : 'text-emerald-400' 
@@ -1931,7 +1911,7 @@ export default function DashboardAnalytics({
               <span className={`text-[10px] block font-bold uppercase tracking-wider ${
                 isLight ? 'text-slate-700' : 'text-slate-500'
               }`}>
-                {isScopeMonth ? t('oQueSobrouLivre', 'O que sobrou (Entradas - Despesas)') : t('mediaLivreMensalProjetada', 'Média livre mensal projetada')}
+                {isScopeMonth ? t('saldoLivreProjetado', 'Saldo livre projetado do mês') : t('mediaLivreMensalProjetada', 'Média livre mensal projetada')}
               </span>
             </div>
 
@@ -1982,7 +1962,7 @@ export default function DashboardAnalytics({
               <div className={`p-4 rounded-2xl border transition-all ${
                 isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
               }`}>
-                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">{t('totalDeEntradas', 'Total de Entradas')} (MoM)</span>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">{t('entradas', 'Entradas')} (MoM)</span>
                 
                 <div className="flex items-baseline justify-between gap-1 mt-1">
                   <span className={`text-base font-mono font-extrabold ${isLight ? 'text-slate-900' : 'text-slate-250'}`}>
@@ -2012,7 +1992,7 @@ export default function DashboardAnalytics({
               <div className={`p-4 rounded-2xl border transition-all ${
                 isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
               }`}>
-                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">{t('totalDespesas', 'Total Despesas')} (MoM)</span>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">{t('gastos', 'Gastos')} (MoM)</span>
                 
                 <div className="flex items-baseline justify-between gap-1 mt-1">
                   <span className={`text-base font-mono font-extrabold ${isLight ? 'text-slate-900' : 'text-slate-250'}`}>
@@ -2042,7 +2022,7 @@ export default function DashboardAnalytics({
               <div className={`p-4 rounded-2xl border transition-all ${
                 isLight ? 'bg-slate-50/70 border-slate-200' : 'bg-white/2 border-white/5'
               }`}>
-                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">{t('sobrasEstimadasDeCaixa', 'Sobras Estimada de Caixa')} (MoM)</span>
+                <span className="text-[9.5px] font-black text-slate-500 uppercase tracking-wider block mb-1">{t('sobrasEstimadas', 'Sobras Estimadas')}</span>
                 
                 <div className="flex items-baseline justify-between gap-1 mt-1">
                   <span className={`text-base font-mono font-extrabold ${

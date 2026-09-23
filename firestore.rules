@@ -165,21 +165,10 @@ service cloud.firestore {
     }
 
     match /push_subscriptions/{subId} {
-      allow get: if true;
-      allow list: if true;
-      allow create, update, delete: if isSignedIn();
-    }
-
-    match /user_sync_cache/{userId} {
-      allow get: if true;
-      allow list: if true;
-      allow create, update, delete: if isSignedIn();
-    }
-
-    match /notified_alerts/{alertId} {
-      allow get: if true;
-      allow list: if true;
-      allow create, update, delete: if true;
+      allow get, delete: if isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(subId) && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(subId) && existing().userId == request.auth.uid && incoming().userId == request.auth.uid;
     }
 
     match /registrations/{registrationId} {

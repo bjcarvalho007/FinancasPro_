@@ -12,18 +12,18 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // Initialize Firebase Admin SDK for secure server-side Firestore operations
-let firebaseAppConfig: any = {};
 try {
+  let config: any = {};
   try {
     const configPath = path.join(process.cwd(), "firebase-applet-config.json");
     if (fs.existsSync(configPath)) {
-      firebaseAppConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+      config = JSON.parse(fs.readFileSync(configPath, "utf8"));
     }
   } catch (e) {
     console.warn("⚠️ Não foi possível carregar firebase-applet-config.json:", e);
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID || firebaseAppConfig.projectId || "financaspro-bcbb4";
+  const projectId = process.env.FIREBASE_PROJECT_ID || config.projectId || "financaspro-bcbb4";
   
   if (!admin.apps.length) {
     console.log(`🚀 Inicializando Firebase Admin SDK para o projeto: ${projectId}`);
@@ -192,68 +192,15 @@ async function ensureVapidKeys() {
 // Background Checker & Push Cache File Storage (using /tmp on serverless environments to prevent EROFS)
 const PUSH_SUBS_FILE = path.join(storageBaseDir, "push-subscriptions.json");
 const USER_BILLS_FILE = path.join(storageBaseDir, "user-bills-cache.json");
-const USER_SETTINGS_FILE = path.join(storageBaseDir, "user-settings-cache.json");
 const NOTIFIED_ALERTS_FILE = path.join(storageBaseDir, "notified-alerts-cache.json");
 
-function readJsonFileSafe(filePath: string, fallbacks: string[] = []): any {
-  try {
-    if (fs.existsSync(filePath)) {
-      const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
-      if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-        return data;
-      }
-    }
-  } catch (_) {}
-
-  for (const fb of fallbacks) {
-    try {
-      if (fb && fb !== filePath && fs.existsSync(fb)) {
-        const data = JSON.parse(fs.readFileSync(fb, "utf8"));
-        if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-          return data;
-        }
-      }
-    } catch (_) {}
-  }
-  return {};
-}
-
-function writeJsonFileSafe(filePath: string, data: any, backupPath?: string) {
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
-    if (backupPath && backupPath !== filePath) {
-      try {
-        fs.writeFileSync(backupPath, JSON.stringify(data, null, 2), "utf8");
-      } catch (_) {}
-    }
-  } catch (e) {
-    console.warn(`⚠️ [CACHE] Falha ao gravar ${filePath}:`, e);
-  }
-}
-
-function getLocalUserSettings(): { [userId: string]: any } {
-  return readJsonFileSafe(USER_SETTINGS_FILE, [
-    path.join(process.cwd(), "user-settings-cache.json"),
-    "/tmp/user-settings-cache.json"
-  ]);
-}
-
-function saveLocalUserSettings(userId: string, settings: any) {
-  try {
-    if (!userId || !settings) return;
-    const data = getLocalUserSettings();
-    data[userId] = { ...(data[userId] || {}), ...settings };
-    writeJsonFileSafe(USER_SETTINGS_FILE, data, path.join(process.cwd(), "user-settings-cache.json"));
-  } catch (e) {
-    console.warn("⚠️ Erro ao salvar configurações locais:", e);
-  }
-}
-
 function getLocalSubscriptions(): { [userId: string]: any[] } {
-  return readJsonFileSafe(PUSH_SUBS_FILE, [
-    path.join(process.cwd(), "push-subscriptions.json"),
-    "/tmp/push-subscriptions.json"
-  ]);
+  try {
+    if (fs.existsSync(PUSH_SUBS_FILE)) {
+      return JSON.parse(fs.readFileSync(PUSH_SUBS_FILE, "utf8")) || {};
+    }
+  } catch (e) {}
+  return {};
 }
 
 function saveLocalSubscription(userId: string, subscription: any) {
@@ -276,77 +223,29 @@ function saveLocalSubscription(userId: string, subscription: any) {
     } else {
       data[userId].push(subObj);
     }
-    writeJsonFileSafe(PUSH_SUBS_FILE, data, path.join(process.cwd(), "push-subscriptions.json"));
+    fs.writeFileSync(PUSH_SUBS_FILE, JSON.stringify(data, null, 2), "utf8");
     console.log(`💾 [SUBS] Dispositivo registrado com sucesso para usuário ${userId}. Total registrado: ${data[userId].length}`);
   } catch (e) {
     console.warn("⚠️ Erro ao salvar assinatura local:", e);
   }
 }
 
-function getLocalUserBills(): { [userId: string]: any } {
-  return readJsonFileSafe(USER_BILLS_FILE, [
-    path.join(process.cwd(), "user-bills-cache.json"),
-    "/tmp/user-bills-cache.json"
-  ]);
+function getLocalUserBills(): { [userId: string]: any[] } {
+  try {
+    if (fs.existsSync(USER_BILLS_FILE)) {
+      return JSON.parse(fs.readFileSync(USER_BILLS_FILE, "utf8")) || {};
+    }
+  } catch (e) {}
+  return {};
 }
 
-function saveLocalUserBills(userId: string, data: any) {
+function saveLocalUserBills(userId: string, bills: any[]) {
   try {
-    const store = getLocalUserBills();
-    const existing = (store[userId] && typeof store[userId] === 'object' && !Array.isArray(store[userId])) ? store[userId] : {};
-
-    if (Array.isArray(data)) {
-      if (data.length > 0 || !existing.monthBills || existing.monthBills.length === 0) {
-        store[userId] = {
-          ...existing,
-          userId,
-          bills: data,
-          monthBills: data,
-          pendingBills: data.filter((b: any) => ((Number(b.amount) || 0) - (Number(b.paid_amount) || 0)) > 0),
-          updatedAt: new Date().toISOString()
-        };
-      }
-    } else if (data && typeof data === 'object') {
-      const incomingMonthBills = Array.isArray(data.monthBills) && data.monthBills.length > 0
-        ? data.monthBills
-        : (Array.isArray(data.bills) && data.bills.length > 0 ? data.bills : null);
-
-      // Preserve existing bills if incoming is empty/missing
-      const finalMonthBills = incomingMonthBills || existing.monthBills || existing.bills || [];
-
-      const incomingPendingBills = Array.isArray(data.pendingBills) && data.pendingBills.length > 0
-        ? data.pendingBills
-        : (incomingMonthBills
-            ? incomingMonthBills.filter((b: any) => ((Number(b.amount) || 0) - (Number(b.paid_amount) || 0)) > 0)
-            : null);
-
-      const finalPendingBills = incomingPendingBills || existing.pendingBills || [];
-
-      let finalSummary = data.summary;
-      // If incoming summary is zeroed out or missing, but existing has non-zero summary, preserve existing!
-      if (!finalSummary || (Number(finalSummary.totalSpentMonth) === 0 && existing.summary && Number(existing.summary.totalSpentMonth) > 0)) {
-        finalSummary = existing.summary || data.summary;
-      }
-
-      const finalRawTransactions = (Array.isArray(data.rawTransactions) && data.rawTransactions.length > 0)
-        ? data.rawTransactions
-        : (existing.rawTransactions || []);
-
-      store[userId] = {
-        ...existing,
-        ...data,
-        monthBills: finalMonthBills,
-        pendingBills: finalPendingBills,
-        bills: finalMonthBills,
-        summary: finalSummary,
-        rawTransactions: finalRawTransactions,
-        userId,
-        updatedAt: new Date().toISOString()
-      };
-    }
-    writeJsonFileSafe(USER_BILLS_FILE, store, path.join(process.cwd(), "user-bills-cache.json"));
+    const data = getLocalUserBills();
+    data[userId] = bills;
+    fs.writeFileSync(USER_BILLS_FILE, JSON.stringify(data, null, 2), "utf8");
   } catch (e) {
-    console.warn("⚠️ Erro ao salvar dados financeiros locais:", e);
+    console.warn("⚠️ Erro ao salvar faturas locais:", e);
   }
 }
 
@@ -429,359 +328,73 @@ function getBrasiliaDate(): { hour: number; minute: number; dateStr: string; tim
   }
 }
 
-interface DashboardAlertItem {
-  id: string;
-  type: 'error' | 'warning' | 'info' | 'success';
-  title: string;
-  summary: string;
-}
-
-interface DashboardSmartInsightsData {
-  alerts: DashboardAlertItem[];
+interface SmartInsightsData {
   topExpense: { name: string; amount: number; category: string } | null;
-  totalAvailable: number;
   totalExpenses: number;
   totalPaid: number;
   totalPending: number;
   paidPercentage: number;
-  leftover: number;
-  spentRatio: number;
-  topCategory: { name: string; amount: number; pct: number } | null;
+  topCategory: string | null;
   expensesCount: number;
 }
 
-function computeServerMonthFinancials(rawTransactions: any[], targetMonthKey: string) {
-  if (!Array.isArray(rawTransactions) || rawTransactions.length === 0) {
-    return null;
-  }
-
-  // Real transactions in the target month
-  const realThisMonth = rawTransactions.filter(t => t.monthKey === targetMonthKey && !t.is_skipped);
-  const normalizedReal = realThisMonth.map(t => {
-    if (t.type === 'parcelas') {
-      const masterId = t.masterId || t.id;
-      const masterTx = rawTransactions.find(m => m.id === masterId) || t;
-      const extraGasto = Number(masterTx.extra_gasto) || 0;
-      const totalOriginalBase = Number(masterTx.total_parcelado) || Number(masterTx.amount) || 0;
-      const count = Number(masterTx.installmentsCount) || 1;
-      const baseInstallment = (Number(masterTx.amount) > 0 && Number(masterTx.amount) !== totalOriginalBase)
-        ? Number(masterTx.amount)
-        : (totalOriginalBase / count);
-      return {
-        ...t,
-        amount: baseInstallment + (extraGasto / count),
-        paid_amount: Number(t.paid_amount) || 0
-      };
-    }
-    return {
-      ...t,
-      amount: Number(t.amount) || 0,
-      paid_amount: Number(t.paid_amount) || 0
-    };
-  });
-
-  // Unique master transactions for fixos & parcelas
-  const masterTransactions = rawTransactions.filter(t => (t.type === 'fixos' || t.type === 'parcelas') && !String(t.id).startsWith('v_'));
-  const mastersMap = new Map<string, any>();
-  for (const tx of masterTransactions) {
-    const key = tx.masterId || `name_${String(tx.name || '').trim().toLowerCase()}`;
-    if (!mastersMap.has(key)) {
-      mastersMap.set(key, tx);
-    }
-  }
-
-  const enriched = [...normalizedReal];
-
-  mastersMap.forEach(masterTx => {
-    const exists = normalizedReal.some(t => {
-      if (t.id === masterTx.id) return true;
-      if (masterTx.masterId && t.masterId === masterTx.masterId) return true;
-      if (t.masterId === masterTx.id) return true;
-      if (String(t.name || '').trim().toLowerCase() === String(masterTx.name || '').trim().toLowerCase()) return true;
-      return false;
-    });
-
-    if (!exists) {
-      const startMonthKey = masterTx.monthKey || (masterTx.createdAt ? String(masterTx.createdAt).substring(0, 7) : targetMonthKey);
-      const [sY, sM] = startMonthKey.split('-').map(Number);
-      const [tY, tM] = targetMonthKey.split('-').map(Number);
-      const monthsDiff = (tY - sY) * 12 + (tM - sM);
-      if (monthsDiff < 0) return;
-
-      if (masterTx.type === 'parcelas') {
-        const count = Number(masterTx.installmentsCount) || 1;
-        if (monthsDiff >= count) return;
-      }
-
-      let amount = Number(masterTx.amount) || 0;
-      if (masterTx.type === 'parcelas') {
-        const count = Number(masterTx.installmentsCount) || 1;
-        const totalBase = Number(masterTx.total_parcelado) || amount;
-        amount = totalBase / count;
-      }
-
-      enriched.push({
-        ...masterTx,
-        id: `v_${masterTx.masterId || masterTx.id}_${targetMonthKey}`,
-        monthKey: targetMonthKey,
-        amount,
-        paid_amount: 0
-      });
-    }
-  });
-
-  const monthBills = enriched.filter(t => t.type !== 'rendas' && t.type !== 'entradas' && t.type !== 'receita' && !t.is_skipped);
-  const pendingBills = monthBills.filter(t => (Number(t.amount) - Number(t.paid_amount)) > 0);
-  const totalSpent = monthBills.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
-  const totalPaid = monthBills.reduce((acc, t) => acc + (Number(t.paid_amount) || 0), 0);
-  const totalUnpaid = Math.max(0, totalSpent - totalPaid);
-
-  return {
-    monthBills,
-    pendingBills,
-    totalSpent,
-    totalPaid,
-    totalUnpaid
-  };
-}
-
-function generateDashboardSmartAlerts(
-  userData: any,
-  userSettings: any,
-  brYear: number,
-  brMonth: number
-): DashboardSmartInsightsData {
-  const currentMonthKey = (userData && typeof userData === 'object' && userData.currentMonthKey)
-    ? userData.currentMonthKey
-    : `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
-  const fmt = (v: number) => (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  // 1. Inflows (Total de Entrada = Renda + Saldo em mãos/Reserva + Extras)
-  const income = Number(userSettings?.monthlyIncome?.[currentMonthKey] ?? userSettings?.income ?? 0);
-  const balance = Number(userSettings?.monthlyBalance?.[currentMonthKey] ?? userSettings?.balance ?? 0);
-  const extra = Number(userSettings?.extras?.[currentMonthKey] ?? 0);
-  const storedSummary = (userData && typeof userData === 'object') ? userData.summary : null;
-  const totalAvailable = (storedSummary?.totalAvailable !== undefined) ? Number(storedSummary.totalAvailable) : (income + balance + extra);
-
-  // 2. Identify month expenses
-  let rawList: any[] = (userData && typeof userData === 'object')
-    ? (userData.monthBills || userData.bills || (Array.isArray(userData) ? userData : []))
-    : (Array.isArray(userData) ? userData : []);
-
-  // If rawList is empty, check if we can compute from rawTransactions
-  if (rawList.length === 0 && userData && Array.isArray(userData.rawTransactions) && userData.rawTransactions.length > 0) {
-    const projected = computeServerMonthFinancials(userData.rawTransactions, currentMonthKey);
-    if (projected && projected.monthBills.length > 0) {
-      rawList = projected.monthBills;
-    }
-  }
-
-  const monthExpenses = rawList.filter(t => {
-    if (!t || !t.name) return false;
-    if (t.type === 'rendas' || t.type === 'entradas' || t.type === 'receita') return false;
-    if (t.is_skipped) return false;
-    if (t.monthKey && t.monthKey !== currentMonthKey) return false;
-    return true;
-  });
-
-  const activeExpenses = monthExpenses;
-
+function calculateUserSmartInsights(userBills: any[], brYear: number, brMonth: number): SmartInsightsData {
+  const currentMonthKey = `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
+  let topExpense: { name: string; amount: number; category: string } | null = null;
   let totalExpenses = 0;
   let totalPaid = 0;
-  let topExpense: { name: string; amount: number; category: string } | null = storedSummary?.topExpense || null;
-  const categoryTotals: Record<string, number> = storedSummary?.categoryTotals ? { ...storedSummary.categoryTotals } : {};
-  let installmentsTotal = 0;
-  const overdueItems: string[] = [];
+  const categoryTotals: { [cat: string]: number } = {};
+  let count = 0;
 
-  if (storedSummary?.totalSpentMonth !== undefined && Number(storedSummary.totalSpentMonth) > 0) {
-    totalExpenses = Number(storedSummary.totalSpentMonth);
-    totalPaid = Number(storedSummary.totalPaidMonth) || 0;
-  } else {
-    for (const tx of activeExpenses) {
-      const amt = Number(tx.amount) > 0 
-        ? Number(tx.amount) 
-        : (Number(tx.total_parcelado) > 0 && tx.installmentsCount ? (Number(tx.total_parcelado) / Number(tx.installmentsCount)) : (Number(tx.total_parcelado) || 0));
-      const paid = Number(tx.paid_amount) || 0;
-      totalExpenses += amt;
-      totalPaid += paid;
-    }
-  }
+  for (const tx of userBills) {
+    if (!tx || !tx.name) continue;
+    if (tx.type === 'rendas' || tx.type === 'entradas' || tx.type === 'receita') continue;
+    if (tx.is_skipped) continue;
 
-  for (const tx of activeExpenses) {
-    const amt = Number(tx.amount) > 0 
-      ? Number(tx.amount) 
-      : (Number(tx.total_parcelado) > 0 && tx.installmentsCount ? (Number(tx.total_parcelado) / Number(tx.installmentsCount)) : (Number(tx.total_parcelado) || 0));
+    // Consider transactions for current month or active non-month-specific expenses
+    if (tx.monthKey && tx.monthKey !== currentMonthKey) continue;
+
+    const amount = Number(tx.amount) || Number(tx.total_parcelado) || 0;
     const paid = Number(tx.paid_amount) || 0;
 
-    if (!topExpense || amt > topExpense.amount) {
+    if (amount <= 0 && paid <= 0) continue;
+
+    count++;
+    totalExpenses += amount;
+    totalPaid += paid;
+
+    if (!topExpense || amount > topExpense.amount) {
       topExpense = {
         name: tx.name,
-        amount: amt,
+        amount: amount,
         category: tx.cat || tx.category || 'Geral'
       };
     }
 
     const catName = String(tx.cat || tx.category || 'Outros').trim();
-    if (!storedSummary?.categoryTotals) {
-      categoryTotals[catName] = (categoryTotals[catName] || 0) + amt;
-    }
-
-    if (tx.type === 'parcelas') {
-      installmentsTotal += amt;
-    }
-    if (tx.isOverdue && (amt - paid) > 0) {
-      overdueItems.push(tx.name);
-    }
+    categoryTotals[catName] = (categoryTotals[catName] || 0) + amount;
   }
 
-  // Total a pagar pendente é o que falta pagar
-  const totalPending = (storedSummary?.totalUnpaidMonth !== undefined)
-    ? Number(storedSummary.totalUnpaidMonth)
-    : Math.max(0, totalExpenses - totalPaid);
-
-  const paidPercentage = totalExpenses > 0 ? Math.round((totalPaid / totalExpenses) * 100) : (totalPending === 0 ? 100 : 0);
-
-  // Sobras Estimada de Caixa é o que sobrou (Total de Entrada - Total de Despesas do Mês)
-  const leftover = (storedSummary?.leftover !== undefined && (storedSummary?.totalSpentMonth !== undefined ? Number(storedSummary.totalSpentMonth) > 0 : true))
-    ? Number(storedSummary.leftover)
-    : (totalAvailable - totalExpenses);
-
-  const spentRatio = totalAvailable > 0 ? (totalExpenses / totalAvailable) * 100 : 0;
-
-  // Build exact Dashboard Alerts
-  const alerts: DashboardAlertItem[] = [];
-
-  // A. Contas Atrasadas
-  if (overdueItems.length > 0) {
-    alerts.push({
-      id: 'month-overdue',
-      type: 'error',
-      title: `${overdueItems.length} conta(s) em atraso`,
-      summary: `Atenção: ${overdueItems.slice(0, 2).map(n => `"${n}"`).join(', ')}${overdueItems.length > 2 ? ' e outras' : ''} precisam de quitação urgente para evitar juros.`
-    });
-  }
-
-  // B. Total a Pagar Pendente (o que falta pagar)
-  if (totalPending > 0) {
-    alerts.push({
-      id: 'month-pending-unpaid',
-      type: overdueItems.length > 0 ? 'error' : 'warning',
-      title: `Total a Pagar Pendente: R$ ${fmt(totalPending)}`,
-      summary: `É o que falta pagar no mês (R$ ${fmt(totalPaid)} já quitado de R$ ${fmt(totalExpenses)}).`
-    });
-  }
-
-  // C. Sobras Estimada de Caixa (o que sobrou)
-  // CRITICAL: Só gera alerta de sobra se houver despesas no mês para evitar confundir Total de Entrada com Sobra!
-  if (totalExpenses > 0) {
-    if (leftover < 0) {
-      alerts.push({
-        id: 'month-leftover-deficit',
-        type: 'error',
-        title: `Déficit de Caixa: -R$ ${fmt(Math.abs(leftover))}`,
-        summary: `Despesas maiores que as entradas no mês em R$ ${fmt(Math.abs(leftover))}. Evite novos gastos para restabelecer o equilíbrio.`
-      });
-    } else if (leftover === 0) {
-      alerts.push({
-        id: 'month-leftover-zero',
-        type: 'warning',
-        title: 'Contas no Limite (Zero Sobras)',
-        summary: 'Todas as receitas cobrem exatamente as despesas, sem sobra livre no caixa.'
-      });
-    } else {
-      alerts.push({
-        id: 'month-leftover-surplus',
-        type: 'success',
-        title: `Sobra Estimada de Caixa: R$ ${fmt(leftover)}`,
-        summary: `É o que sobrou livre após todas as despesas do mês (Entradas de R$ ${fmt(totalAvailable)} - Despesas de R$ ${fmt(totalExpenses)}).`
-      });
-    }
-  } else if (totalAvailable > 0) {
-    alerts.push({
-      id: 'month-inflows-ready',
-      type: 'info',
-      title: `Total de Entrada: R$ ${fmt(totalAvailable)}`,
-      summary: `Receita registrada no mês. Lance suas despesas para calcular o que falta pagar e a sobra de caixa.`
-    });
-  }
-
-  // C. Comprometimento de Renda
-  if (spentRatio > 85) {
-    alerts.push({
-      id: 'month-spent-critical',
-      type: 'error',
-      title: `Renda Comprometida: ${Math.round(spentRatio)}% usado`,
-      summary: `Mais de 85% do seu dinheiro disponível já está consumido em despesas.`
-    });
-  } else if (spentRatio > 65) {
-    alerts.push({
-      id: 'month-spent-warning',
-      type: 'warning',
-      title: `Gastos consomem ${Math.round(spentRatio)}% da renda`,
-      summary: `Despesas em nível elevado. Mantenha cautela em novos compromissos.`
-    });
-  }
-
-  // D. Concentração de Categoria
-  let topCat: { name: string; amount: number; pct: number } | null = null;
-  for (const [cName, cAmt] of Object.entries(categoryTotals)) {
-    const pct = totalExpenses > 0 ? Math.round((cAmt / totalExpenses) * 100) : 0;
-    if (!topCat || cAmt > topCat.amount) {
-      topCat = { name: cName, amount: cAmt, pct };
+  let topCategory: string | null = null;
+  let topCatAmount = 0;
+  for (const [cat, sum] of Object.entries(categoryTotals)) {
+    if (sum > topCatAmount) {
+      topCatAmount = sum;
+      topCategory = cat;
     }
   }
-  if (topCat && topCat.pct >= 40 && Object.keys(categoryTotals).length > 1) {
-    alerts.push({
-      id: 'month-cat-leak',
-      type: 'warning',
-      title: `Gasto concentrado em ${topCat.name}`,
-      summary: `A categoria "${topCat.name}" consome ${topCat.pct}% de todas as despesas registradas.`
-    });
-  }
 
-  // E. Maior Despesa do Mês
-  if (topExpense) {
-    alerts.push({
-      id: 'month-top-expense',
-      type: 'info',
-      title: `Maior gasto: "${topExpense.name}" (R$ ${fmt(topExpense.amount)})`,
-      summary: `Principal compromisso financeiro deste ciclo (categoria: ${topExpense.category}).`
-    });
-  }
-
-  // F. Parcelas no Cartão
-  const installmentPct = totalExpenses > 0 ? Math.round((installmentsTotal / totalExpenses) * 100) : 0;
-  if (installmentPct >= 40) {
-    alerts.push({
-      id: 'month-installments-high',
-      type: 'warning',
-      title: `Parcelamentos somam ${installmentPct}% das contas`,
-      summary: `R$ ${fmt(installmentsTotal)} comprometidos em compras parceladas de cartão.`
-    });
-  }
-
-  // G. Progresso de Pagamento (somente se houver despesas planejadas no mês)
-  if (totalExpenses > 0) {
-    alerts.push({
-      id: 'month-progress',
-      type: paidPercentage >= 80 ? 'success' : 'info',
-      title: `Progresso: ${paidPercentage}% das contas quitadas`,
-      summary: `R$ ${fmt(totalPaid)} pagos de R$ ${fmt(totalExpenses)} planejados (restam R$ ${fmt(totalPending)}).`
-    });
-  }
+  const totalPending = Math.max(0, totalExpenses - totalPaid);
+  const paidPercentage = totalExpenses > 0 ? Math.round((totalPaid / totalExpenses) * 100) : 100;
 
   return {
-    alerts,
     topExpense,
-    totalAvailable,
     totalExpenses,
     totalPaid,
     totalPending,
     paidPercentage,
-    leftover,
-    spentRatio,
-    topCategory: topCat,
-    expensesCount: activeExpenses.length
+    topCategory,
+    expensesCount: count
   };
 }
 
@@ -835,133 +448,48 @@ async function dispatchPushToSubscriptions(
   return sentCount;
 }
 
-// Helper to query Firestore via REST API with web API key (works on Vercel serverless without service account)
-async function fetchFirestoreDocumentRest(docPath: string): Promise<any> {
-  try {
-    const projectId = process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT_ID || firebaseAppConfig.projectId;
-    const apiKey = process.env.VITE_FIREBASE_API_KEY || firebaseAppConfig.apiKey;
-    if (!projectId || !apiKey) return null;
-
-    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${docPath}?key=${apiKey}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data || !data.fields) return null;
-
-    const parseFields = (fields: any): any => {
-      if (!fields) return null;
-      const result: any = {};
-      for (const [k, v] of Object.entries(fields) as [string, any][]) {
-        if (v.stringValue !== undefined) result[k] = v.stringValue;
-        else if (v.integerValue !== undefined) result[k] = Number(v.integerValue);
-        else if (v.doubleValue !== undefined) result[k] = Number(v.doubleValue);
-        else if (v.booleanValue !== undefined) result[k] = v.booleanValue;
-        else if (v.mapValue?.fields !== undefined) result[k] = parseFields(v.mapValue.fields);
-        else if (v.arrayValue?.values !== undefined) {
-          result[k] = v.arrayValue.values.map((item: any) => 
-            item.stringValue !== undefined ? item.stringValue :
-            item.integerValue !== undefined ? Number(item.integerValue) :
-            item.doubleValue !== undefined ? Number(item.doubleValue) :
-            item.booleanValue !== undefined ? item.booleanValue :
-            item.mapValue?.fields ? parseFields(item.mapValue.fields) : null
-          );
-        }
-      }
-      return result;
-    };
-
-    return parseFields(data.fields);
-  } catch (err) {
-    return null;
-  }
-}
-
 // Background Checker Task for push notifications when browser is closed
 async function runBackgroundPushNotificationChecker(
   forceNow: boolean = false, 
   targetUserId?: string,
-  targetMode: 'bills' | 'smart' | 'both' = 'both',
-  targetSlot?: string
+  targetMode: 'bills' | 'smart' | 'both' = 'both'
 ) {
   await ensureVapidKeys();
   const br = getBrasiliaDate();
-  console.log(`⏰ [BACKGROUND SWEEPER] Varredura em 2º plano (Horário de Brasília: ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}, Data: ${br.dateStr}, Forçar: ${forceNow}, Modo: ${targetMode}, Slot: ${targetSlot || 'auto'})...`);
+  console.log(`⏰ [BACKGROUND SWEEPER] Varredura em 2º plano (Horário de Brasília: ${String(br.hour).padStart(2, '0')}:${String(br.minute).padStart(2, '0')}, Data: ${br.dateStr}, Forçar: ${forceNow}, Modo: ${targetMode})...`);
 
   const userSubsMap: { [userId: string]: any[] } = getLocalSubscriptions();
 
-  // Supplement with Firestore subscriptions if accessible via Admin SDK
+  // Supplement with Firestore subscriptions if accessible
   try {
     const db = admin.firestore();
     const subsSnapshot = await db.collection("push_subscriptions").get();
     if (!subsSnapshot.empty) {
       subsSnapshot.forEach((doc) => {
         const data = doc.data();
-        const extractedUserId = data?.userId || (doc.id.startsWith("sub_") ? doc.id.replace(/^sub_/, "").split("_")[0] : null);
-        if (data && extractedUserId) {
+        if (data && data.userId && data.subscription) {
           try {
-            let subParsed: any = null;
-            if (data.subscription) {
-              subParsed = typeof data.subscription === 'string' ? JSON.parse(data.subscription) : data.subscription;
-            } else if (data.sub) {
-              subParsed = typeof data.sub === 'string' ? JSON.parse(data.sub) : data.sub;
-            } else if (data.endpoint && data.keys) {
-              subParsed = { endpoint: data.endpoint, keys: data.keys };
-            }
-
-            if (subParsed && subParsed.endpoint && subParsed.keys?.p256dh && subParsed.keys?.auth) {
-              if (!userSubsMap[extractedUserId]) userSubsMap[extractedUserId] = [];
-              const ep = subParsed.endpoint;
-              const exists = userSubsMap[extractedUserId].some((s: any) => s?.endpoint === ep);
-              if (!exists) {
-                userSubsMap[extractedUserId].push(subParsed);
-              }
+            const subParsed = typeof data.subscription === 'string' ? JSON.parse(data.subscription) : data.subscription;
+            if (!userSubsMap[data.userId]) userSubsMap[data.userId] = [];
+            const ep = subParsed?.endpoint;
+            const exists = userSubsMap[data.userId].some((s: any) => s?.endpoint === ep);
+            if (!exists && ep) {
+              userSubsMap[data.userId].push(subParsed);
             }
           } catch (e) {}
         }
       });
     }
-  } catch (dbErr: any) {}
-
-  // Fallback on Vercel: fetch subscriptions from registrations via Firestore REST
-  try {
-    const regIndex = await fetchFirestoreDocumentRest("registrations/reg_user_index");
-    const uidsToInspect: string[] = [];
-    if (regIndex?.usersList) {
-      try {
-        const parsed = typeof regIndex.usersList === 'string' ? JSON.parse(regIndex.usersList) : regIndex.usersList;
-        if (Array.isArray(parsed)) uidsToInspect.push(...parsed);
-      } catch (_) {}
-    }
-    if (regIndex?.userId && !uidsToInspect.includes(regIndex.userId)) {
-      uidsToInspect.push(regIndex.userId);
-    }
-    if (targetUserId && !uidsToInspect.includes(targetUserId)) {
-      uidsToInspect.push(targetUserId);
-    }
-
-    for (const uid of uidsToInspect) {
-      if (!userSubsMap[uid] || userSubsMap[uid].length === 0) {
-        const subDoc = await fetchFirestoreDocumentRest(`registrations/reg_sub_${uid}`);
-        if (subDoc?.subscriptionPayload) {
-          try {
-            const parsedSub = typeof subDoc.subscriptionPayload === 'string' ? JSON.parse(subDoc.subscriptionPayload) : subDoc.subscriptionPayload;
-            if (parsedSub && parsedSub.endpoint && parsedSub.keys?.p256dh && parsedSub.keys?.auth) {
-              if (!userSubsMap[uid]) userSubsMap[uid] = [];
-              userSubsMap[uid].push(parsedSub);
-              saveLocalSubscription(uid, parsedSub);
-            }
-          } catch (_) {}
-        }
-      }
-    }
-  } catch (_) {}
+  } catch (dbErr: any) {
+    // Firestore admin service account key not provided, using local subscription cache
+  }
 
   const allUserIds = Object.keys(userSubsMap);
   const userIds = targetUserId ? allUserIds.filter(id => id === targetUserId) : allUserIds;
 
   if (userIds.length === 0) {
     console.log("ℹ️ [BACKGROUND SWEEPER] Nenhuma assinatura de Web Push cadastrada.");
-    return { sent: 0, userCount: 0, reason: "Nenhuma assinatura de dispositivo registrada.", users: [] };
+    return { sent: 0, reason: "Nenhuma assinatura de dispositivo registrada." };
   }
 
   const localUserBills = getLocalUserBills();
@@ -969,50 +497,20 @@ async function runBackgroundPushNotificationChecker(
   const now = new Date();
 
   let totalDispatched = 0;
-  const userReports: Array<{
-    userId: string;
-    devices: number;
-    pendingBillsCount: number;
-    overdueCount: number;
-    dueTodayCount: number;
-    smartAlertsCount: number;
-    billsSent: number;
-    smartSent: number;
-    totalSent: number;
-  }> = [];
   const fmt = (v: number) => (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   for (const userId of userIds) {
     const subs = userSubsMap[userId];
     if (!subs || subs.length === 0) continue;
 
-    let userStored = localUserBills[userId];
-    // Fallback: load snapshot from registrations if not found in local cache
-    if (!userStored || !userStored.monthBills || userStored.monthBills.length === 0) {
-      try {
-        const syncDoc = await fetchFirestoreDocumentRest(`registrations/reg_sync_${userId}`);
-        if (syncDoc?.snapshotPayload) {
-          const snap = typeof syncDoc.snapshotPayload === 'string' ? JSON.parse(syncDoc.snapshotPayload) : syncDoc.snapshotPayload;
-          if (snap) {
-            saveLocalUserBills(userId, snap);
-            userStored = snap;
-          }
-        }
-      } catch (_) {}
-    }
-
-    let userSettings = getLocalUserSettings()[userId] || {};
+    let userBills = localUserBills[userId] || [];
 
     // Try fetching from Firestore if accessible
     try {
       const db = admin.firestore();
-      const userDoc = await db.collection("users").doc(userId).get();
-      if (userDoc.exists) {
-        userSettings = { ...userDoc.data(), ...userSettings };
-      }
-      const settingsDoc = await db.collection("settings").doc(userId).get();
-      if (settingsDoc.exists) {
-        userSettings = { ...userSettings, ...settingsDoc.data() };
+      const txSnapshot = await db.collection("transactions").where("userId", "==", userId).get();
+      if (!txSnapshot.empty) {
+        userBills = txSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       }
     } catch (e) {}
 
@@ -1022,111 +520,54 @@ async function runBackgroundPushNotificationChecker(
     const brDay = parseInt(br.dateStr.split('-')[2], 10) || now.getDate();
     const brTodayNoon = new Date(brYear, brMonth, brDay, 12, 0, 0);
 
-    const userCurrentMonthKey = (userStored && typeof userStored === 'object' && userStored.currentMonthKey)
-      ? userStored.currentMonthKey
-      : `${brYear}-${String(brMonth + 1).padStart(2, '0')}`;
-
-    // 1. Gather all potential bill sources to ensure no overdue or pending bill is missed
-    const sourceArrays: any[] = [];
-    if (userStored && typeof userStored === 'object') {
-      if (Array.isArray(userStored.pendingBills)) sourceArrays.push(...userStored.pendingBills);
-      if (Array.isArray(userStored.allBills)) sourceArrays.push(...userStored.allBills);
-      if (Array.isArray(userStored.monthBills)) sourceArrays.push(...userStored.monthBills);
-      if (Array.isArray(userStored.bills)) sourceArrays.push(...userStored.bills);
-    } else if (Array.isArray(userStored)) {
-      sourceArrays.push(...userStored);
-    }
-
-    // If sourceArrays is empty, check if we can compute from rawTransactions
-    if (sourceArrays.length === 0 && userStored && Array.isArray(userStored.rawTransactions) && userStored.rawTransactions.length > 0) {
-      const projected = computeServerMonthFinancials(userStored.rawTransactions, userCurrentMonthKey);
-      if (projected && projected.monthBills.length > 0) {
-        sourceArrays.push(...projected.monthBills);
-      }
-    }
-
-    // Deduplicate by unique id or name+due+monthKey
-    const seenBillKeys = new Set<string>();
-    const rawPendingList: any[] = [];
-    for (const b of sourceArrays) {
-      if (!b || !b.name) continue;
-      const key = b.id || `${b.name}_${b.due}_${b.monthKey}`;
-      if (!seenBillKeys.has(key)) {
-        seenBillKeys.add(key);
-        rawPendingList.push(b);
-      }
-    }
-
-    // 2. Process ALL pending & overdue bills accurately
-    const userPendingBills: Array<{
+    // 1. Process expiring and overdue bills
+    const userExpiringBills: Array<{
       id: string;
       name: string;
       due: string;
-      amount: number;
-      paid_amount: number;
       remaining: number;
       isOverdue: boolean;
       isDueToday: boolean;
       diffDays: number;
-      cat: string;
-      monthKey?: string;
     }> = [];
 
-    for (const tx of rawPendingList) {
-      if (!tx || !tx.name) continue;
+    for (const tx of userBills) {
+      if (!tx || !tx.name || !tx.due) continue;
       if (tx.type === 'rendas' || tx.type === 'entradas' || tx.type === 'receita') continue;
       if (tx.is_skipped) continue;
 
-      // STRICTLY CURRENT MONTH: all alerts and notifications are about the current active month only!
-      if (tx.monthKey && tx.monthKey !== userCurrentMonthKey) {
-        continue;
-      }
-
-      const amount = Number(tx.amount) > 0 
-        ? Number(tx.amount) 
-        : (Number(tx.total_parcelado) > 0 && tx.installmentsCount ? (Number(tx.total_parcelado) / Number(tx.installmentsCount)) : (Number(tx.total_parcelado) || 0));
+      const amount = Number(tx.amount) || Number(tx.total_parcelado) || 0;
       const paid_amount = Number(tx.paid_amount) || 0;
-      const remaining = tx.remaining !== undefined ? Number(tx.remaining) : Math.max(0, amount - paid_amount);
-      
-      // If remaining is 0, this bill is completely paid - not pending!
-      if (amount <= 0 || remaining <= 0) continue;
+      if (amount > 0 && paid_amount >= amount) continue;
 
-      const dueStr = tx.due ? String(tx.due).trim() : '';
-      let isOverdue = false;
+      let isNearDue = false;
+      let isOverdue = !!tx.isOverdue;
       let isDueToday = false;
       let diffDays = 999;
+
+      const dueStr = String(tx.due).trim();
       let dueDate: Date | null = null;
 
-      if (dueStr) {
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
-          const parts = dueStr.split("-").map(Number);
-          const dueMKey = `${parts[0]}-${String(parts[1]).padStart(2, '0')}`;
-          if (dueMKey !== userCurrentMonthKey) {
-            continue; // Belongs to a different month
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
+        const parts = dueStr.split("-").map(Number);
+        dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+      } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dueStr)) {
+        const parts = dueStr.split("/").map(Number);
+        dueDate = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
+      } else {
+        const dayMatch = dueStr.match(/\d+/);
+        if (dayMatch) {
+          const dueDay = parseInt(dayMatch[0], 10);
+          let dueYear = brYear;
+          let dueMonth = brMonth;
+          if (tx.monthKey && /^\d{4}-\d{2}$/.test(tx.monthKey)) {
+            const mParts = tx.monthKey.split("-").map(Number);
+            dueYear = mParts[0];
+            dueMonth = mParts[1] - 1;
           }
-          dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
-        } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dueStr)) {
-          const parts = dueStr.split("/").map(Number);
-          const dueMKey = `${parts[2]}-${String(parts[1]).padStart(2, '0')}`;
-          if (dueMKey !== userCurrentMonthKey) {
-            continue; // Belongs to a different month
-          }
-          dueDate = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
-        } else {
-          const dayMatch = dueStr.match(/\d+/);
-          if (dayMatch) {
-            const dueDay = parseInt(dayMatch[0], 10);
-            let dueYear = brYear;
-            let dueMonth = brMonth;
-            if (userCurrentMonthKey && /^\d{4}-\d{2}$/.test(userCurrentMonthKey)) {
-              const mParts = userCurrentMonthKey.split("-").map(Number);
-              dueYear = mParts[0];
-              dueMonth = mParts[1] - 1;
-            }
-            const maxDays = new Date(dueYear, dueMonth + 1, 0).getDate();
-            const safeDay = Math.min(Math.max(1, dueDay), maxDays);
-            dueDate = new Date(dueYear, dueMonth, safeDay, 12, 0, 0);
-          }
+          const maxDays = new Date(dueYear, dueMonth + 1, 0).getDate();
+          const safeDay = Math.min(Math.max(1, dueDay), maxDays);
+          dueDate = new Date(dueYear, dueMonth, safeDay, 12, 0, 0);
         }
       }
 
@@ -1134,44 +575,40 @@ async function runBackgroundPushNotificationChecker(
         diffDays = Math.round((dueDate.getTime() - brTodayNoon.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays < 0) {
           isOverdue = true;
+          isNearDue = true;
         } else if (diffDays === 0) {
           isDueToday = true;
+          isNearDue = true;
+        } else if (diffDays <= 3) {
+          isNearDue = true;
         }
-      } else if (tx.isOverdue) {
-        isOverdue = true;
-        diffDays = -1;
       }
 
-      userPendingBills.push({
-        id: tx.id || String(Math.random()),
-        name: tx.name,
-        due: dueStr,
-        amount,
-        paid_amount,
-        remaining,
-        isOverdue,
-        isDueToday,
-        diffDays,
-        cat: tx.cat || tx.category || 'Geral',
-        monthKey: userCurrentMonthKey
-      });
+      if (tx.isOverdue) {
+        isOverdue = true;
+        isNearDue = true;
+      }
+
+      if (isNearDue) {
+        userExpiringBills.push({
+          id: tx.id || String(Math.random()),
+          name: tx.name,
+          due: dueStr,
+          remaining: Math.max(0, amount - paid_amount),
+          isOverdue,
+          isDueToday,
+          diffDays
+        });
+      }
     }
 
-    // Sort: 1º Overdue (most delayed first), 2º Due Today, 3º Nearest Due Date
-    userPendingBills.sort((a, b) => {
-      if (a.isOverdue && !b.isOverdue) return -1;
-      if (!a.isOverdue && b.isOverdue) return 1;
-      if (a.isDueToday && !b.isDueToday) return -1;
-      if (!a.isDueToday && b.isDueToday) return 1;
+    userExpiringBills.sort((a, b) => {
+      if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
       return a.diffDays - b.diffDays;
     });
 
-    const overdueBills = userPendingBills.filter(b => b.isOverdue);
-    const todayBills = userPendingBills.filter(b => b.isDueToday);
-    const totalRemaining = userPendingBills.reduce((acc, b) => acc + (b.remaining || 0), 0);
-
-    // 2. Generate Dashboard Smart Alerts matching DashboardAnalytics.tsx
-    const dashboard = generateDashboardSmartAlerts(userStored, userSettings, brYear, brMonth);
+    // 2. Process Smart Insights for current month (biggest expense, control balance)
+    const insights = calculateUserSmartInsights(userBills, brYear, brMonth);
 
     // Keys for anti-spam tracking
     // Bills Slots: 08:00, 12:00, 20:00
@@ -1205,96 +642,115 @@ async function runBackgroundPushNotificationChecker(
     } catch (e) {}
 
     // STRICT EXACT-HOUR SCHEDULE RULES (As requested: 08:00, 12:00, 20:00 for Bills; 09:00, 13:00, 21:00 for Smart Insights)
-    // 5-minute pre-window allowed to absorb serverless cron execution jitter
-    const is08Window = (br.hour === 8) || (br.hour === 7 && br.minute >= 55);
-    const is09Window = (br.hour === 9) || (br.hour === 8 && br.minute >= 55);
-    const is12Window = (br.hour === 12) || (br.hour === 11 && br.minute >= 55);
-    const is13Window = (br.hour === 13) || (br.hour === 12 && br.minute >= 55);
-    const is20Window = (br.hour === 20) || (br.hour === 19 && br.minute >= 55);
-    const is21Window = (br.hour === 21) || (br.hour === 20 && br.minute >= 55);
+    // No drift, no overlapping, and NEVER fire outside the exact scheduled hour!
+    const isBills08Trigger = !forceNow && targetMode !== 'smart' && br.hour === 8 && !notifiedAlerts[bills08Key]?.notified;
+    const isBills12Trigger = !forceNow && targetMode !== 'smart' && br.hour === 12 && !notifiedAlerts[bills12Key]?.notified;
+    const isBills20Trigger = !forceNow && targetMode !== 'smart' && br.hour === 20 && !notifiedAlerts[bills20Key]?.notified;
 
-    const isBills08Trigger = !forceNow && targetMode !== 'smart' && (targetSlot === '08h' || (!targetSlot && is08Window)) && !notifiedAlerts[bills08Key]?.notified;
-    const isBills12Trigger = !forceNow && targetMode !== 'smart' && (targetSlot === '12h' || (!targetSlot && is12Window)) && !notifiedAlerts[bills12Key]?.notified;
-    const isBills20Trigger = !forceNow && targetMode !== 'smart' && (targetSlot === '20h' || (!targetSlot && is20Window)) && !notifiedAlerts[bills20Key]?.notified;
+    const isSmart09Trigger = !forceNow && targetMode !== 'bills' && br.hour === 9 && !notifiedAlerts[smart09Key]?.notified;
+    const isSmart13Trigger = !forceNow && targetMode !== 'bills' && br.hour === 13 && !notifiedAlerts[smart13Key]?.notified;
+    const isSmart21Trigger = !forceNow && targetMode !== 'bills' && br.hour === 21 && !notifiedAlerts[smart21Key]?.notified;
 
-    const isSmart09Trigger = !forceNow && targetMode !== 'bills' && (targetSlot === '09h' || (!targetSlot && is09Window)) && !notifiedAlerts[smart09Key]?.notified;
-    const isSmart13Trigger = !forceNow && targetMode !== 'bills' && (targetSlot === '13h' || (!targetSlot && is13Window)) && !notifiedAlerts[smart13Key]?.notified;
-    const isSmart21Trigger = !forceNow && targetMode !== 'bills' && (targetSlot === '21h' || (!targetSlot && is21Window)) && !notifiedAlerts[smart21Key]?.notified;
+    const overdueBills = userExpiringBills.filter(b => b.isOverdue);
+    const todayBills = userExpiringBills.filter(b => !b.isOverdue && b.isDueToday);
+    const totalRemaining = userExpiringBills.reduce((acc, b) => acc + (b.remaining || 0), 0);
 
     // ==========================================
     // A) DISPATCH BILLS NOTIFICATION (08h, 12h, 20h)
     // ==========================================
     const shouldSendBills = 
-      (forceNow && (targetMode === 'bills' || targetMode === 'both')) || 
+      (forceNow && targetMode !== 'smart') || 
       isBills08Trigger || 
       isBills12Trigger || 
       isBills20Trigger;
 
-    let billsSentCount = 0;
-    if (shouldSendBills && (userPendingBills.length > 0 || forceNow)) {
+    if (shouldSendBills) {
       let billsSlotName = 'manual';
       let billsTitle = '';
       let billsBody = '';
 
-      if (isBills08Trigger) billsSlotName = '08h';
-      else if (isBills12Trigger) billsSlotName = '12h';
-      else if (isBills20Trigger) billsSlotName = '20h';
-      else if (forceNow) billsSlotName = 'teste';
-
-      if (userPendingBills.length === 0) {
-        if (sourceArrays.length === 0) {
-          billsTitle = "ℹ️ Sincronize suas Contas";
-          billsBody = "Abra o aplicativo para sincronizar suas despesas do mês com o servidor.";
+      if (forceNow) {
+        billsSlotName = 'teste';
+        if (overdueBills.length > 0) {
+          billsTitle = `🚨 [TESTE] ${overdueBills.length} Conta(s) em Atraso`;
+        } else if (todayBills.length > 0) {
+          billsTitle = `⚠️ [TESTE] ${todayBills.length} Conta(s) Vence(m) Hoje`;
+        } else if (userExpiringBills.length > 0) {
+          billsTitle = `⚠️ [TESTE] ${userExpiringBills.length} Conta(s) a Vencer`;
         } else {
-          billsTitle = "✅ Finanças do Mês em Dia";
-          billsBody = "Parabéns! Todas as contas do mês atual estão quitadas. Nenhuma pendência em aberto.";
+          billsTitle = "✅ [TESTE] Contas em Dia!";
+        }
+      } else if (isBills08Trigger) {
+        billsSlotName = '08h';
+        if (overdueBills.length > 0) {
+          billsTitle = `🚨 ALERTA MATINAL (08:00): ${overdueBills.length} Conta(s) Atrasada(s)`;
+        } else if (todayBills.length > 0) {
+          billsTitle = `⚠️ BOM DIA (08:00): ${todayBills.length} Conta(s) Vence(m) Hoje`;
+        } else if (userExpiringBills.length > 0) {
+          billsTitle = `⚠️ RADAR DO DIA (08:00): ${userExpiringBills.length} Conta(s) a Vencer`;
+        } else {
+          billsTitle = "✅ CONTAS EM DIA (08:00): Tudo organizado!";
+        }
+      } else if (isBills12Trigger) {
+        billsSlotName = '12h';
+        if (overdueBills.length > 0) {
+          billsTitle = `🚨 MEIO-DIA (12:00): ${overdueBills.length} Conta(s) em Atraso`;
+        } else if (todayBills.length > 0) {
+          billsTitle = `☀️ REFORÇO DO ALMOÇO (12:00): ${todayBills.length} Vence(m) Hoje`;
+        } else if (userExpiringBills.length > 0) {
+          billsTitle = `☀️ MEIO-DIA (12:00): ${userExpiringBills.length} Conta(s) Pendente(s)`;
+        } else {
+          billsTitle = "✅ CONTAS EM DIA (12:00): Suas finanças estão tranquilas!";
+        }
+      } else if (isBills20Trigger) {
+        billsSlotName = '20h';
+        if (overdueBills.length > 0 || todayBills.length > 0) {
+          billsTitle = `🌙 8 DA NOITE (20:00): ${overdueBills.length + todayBills.length} Pendência(s) de Atenção`;
+        } else if (userExpiringBills.length > 0) {
+          billsTitle = `🌙 RADAR NOTURNO (20:00): Contas dos próximos dias`;
+        } else {
+          billsTitle = "✨ NOITE TRANQUILA (20:00): Nenhuma conta atrasada!";
+        }
+      }
+
+      if (userExpiringBills.length === 0) {
+        billsBody = "Parabéns! Nenhuma conta atrasada ou próxima do vencimento. Seus alertas diários continuam agendados às 08:00, 12:00 e 20:00.";
+      } else if (userExpiringBills.length === 1) {
+        const b = userExpiringBills[0];
+        const valStr = b.remaining > 0 ? ` de R$ ${fmt(b.remaining)}` : '';
+        if (b.isOverdue) {
+          billsBody = `A despesa "${b.name}"${valStr} está ATRASADA (${b.due}). Abra o app para regularizar e evitar juros.`;
+        } else if (b.isDueToday) {
+          billsBody = `Lembrete: A despesa "${b.name}"${valStr} VENCE HOJE (${b.due}). Aproveite para quitar agora.`;
+        } else {
+          billsBody = `Lembrete: A despesa "${b.name}"${valStr} vence em ${b.diffDays} dia(s) (${b.due}).`;
         }
       } else {
-        if (overdueBills.length > 0 && todayBills.length > 0) {
-          billsTitle = `⚠️ ${overdueBills.length} em Atraso e ${todayBills.length} Vencendo Hoje`;
-        } else if (overdueBills.length > 0) {
-          billsTitle = `⚠️ ${overdueBills.length} Conta(s) em Atraso no Mês`;
-        } else if (todayBills.length > 0) {
-          billsTitle = `🔔 ${todayBills.length} Conta(s) Vencendo Hoje`;
-        } else {
-          billsTitle = `📋 ${userPendingBills.length} Conta(s) a Pagar no Mês`;
-        }
-
         const maxDisplay = 5;
         const lines: string[] = [];
-        for (const b of userPendingBills.slice(0, maxDisplay)) {
-          const valStr = `R$ ${fmt(b.remaining)}`;
-          let statusLabel = '';
-          if (b.isOverdue) {
-            statusLabel = ' [ATRASADA]';
-          } else if (b.isDueToday) {
-            statusLabel = ' [VENCE HOJE]';
-          } else if (b.due) {
-            let dueFmt = b.due;
-            if (/^\d{4}-\d{2}-\d{2}$/.test(b.due)) {
-              const parts = b.due.split('-');
-              dueFmt = `${parts[2]}/${parts[1]}`;
-            }
-            statusLabel = ` [Venc: ${dueFmt}]`;
-          }
-          lines.push(`• ${b.name}: ${valStr}${statusLabel}`);
+        for (const b of userExpiringBills.slice(0, maxDisplay)) {
+          const valStr = b.remaining > 0 ? ` - R$ ${fmt(b.remaining)}` : '';
+          let tag = ` (${b.due})`;
+          if (b.isOverdue) tag = ' [ATRASADA]';
+          else if (b.isDueToday) tag = ' [VENCE HOJE]';
+          else if (b.diffDays !== 999) tag = ` [Em ${b.diffDays}d]`;
+          lines.push(`• ${b.name}${valStr}${tag}`);
         }
-        if (userPendingBills.length > maxDisplay) {
-          lines.push(`... e mais ${userPendingBills.length - maxDisplay} conta(s) do mês.`);
+        if (userExpiringBills.length > maxDisplay) {
+          lines.push(`... e mais ${userExpiringBills.length - maxDisplay} conta(s) pendente(s).`);
         }
-
-        const header = `Total a pagar pendente: R$ ${fmt(totalRemaining)} (o que falta pagar):\n`;
-        billsBody = header + lines.join('\n');
+        const totalStr = totalRemaining > 0 ? ` Total pendente: R$ ${fmt(totalRemaining)}.` : '';
+        billsBody = `Você tem ${userExpiringBills.length} contas para acompanhar.${totalStr}\n` + lines.join('\n');
       }
 
       const billsTag = forceNow ? `financaspro-bills-test-${Date.now()}` : `financaspro-bills-${billsSlotName}-${br.dateStr}`;
-      billsSentCount = await dispatchPushToSubscriptions(userId, subs, billsTitle, billsBody, billsTag);
-      totalDispatched += billsSentCount;
+      const sent = await dispatchPushToSubscriptions(userId, subs, billsTitle, billsBody, billsTag);
+      totalDispatched += sent;
 
       // Mark slot notified
-      if (isBills08Trigger) markLocalAlertNotified(bills08Key, { slot: 'bills_08h', count: userPendingBills.length });
-      if (isBills12Trigger) markLocalAlertNotified(bills12Key, { slot: 'bills_12h', count: userPendingBills.length });
-      if (isBills20Trigger) markLocalAlertNotified(bills20Key, { slot: 'bills_20h', count: userPendingBills.length });
+      if (isBills08Trigger) markLocalAlertNotified(bills08Key, { slot: 'bills_08h', count: userExpiringBills.length });
+      if (isBills12Trigger) markLocalAlertNotified(bills12Key, { slot: 'bills_12h', count: userExpiringBills.length });
+      if (isBills20Trigger) markLocalAlertNotified(bills20Key, { slot: 'bills_20h', count: userExpiringBills.length });
 
       try {
         const db = admin.firestore();
@@ -1304,97 +760,66 @@ async function runBackgroundPushNotificationChecker(
             userId,
             slot: billsSlotName,
             type: "bills",
-            count: userPendingBills.length,
-            totalRemaining,
+            count: userExpiringBills.length,
             dispatchedAt: new Date().toISOString()
           });
         }
       } catch (e) {}
 
-      console.log(`✅ [BILLS PUSH] Alerta entregue para ${billsSentCount} aparelho(s) do usuário ${userId}.`);
-    } else if (shouldSendBills && userPendingBills.length === 0) {
-      console.log(`ℹ️ [BILLS PUSH] Usuário ${userId} está com todas as contas quitadas. Alerta programado suprimido.`);
-    }
-
-    // Small delay between alerts during manual test if both are requested
-    if (shouldSendBills && forceNow && targetMode === 'both' && billsSentCount > 0) {
-      await new Promise(resolve => setTimeout(resolve, 1200));
+      console.log(`✅ [BILLS PUSH] Alerta das ${billsSlotName} entregue para ${sent} aparelho(s) do usuário ${userId}.`);
     }
 
     // ====================================================
     // B) DISPATCH SMART INSIGHTS NOTIFICATION (09h, 13h, 21h)
     // ====================================================
     const shouldSendSmart = 
-      (forceNow && (targetMode === 'smart' || targetMode === 'both')) || 
+      (forceNow && targetMode === 'smart') || 
       isSmart09Trigger || 
       isSmart13Trigger || 
       isSmart21Trigger;
 
-    // Suppress scheduled smart insights if no expenses are recorded for the month to prevent sending all-zero reports!
-    if (!forceNow && shouldSendSmart && dashboard.totalExpenses === 0) {
-      console.log(`ℹ️ [SMART PUSH] Usuário ${userId} sem despesas registradas no mês atual. Alerta de análise suprimido para evitar envio de dados zerados.`);
-    }
-
-    let smartSentCount = 0;
-    if (shouldSendSmart && (dashboard.totalExpenses > 0 || forceNow)) {
+    if (shouldSendSmart) {
       let smartSlotName = 'manual';
       let smartTitle = '';
       let smartBody = '';
 
-      // Select up to 3 priority alerts from DashboardAnalytics logic
-      const chosenAlerts = dashboard.alerts.slice(0, 3);
-      const alertLines = chosenAlerts.map(a => `• ${a.title}: ${a.summary}`);
-
-      const sobraText = dashboard.totalExpenses > 0
-        ? (dashboard.leftover >= 0
-            ? `💎 Sobra Estimada de Caixa: R$ ${fmt(dashboard.leftover)} (o que sobrou)`
-            : `🚨 Déficit de Caixa: -R$ ${fmt(Math.abs(dashboard.leftover))} (despesas superam entradas)`)
-        : (dashboard.leftover > 0 && forceNow
-            ? `💎 Sobra Estimada de Caixa: R$ ${fmt(dashboard.leftover)} (o que sobrou)`
-            : `💎 Sobra Estimada: R$ 0,00`);
-
-      const summaryOverview = [
-        `💵 Total de Entrada: R$ ${fmt(dashboard.totalAvailable)}`,
-        `⏳ Total a Pagar Pendente: R$ ${fmt(dashboard.totalPending)} (o que falta pagar)`,
-        `✅ Total Já Pago: R$ ${fmt(dashboard.totalPaid)}`,
-        sobraText
-      ].join('\n');
-
-      const diagAlerts = alertLines.filter(l => 
-        !l.includes('Sobra Estimada') && 
-        !l.includes('Total a Pagar') && 
-        !l.includes('Déficit') && 
-        !l.includes('Total de Entrada') &&
-        !l.includes('0,00 planejados')
-      );
-      const diagSection = diagAlerts.length > 0 ? `\n\n📌 Alertas:\n` + diagAlerts.slice(0, 2).join('\n') : '';
-
       if (forceNow) {
         smartSlotName = 'teste';
-        smartTitle = `💡 Análise do Dashboard (Mês Atual)`;
-        smartBody = summaryOverview + diagSection;
+        smartTitle = "💡 [TESTE] Informações Inteligentes & Maior Gasto";
+        if (insights.topExpense) {
+          smartBody = `📊 Maior gasto do mês: "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n🎯 Progresso: ${insights.paidPercentage}% quitado. Mantenha seus limites diários para proteger seu saldo!`;
+        } else {
+          smartBody = "💡 Dica de Ouro: Registre seus gastos no FinançasPro para manter sua meta e orçamento sob controle!";
+        }
       } else if (isSmart09Trigger) {
         smartSlotName = '09h';
-        smartTitle = "💡 Análise do Dashboard (Mês Atual)";
-        smartBody = summaryOverview + diagSection;
+        smartTitle = "💡 CONTROLE INTELIGENTE (09:00)";
+        if (insights.topExpense) {
+          smartBody = `📊 Maior gasto do mês: "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n🎯 Meta de hoje: Mantenha seus limites diários e priorize o que é essencial para proteger seu saldo!`;
+        } else {
+          smartBody = "💡 Dica de Ouro: Comece o dia no controle! Registre qualquer novo gasto no FinançasPro para manter sua meta em dia.";
+        }
       } else if (isSmart13Trigger) {
         smartSlotName = '13h';
-        smartTitle = "🎯 Análise do Dashboard (Mês Atual)";
-        smartBody = summaryOverview + diagSection;
+        smartTitle = "🎯 RAIO-X FINANCEIRO (13:00)";
+        const topStr = insights.topExpense ? `\nMaior despesa: ${insights.topExpense.name} (R$ ${fmt(insights.topExpense.amount)}).` : '';
+        smartBody = `Progresso do mês: ${insights.paidPercentage}% das despesas pagas (R$ ${fmt(insights.totalPaid)} de R$ ${fmt(insights.totalExpenses)}).${topStr}\n💡 Dica: Acompanhe seus gastos na pausa do almoço para evitar excessos à tarde.`;
       } else if (isSmart21Trigger) {
         smartSlotName = '21h';
-        smartTitle = "✨ Análise do Dashboard (Mês Atual)";
-        smartBody = summaryOverview + diagSection;
+        smartTitle = "✨ 9 DA NOITE - FECHAMENTO INTELIGENTE (21:00)";
+        const topStr = insights.topExpense ? `Sua maior fatura neste mês é "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n` : '';
+        const pendStr = insights.totalPending > 0 ? `Restam R$ ${fmt(insights.totalPending)} em despesas pendentes no mês.\n` : 'Todas as despesas do mês já estão quitadas!\n';
+        smartBody = `${topStr}${pendStr}🌙 Dica da noite: Registre pequenas compras do dia antes de dormir para garantir tranquilidade financeira amanhã!`;
       }
 
       const smartTag = forceNow ? `financaspro-smart-test-${Date.now()}` : `financaspro-smart-${smartSlotName}-${br.dateStr}`;
-      smartSentCount = await dispatchPushToSubscriptions(userId, subs, smartTitle, smartBody, smartTag);
-      totalDispatched += smartSentCount;
+      const sent = await dispatchPushToSubscriptions(userId, subs, smartTitle, smartBody, smartTag);
+      totalDispatched += sent;
 
       // Mark slot notified
-      if (isSmart09Trigger) markLocalAlertNotified(smart09Key, { slot: 'smart_09h', count: dashboard.alerts.length });
-      if (isSmart13Trigger) markLocalAlertNotified(smart13Key, { slot: 'smart_13h', count: dashboard.alerts.length });
-      if (isSmart21Trigger) markLocalAlertNotified(smart21Key, { slot: 'smart_21h', count: dashboard.alerts.length });
+      if (isSmart09Trigger) markLocalAlertNotified(smart09Key, { slot: 'smart_09h', count: insights.expensesCount });
+      if (isSmart13Trigger) markLocalAlertNotified(smart13Key, { slot: 'smart_13h', count: insights.expensesCount });
+      if (isSmart21Trigger) markLocalAlertNotified(smart21Key, { slot: 'smart_21h', count: insights.expensesCount });
 
       try {
         const db = admin.firestore();
@@ -1404,41 +829,26 @@ async function runBackgroundPushNotificationChecker(
             userId,
             slot: smartSlotName,
             type: "smart",
-            topExpense: dashboard.topExpense,
-            totalExpenses: dashboard.totalExpenses,
-            alertsCount: dashboard.alerts.length,
+            topExpense: insights.topExpense,
+            totalExpenses: insights.totalExpenses,
             dispatchedAt: new Date().toISOString()
           });
         }
       } catch (e) {}
 
-      console.log(`✅ [SMART PUSH] Alerta inteligente das ${smartSlotName} entregue para ${smartSentCount} aparelho(s) do usuário ${userId}.`);
+      console.log(`✅ [SMART PUSH] Alerta inteligente das ${smartSlotName} entregue para ${sent} aparelho(s) do usuário ${userId}.`);
     }
-
-    userReports.push({
-      userId,
-      devices: subs.length,
-      pendingBillsCount: userPendingBills.length,
-      overdueCount: overdueBills.length,
-      dueTodayCount: todayBills.length,
-      smartAlertsCount: dashboard.alerts.length,
-      billsSent: billsSentCount,
-      smartSent: smartSentCount,
-      totalSent: billsSentCount + smartSentCount
-    });
   }
 
-  return { 
-    sent: totalDispatched, 
-    userCount: userIds.length,
-    users: userReports,
-    brasiliaTime: br.timeStr,
-    brasiliaDate: br.dateStr
-  };
+  return { sent: totalDispatched, userCount: userIds.length };
 }
 
 if (!process.env.VERCEL) {
-  // Check periodically so scheduled hours (08:00, 09:00, 12:00, 13:00, 20:00, 21:00) are hit with precision
+  setTimeout(() => {
+    runBackgroundPushNotificationChecker().catch((e) => console.warn("⚠️ Background push checker error:", e?.message || e));
+  }, 5000);
+
+  // Check every 2 minutes so 08:00 AM is hit with high precision
   setInterval(() => {
     runBackgroundPushNotificationChecker().catch((e) => console.warn("⚠️ Background push checker error:", e?.message || e));
   }, 1000 * 60 * 2);
@@ -2083,27 +1493,15 @@ app.get("/api/push/vapid-public-key", async (req, res) => {
 // API route: Save PWA Web Push Subscription for background alerts when app is closed
 app.post("/api/push/subscribe", async (req, res) => {
   try {
-    const { userId, subscription, bills, monthBills, pendingBills, summary, currentMonthKey, settings } = req.body;
+    const { userId, subscription, bills } = req.body;
     if (!userId || !subscription) {
       return res.status(400).json({ error: "userId e subscription são obrigatórios." });
     }
 
     saveLocalSubscription(userId, subscription);
 
-    if (monthBills || pendingBills || summary || currentMonthKey) {
-      saveLocalUserBills(userId, {
-        userId,
-        currentMonthKey,
-        monthBills: monthBills || bills || [],
-        pendingBills: pendingBills || [],
-        summary,
-        bills: monthBills || bills || []
-      });
-    } else if (Array.isArray(bills)) {
+    if (Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
-    }
-    if (settings) {
-      saveLocalUserSettings(userId, settings);
     }
 
     // Backup to Firestore if permitted
@@ -2131,29 +1529,17 @@ app.post("/api/push/subscribe", async (req, res) => {
 // API route: Synchronize user unpaid bills so server can sweep when app is closed
 app.post("/api/push/sync-bills", async (req, res) => {
   try {
-    const { userId, bills, monthBills, pendingBills, summary, currentMonthKey, settings, rawTransactions } = req.body;
-    if (!userId) {
-      return res.status(400).json({ error: "userId é obrigatório." });
+    const { userId, bills } = req.body;
+    if (!userId || !Array.isArray(bills)) {
+      return res.status(400).json({ error: "userId e faturas são obrigatórios." });
     }
 
-    if (monthBills || pendingBills || summary || currentMonthKey || rawTransactions) {
-      saveLocalUserBills(userId, {
-        userId,
-        currentMonthKey,
-        monthBills: monthBills || bills || [],
-        pendingBills: pendingBills || [],
-        summary,
-        rawTransactions: Array.isArray(rawTransactions) ? rawTransactions : [],
-        bills: monthBills || bills || []
-      });
-    } else if (Array.isArray(bills)) {
-      saveLocalUserBills(userId, bills);
-    }
-    if (settings) {
-      saveLocalUserSettings(userId, settings);
-    }
+    saveLocalUserBills(userId, bills);
 
-    res.json({ success: true, syncedCount: Array.isArray(monthBills || bills) ? (monthBills || bills).length : 0 });
+    // Run check immediately to trigger push if any bill is due/overdue right now
+    runBackgroundPushNotificationChecker().catch((e) => console.warn("Background push check err:", e));
+
+    res.json({ success: true, syncedCount: bills.length });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "Erro interno" });
   }
@@ -2163,7 +1549,7 @@ app.post("/api/push/sync-bills", async (req, res) => {
 app.post("/api/push/test-background", async (req, res) => {
   try {
     await ensureVapidKeys();
-    const { userId, delaySeconds = 10, subscription, bills, monthBills, pendingBills, summary, currentMonthKey, settings, rawTransactions, mode = 'both' } = req.body;
+    const { userId, delaySeconds = 10, subscription, bills, mode = 'both' } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
@@ -2172,21 +1558,8 @@ app.post("/api/push/test-background", async (req, res) => {
     if (subscription) {
       saveLocalSubscription(userId, subscription);
     }
-    if (monthBills || pendingBills || summary || currentMonthKey || rawTransactions) {
-      saveLocalUserBills(userId, {
-        userId,
-        currentMonthKey,
-        monthBills: monthBills || bills || [],
-        pendingBills: pendingBills || [],
-        summary,
-        rawTransactions: Array.isArray(rawTransactions) ? rawTransactions : [],
-        bills: monthBills || bills || []
-      });
-    } else if (bills && Array.isArray(bills)) {
+    if (bills && Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
-    }
-    if (settings) {
-      saveLocalUserSettings(userId, settings);
     }
 
     let allSubs = getLocalSubscriptions();
@@ -2311,84 +1684,18 @@ app.get("/api/push/status/:userId", (req, res) => {
   }
 });
 
-// API route: Get overall push system status across all registered active users
-app.get("/api/push/all-users-status", (req, res) => {
-  try {
-    const allSubs = getLocalSubscriptions();
-    const allBills = getLocalUserBills();
-    const allSettings = getLocalUserSettings();
-    const notifiedAlerts = getLocalNotifiedAlerts();
-    const br = getBrasiliaDate();
-
-    const userIds = Object.keys(allSubs);
-    const usersSummary = userIds.map(uid => {
-      const subs = allSubs[uid] || [];
-      const bills = allBills[uid] || [];
-      const settings = allSettings[uid] || null;
-
-      const bills08Key = `push_bills_08h_${uid}_${br.dateStr}`;
-      const bills12Key = `push_bills_12h_${uid}_${br.dateStr}`;
-      const bills20Key = `push_bills_20h_${uid}_${br.dateStr}`;
-      const smart09Key = `push_smart_09h_${uid}_${br.dateStr}`;
-      const smart13Key = `push_smart_13h_${uid}_${br.dateStr}`;
-      const smart21Key = `push_smart_21h_${uid}_${br.dateStr}`;
-
-      return {
-        userId: uid,
-        deviceCount: subs.length,
-        billsCount: bills.length,
-        hasSettings: Boolean(settings),
-        income: settings?.income || 0,
-        balance: settings?.balance || 0,
-        slots: {
-          bills08: Boolean(notifiedAlerts[bills08Key]?.notified),
-          smart09: Boolean(notifiedAlerts[smart09Key]?.notified),
-          bills12: Boolean(notifiedAlerts[bills12Key]?.notified),
-          smart13: Boolean(notifiedAlerts[smart13Key]?.notified),
-          bills20: Boolean(notifiedAlerts[bills20Key]?.notified),
-          smart21: Boolean(notifiedAlerts[smart21Key]?.notified)
-        }
-      };
-    });
-
-    res.json({
-      success: true,
-      totalRegisteredUsers: userIds.length,
-      currentBrasiliaTime: br.timeStr,
-      currentBrasiliaDate: br.dateStr,
-      users: usersSummary,
-      backgroundSweeperActive: !process.env.VERCEL,
-      sweepInterval: "2 minutos"
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message || "Erro ao consultar status geral" });
-  }
-});
-
 // API route: Immediately trigger notification check for a user (bypassing time constraint)
 app.post("/api/push/trigger-now", async (req, res) => {
   try {
-    const { userId, subscription, bills, monthBills, pendingBills, summary, currentMonthKey, settings, mode = 'both' } = req.body;
+    const { userId, subscription, bills, mode = 'both' } = req.body;
     if (!userId) {
       return res.status(400).json({ error: "userId é obrigatório." });
     }
     if (subscription) {
       saveLocalSubscription(userId, subscription);
     }
-    if (monthBills || pendingBills || summary || currentMonthKey) {
-      saveLocalUserBills(userId, {
-        userId,
-        currentMonthKey,
-        monthBills: monthBills || bills || [],
-        pendingBills: pendingBills || [],
-        summary,
-        bills: monthBills || bills || []
-      });
-    } else if (bills && Array.isArray(bills)) {
+    if (bills && Array.isArray(bills)) {
       saveLocalUserBills(userId, bills);
-    }
-    if (settings) {
-      saveLocalUserSettings(userId, settings);
     }
     const testMode = (mode === 'bills' || mode === 'smart' ? mode : 'both') as 'bills' | 'smart' | 'both';
     const result = await runBackgroundPushNotificationChecker(true, userId, testMode);
@@ -2404,9 +1711,8 @@ app.all("/api/cron/check-alerts", async (req, res) => {
     await ensureVapidKeys();
     const force = req.query.force === 'true' || req.body?.force === true;
     const mode = (req.query.mode || req.body?.mode || 'both') as 'bills' | 'smart' | 'both';
-    const slot = (req.query.slot || req.body?.slot || undefined) as string | undefined;
-    const result = await runBackgroundPushNotificationChecker(force, undefined, mode, slot);
-    res.json({ success: true, message: "Varredura de notificações executada com sucesso.", mode, slot, result, timestamp: new Date().toISOString() });
+    const result = await runBackgroundPushNotificationChecker(force, undefined, mode);
+    res.json({ success: true, message: "Varredura de notificações executada com sucesso.", mode, result, timestamp: new Date().toISOString() });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || String(err) });
   }

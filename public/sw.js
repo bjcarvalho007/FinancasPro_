@@ -6,7 +6,8 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     Promise.all([
-      self.clients.claim()
+      self.clients.claim(),
+      checkExpiringBillsAndNotify() // Check immediately when service worker wakes up / activates
     ])
   );
 });
@@ -52,29 +53,21 @@ async function checkExpiringBillsAndNotify() {
     const now = new Date();
     const currentDay = now.getDate();
     
-    // Filter pending/expiring/overdue bills with multi-format support and remaining balance accuracy
+    // Filter pending/expiring/overdue bills with multi-format support
     const pendingBills = bills.map(bill => {
-      const amt = Number(bill.amount) || 0;
-      const paid = Number(bill.paid_amount) || 0;
-      const remaining = bill.remaining !== undefined ? Number(bill.remaining) : Math.max(0, amt - paid);
-      // If bill is fully paid, skip
-      if (amt > 0 && remaining <= 0) return null;
-
       const diffDays = parseBillDueDay(bill.due, now);
       const isOverdue = bill.isOverdue || (diffDays !== null && diffDays < 0);
       const isDueToday = diffDays === 0;
       const isUpcoming = diffDays !== null && diffDays > 0 && diffDays <= 3;
       return {
         ...bill,
-        amount: remaining > 0 ? remaining : amt,
-        remaining,
         diffDays,
         isOverdue,
         isDueToday,
         isUpcoming,
         shouldAlert: isOverdue || isDueToday || isUpcoming
       };
-    }).filter(b => b && b.shouldAlert);
+    }).filter(b => b.shouldAlert);
 
     if (pendingBills.length === 0) return;
 
@@ -93,8 +86,7 @@ async function checkExpiringBillsAndNotify() {
 
       if (count === 1) {
         const bill = pendingBills[0];
-        const displayVal = bill.remaining !== undefined ? bill.remaining : bill.amount;
-        const valStr = displayVal ? ` (R$ ${Number(displayVal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : '';
+        const valStr = bill.amount ? ` (R$ ${Number(bill.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })})` : '';
         if (bill.isOverdue) {
           title = '🚨 CONTA EM ATRASO - FinançasPro';
           body = `A despesa "${bill.name}"${valStr} está ATRASADA (Venceu dia ${bill.due}). Toque para regularizar.`;
@@ -106,9 +98,7 @@ async function checkExpiringBillsAndNotify() {
           body = `A despesa "${bill.name}"${valStr} vence em ${bill.diffDays} dia(s) (${bill.due}).`;
         }
       } else {
-        if (overdueList.length > 0 && todayList.length > 0) {
-          title = `🚨 ${count} CONTAS PENDENTES (${overdueList.length} ATRASADA(S), ${todayList.length} HOJE)`;
-        } else if (overdueList.length > 0) {
+        if (overdueList.length > 0) {
           title = `🚨 ${count} CONTAS PENDENTES (${overdueList.length} ATRASADA${overdueList.length > 1 ? 'S' : ''})`;
         } else if (todayList.length > 0) {
           title = `⚠️ ${count} CONTAS (${todayList.length} VENCEM HOJE)`;
@@ -118,8 +108,7 @@ async function checkExpiringBillsAndNotify() {
 
         const maxDisplay = 5;
         const lines = pendingBills.slice(0, maxDisplay).map(b => {
-          const displayVal = b.remaining !== undefined ? b.remaining : b.amount;
-          const valStr = displayVal ? ` - R$ ${Number(displayVal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
+          const valStr = b.amount ? ` - R$ ${Number(b.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '';
           let statusStr = ` (${b.due})`;
           if (b.isOverdue) statusStr = ' [ATRASADA]';
           else if (b.isDueToday) statusStr = ' [VENCE HOJE]';
@@ -162,14 +151,16 @@ async function checkExpiringBillsAndNotify() {
   }
 }
 
-// Background sync to update cache
+// Background sync to trigger check when browser restores connection
 self.addEventListener('sync', (event) => {
-  // Silent sync, notifications only sent by push events or explicit scheduled crons
+  if (event.tag === 'check-vencimentos' || event.tag === 'sync' || !event.tag) {
+    event.waitUntil(checkExpiringBillsAndNotify());
+  }
 });
 
 // Periodic Sync helper if supported by PWA platform
 self.addEventListener('periodicsync', (event) => {
-  // Silent periodic sync
+  event.waitUntil(checkExpiringBillsAndNotify());
 });
 
 // Message communications from the main browser window
@@ -178,10 +169,10 @@ self.addEventListener('message', (event) => {
     event.waitUntil(
       caches.open('financaspro-alarms').then(async (cache) => {
         await cache.put('/scheduled-bills.json', new Response(JSON.stringify(event.data.bills || [])));
+        // Run check once to ensure latest synchronization registers alerts immediately
+        await checkExpiringBillsAndNotify();
       })
     );
-  } else if (event.data && event.data.type === 'TRIGGER_TEST_NOTIFICATION') {
-    event.waitUntil(checkExpiringBillsAndNotify());
   }
 });
 

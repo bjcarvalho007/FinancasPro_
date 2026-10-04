@@ -610,13 +610,13 @@ async function runBackgroundPushNotificationChecker(
     // 2. Process Smart Insights for current month (biggest expense, control balance)
     const insights = calculateUserSmartInsights(userBills, brYear, brMonth);
 
-    // Keys for anti-spam tracking
-    // Bills Slots: 08:00, 12:00, 20:00
+    // Keys for anti-spam tracking (Exactly 2 daily slots: 08:00 Manhã and 20:00 Noite - ambas juntas)
+    const slot08Key = `push_alert_08h_${userId}_${br.dateStr}`;
+    const slot20Key = `push_alert_20h_${userId}_${br.dateStr}`;
+    // Legacy keys for anti-spam safety across version transitions
     const bills08Key = `push_bills_08h_${userId}_${br.dateStr}`;
     const bills12Key = `push_bills_12h_${userId}_${br.dateStr}`;
     const bills20Key = `push_bills_20h_${userId}_${br.dateStr}`;
-
-    // Smart Insights Slots: 09:00, 13:00, 21:00
     const smart09Key = `push_smart_09h_${userId}_${br.dateStr}`;
     const smart13Key = `push_smart_13h_${userId}_${br.dateStr}`;
     const smart21Key = `push_smart_21h_${userId}_${br.dateStr}`;
@@ -624,7 +624,7 @@ async function runBackgroundPushNotificationChecker(
     // Sync with Firestore notified_alerts to guarantee persistent memory across restarts
     try {
       const db = admin.firestore();
-      const keysToCheck = [bills08Key, bills12Key, bills20Key, smart09Key, smart13Key, smart21Key];
+      const keysToCheck = [slot08Key, slot20Key, bills08Key, bills20Key, smart09Key, smart21Key];
       for (const k of keysToCheck) {
         if (!notifiedAlerts[k]?.notified) {
           const docSnap = await db.collection("notified_alerts").doc(k).get();
@@ -641,92 +641,76 @@ async function runBackgroundPushNotificationChecker(
       }
     } catch (e) {}
 
-    // STRICT EXACT-HOUR SCHEDULE RULES (As requested: 08:00, 12:00, 20:00 for Bills; 09:00, 13:00, 21:00 for Smart Insights)
-    // No drift, no overlapping, and NEVER fire outside the exact scheduled hour!
-    const isBills08Trigger = !forceNow && targetMode !== 'smart' && br.hour === 8 && !notifiedAlerts[bills08Key]?.notified;
-    const isBills12Trigger = !forceNow && targetMode !== 'smart' && br.hour === 12 && !notifiedAlerts[bills12Key]?.notified;
-    const isBills20Trigger = !forceNow && targetMode !== 'smart' && br.hour === 20 && !notifiedAlerts[bills20Key]?.notified;
-
-    const isSmart09Trigger = !forceNow && targetMode !== 'bills' && br.hour === 9 && !notifiedAlerts[smart09Key]?.notified;
-    const isSmart13Trigger = !forceNow && targetMode !== 'bills' && br.hour === 13 && !notifiedAlerts[smart13Key]?.notified;
-    const isSmart21Trigger = !forceNow && targetMode !== 'bills' && br.hour === 21 && !notifiedAlerts[smart21Key]?.notified;
+    // STRICT EXACT-HOUR SCHEDULE RULES: Only 2 times per day (08:00 pela manhã e 20:00 à noite - ambas juntas)
+    // No notifications at 09:00, 12:00, 13:00, 21:00 to prevent customer notification fatigue!
+    const is08Trigger = !forceNow && br.hour === 8 && !notifiedAlerts[slot08Key]?.notified && !notifiedAlerts[bills08Key]?.notified;
+    const is20Trigger = !forceNow && br.hour === 20 && !notifiedAlerts[slot20Key]?.notified && !notifiedAlerts[bills20Key]?.notified;
 
     const overdueBills = userExpiringBills.filter(b => b.isOverdue);
     const todayBills = userExpiringBills.filter(b => !b.isOverdue && b.isDueToday);
     const totalRemaining = userExpiringBills.reduce((acc, b) => acc + (b.remaining || 0), 0);
 
-    // ==========================================
-    // A) DISPATCH BILLS NOTIFICATION (08h, 12h, 20h)
-    // ==========================================
-    const shouldSendBills = 
-      (forceNow && targetMode !== 'smart') || 
-      isBills08Trigger || 
-      isBills12Trigger || 
-      isBills20Trigger;
+    // ================================================================
+    // DISPATCH NOTIFICATION (08:00 Manhã e 20:00 Noite - Ambas Juntas)
+    // ================================================================
+    const shouldSend = forceNow || is08Trigger || is20Trigger;
 
-    if (shouldSendBills) {
-      let billsSlotName = 'manual';
-      let billsTitle = '';
-      let billsBody = '';
+    if (shouldSend) {
+      let slotName = 'manual';
+      let notifTitle = '';
+      let billsPart = '';
+      let smartPart = '';
 
       if (forceNow) {
-        billsSlotName = 'teste';
+        slotName = 'teste';
         if (overdueBills.length > 0) {
-          billsTitle = `🚨 [TESTE] ${overdueBills.length} Conta(s) em Atraso`;
+          notifTitle = `🚨 [TESTE] ${overdueBills.length} Conta(s) em Atraso`;
         } else if (todayBills.length > 0) {
-          billsTitle = `⚠️ [TESTE] ${todayBills.length} Conta(s) Vence(m) Hoje`;
+          notifTitle = `⚠️ [TESTE] ${todayBills.length} Conta(s) Vence(m) Hoje`;
         } else if (userExpiringBills.length > 0) {
-          billsTitle = `⚠️ [TESTE] ${userExpiringBills.length} Conta(s) a Vencer`;
+          notifTitle = `⚠️ [TESTE] ${userExpiringBills.length} Conta(s) a Vencer`;
         } else {
-          billsTitle = "✅ [TESTE] Contas em Dia!";
+          notifTitle = "✅ [TESTE] Finanças em Dia!";
         }
-      } else if (isBills08Trigger) {
-        billsSlotName = '08h';
+      } else if (is08Trigger) {
+        slotName = '08h';
         if (overdueBills.length > 0) {
-          billsTitle = `🚨 ALERTA MATINAL (08:00): ${overdueBills.length} Conta(s) Atrasada(s)`;
+          notifTitle = `🚨 ALERTA MATINAL (08:00): ${overdueBills.length} Conta(s) Atrasada(s)`;
         } else if (todayBills.length > 0) {
-          billsTitle = `⚠️ BOM DIA (08:00): ${todayBills.length} Conta(s) Vence(m) Hoje`;
+          notifTitle = `⚠️ BOM DIA (08:00): ${todayBills.length} Conta(s) Vence(m) Hoje`;
         } else if (userExpiringBills.length > 0) {
-          billsTitle = `⚠️ RADAR DO DIA (08:00): ${userExpiringBills.length} Conta(s) a Vencer`;
+          notifTitle = `⚠️ RADAR DO DIA (08:00): ${userExpiringBills.length} Conta(s) a Vencer`;
         } else {
-          billsTitle = "✅ CONTAS EM DIA (08:00): Tudo organizado!";
+          notifTitle = "✅ BOM DIA (08:00): Contas em Dia & Resumo";
         }
-      } else if (isBills12Trigger) {
-        billsSlotName = '12h';
-        if (overdueBills.length > 0) {
-          billsTitle = `🚨 MEIO-DIA (12:00): ${overdueBills.length} Conta(s) em Atraso`;
-        } else if (todayBills.length > 0) {
-          billsTitle = `☀️ REFORÇO DO ALMOÇO (12:00): ${todayBills.length} Vence(m) Hoje`;
-        } else if (userExpiringBills.length > 0) {
-          billsTitle = `☀️ MEIO-DIA (12:00): ${userExpiringBills.length} Conta(s) Pendente(s)`;
-        } else {
-          billsTitle = "✅ CONTAS EM DIA (12:00): Suas finanças estão tranquilas!";
-        }
-      } else if (isBills20Trigger) {
-        billsSlotName = '20h';
+      } else if (is20Trigger) {
+        slotName = '20h';
         if (overdueBills.length > 0 || todayBills.length > 0) {
-          billsTitle = `🌙 8 DA NOITE (20:00): ${overdueBills.length + todayBills.length} Pendência(s) de Atenção`;
+          notifTitle = `🌙 8 DA NOITE (20:00): ${overdueBills.length + todayBills.length} Pendência(s) de Atenção`;
         } else if (userExpiringBills.length > 0) {
-          billsTitle = `🌙 RADAR NOTURNO (20:00): Contas dos próximos dias`;
+          notifTitle = `🌙 RADAR NOTURNO (20:00): Próximas Contas`;
         } else {
-          billsTitle = "✨ NOITE TRANQUILA (20:00): Nenhuma conta atrasada!";
+          notifTitle = "✨ NOITE TRANQUILA (20:00): Contas em Dia & Fechamento";
         }
       }
 
+      // 1. Build Bills Section
       if (userExpiringBills.length === 0) {
-        billsBody = "Parabéns! Nenhuma conta atrasada ou próxima do vencimento. Seus alertas diários continuam agendados às 08:00, 12:00 e 20:00.";
+        billsPart = is20Trigger 
+          ? "Tudo organizado! Nenhuma conta atrasada pendente hoje." 
+          : "Parabéns! Nenhuma conta atrasada ou próxima do vencimento hoje.";
       } else if (userExpiringBills.length === 1) {
         const b = userExpiringBills[0];
         const valStr = b.remaining > 0 ? ` de R$ ${fmt(b.remaining)}` : '';
         if (b.isOverdue) {
-          billsBody = `A despesa "${b.name}"${valStr} está ATRASADA (${b.due}). Abra o app para regularizar e evitar juros.`;
+          billsPart = `A despesa "${b.name}"${valStr} está ATRASADA (${b.due}). Regularize para evitar juros.`;
         } else if (b.isDueToday) {
-          billsBody = `Lembrete: A despesa "${b.name}"${valStr} VENCE HOJE (${b.due}). Aproveite para quitar agora.`;
+          billsPart = `Lembrete: A despesa "${b.name}"${valStr} VENCE HOJE (${b.due}). Aproveite para quitar.`;
         } else {
-          billsBody = `Lembrete: A despesa "${b.name}"${valStr} vence em ${b.diffDays} dia(s) (${b.due}).`;
+          billsPart = `Lembrete: A despesa "${b.name}"${valStr} vence em ${b.diffDays} dia(s) (${b.due}).`;
         }
       } else {
-        const maxDisplay = 5;
+        const maxDisplay = 4;
         const lines: string[] = [];
         for (const b of userExpiringBills.slice(0, maxDisplay)) {
           const valStr = b.remaining > 0 ? ` - R$ ${fmt(b.remaining)}` : '';
@@ -739,96 +723,61 @@ async function runBackgroundPushNotificationChecker(
         if (userExpiringBills.length > maxDisplay) {
           lines.push(`... e mais ${userExpiringBills.length - maxDisplay} conta(s) pendente(s).`);
         }
-        const totalStr = totalRemaining > 0 ? ` Total pendente: R$ ${fmt(totalRemaining)}.` : '';
-        billsBody = `Você tem ${userExpiringBills.length} contas para acompanhar.${totalStr}\n` + lines.join('\n');
+        const totalStr = totalRemaining > 0 ? ` Total: R$ ${fmt(totalRemaining)}.` : '';
+        billsPart = `Você tem ${userExpiringBills.length} contas para acompanhar.${totalStr}\n` + lines.join('\n');
       }
 
-      const billsTag = forceNow ? `financaspro-bills-test-${Date.now()}` : `financaspro-bills-${billsSlotName}-${br.dateStr}`;
-      const sent = await dispatchPushToSubscriptions(userId, subs, billsTitle, billsBody, billsTag);
+      // 2. Build Smart Insights Section (Ambas juntas)
+      if (is20Trigger) {
+        // Fechamento noturno inteligente
+        const topStr = insights.topExpense ? `Maior fatura do mês: "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n` : '';
+        const pendStr = insights.totalPending > 0 ? `Restam R$ ${fmt(insights.totalPending)} em pendências no mês.\n` : 'Todas as despesas deste mês estão quitadas!\n';
+        smartPart = `\n\n✨ Fechamento Inteligente:\n${topStr}${pendStr}🌙 Dica: Registre compras de hoje antes de dormir para tranquilidade amanhã!`;
+      } else {
+        // Alerta matinal / teste inteligente
+        if (insights.topExpense) {
+          smartPart = `\n\n💡 Controle Inteligente:\nMaior gasto do mês: "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}) | ${insights.paidPercentage}% quitado.\n🎯 Meta: Priorize o essencial para proteger seu saldo!`;
+        } else {
+          smartPart = `\n\n💡 Dica Inteligente:\nComece o dia no controle! Registre novos gastos no FinançasPro para manter sua meta em dia.`;
+        }
+      }
+
+      // Assemble final body according to requested mode
+      let finalBody = '';
+      if (targetMode === 'bills') {
+        finalBody = billsPart;
+      } else if (targetMode === 'smart') {
+        finalBody = smartPart.trim();
+      } else {
+        // Default: Ambas juntas!
+        finalBody = `${billsPart}${smartPart}`;
+      }
+
+      const notifTag = forceNow ? `financaspro-alert-test-${Date.now()}` : `financaspro-alert-${slotName}-${br.dateStr}`;
+      const sent = await dispatchPushToSubscriptions(userId, subs, notifTitle, finalBody, notifTag);
       totalDispatched += sent;
 
-      // Mark slot notified
-      if (isBills08Trigger) markLocalAlertNotified(bills08Key, { slot: 'bills_08h', count: userExpiringBills.length });
-      if (isBills12Trigger) markLocalAlertNotified(bills12Key, { slot: 'bills_12h', count: userExpiringBills.length });
-      if (isBills20Trigger) markLocalAlertNotified(bills20Key, { slot: 'bills_20h', count: userExpiringBills.length });
+      // Mark slot notified (and legacy keys to avoid any duplicated trigger)
+      if (is08Trigger) {
+        markLocalAlertNotified(slot08Key, { slot: '08h', count: userExpiringBills.length });
+        markLocalAlertNotified(bills08Key, { slot: 'bills_08h', count: userExpiringBills.length });
+        markLocalAlertNotified(smart09Key, { slot: 'smart_09h', count: insights.expensesCount });
+      }
+      if (is20Trigger) {
+        markLocalAlertNotified(slot20Key, { slot: '20h', count: userExpiringBills.length });
+        markLocalAlertNotified(bills20Key, { slot: 'bills_20h', count: userExpiringBills.length });
+        markLocalAlertNotified(smart21Key, { slot: 'smart_21h', count: insights.expensesCount });
+      }
 
       try {
         const db = admin.firestore();
-        const activeSlotKey = isBills08Trigger ? bills08Key : (isBills12Trigger ? bills12Key : (isBills20Trigger ? bills20Key : null));
+        const activeSlotKey = is08Trigger ? slot08Key : (is20Trigger ? slot20Key : null);
         if (activeSlotKey) {
           await db.collection("notified_alerts").doc(activeSlotKey).set({
             userId,
-            slot: billsSlotName,
-            type: "bills",
-            count: userExpiringBills.length,
-            dispatchedAt: new Date().toISOString()
-          });
-        }
-      } catch (e) {}
-
-      console.log(`✅ [BILLS PUSH] Alerta das ${billsSlotName} entregue para ${sent} aparelho(s) do usuário ${userId}.`);
-    }
-
-    // ====================================================
-    // B) DISPATCH SMART INSIGHTS NOTIFICATION (09h, 13h, 21h)
-    // ====================================================
-    const shouldSendSmart = 
-      (forceNow && targetMode === 'smart') || 
-      isSmart09Trigger || 
-      isSmart13Trigger || 
-      isSmart21Trigger;
-
-    if (shouldSendSmart) {
-      let smartSlotName = 'manual';
-      let smartTitle = '';
-      let smartBody = '';
-
-      if (forceNow) {
-        smartSlotName = 'teste';
-        smartTitle = "💡 [TESTE] Informações Inteligentes & Maior Gasto";
-        if (insights.topExpense) {
-          smartBody = `📊 Maior gasto do mês: "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n🎯 Progresso: ${insights.paidPercentage}% quitado. Mantenha seus limites diários para proteger seu saldo!`;
-        } else {
-          smartBody = "💡 Dica de Ouro: Registre seus gastos no FinançasPro para manter sua meta e orçamento sob controle!";
-        }
-      } else if (isSmart09Trigger) {
-        smartSlotName = '09h';
-        smartTitle = "💡 CONTROLE INTELIGENTE (09:00)";
-        if (insights.topExpense) {
-          smartBody = `📊 Maior gasto do mês: "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n🎯 Meta de hoje: Mantenha seus limites diários e priorize o que é essencial para proteger seu saldo!`;
-        } else {
-          smartBody = "💡 Dica de Ouro: Comece o dia no controle! Registre qualquer novo gasto no FinançasPro para manter sua meta em dia.";
-        }
-      } else if (isSmart13Trigger) {
-        smartSlotName = '13h';
-        smartTitle = "🎯 RAIO-X FINANCEIRO (13:00)";
-        const topStr = insights.topExpense ? `\nMaior despesa: ${insights.topExpense.name} (R$ ${fmt(insights.topExpense.amount)}).` : '';
-        smartBody = `Progresso do mês: ${insights.paidPercentage}% das despesas pagas (R$ ${fmt(insights.totalPaid)} de R$ ${fmt(insights.totalExpenses)}).${topStr}\n💡 Dica: Acompanhe seus gastos na pausa do almoço para evitar excessos à tarde.`;
-      } else if (isSmart21Trigger) {
-        smartSlotName = '21h';
-        smartTitle = "✨ 9 DA NOITE - FECHAMENTO INTELIGENTE (21:00)";
-        const topStr = insights.topExpense ? `Sua maior fatura neste mês é "${insights.topExpense.name}" (R$ ${fmt(insights.topExpense.amount)}).\n` : '';
-        const pendStr = insights.totalPending > 0 ? `Restam R$ ${fmt(insights.totalPending)} em despesas pendentes no mês.\n` : 'Todas as despesas do mês já estão quitadas!\n';
-        smartBody = `${topStr}${pendStr}🌙 Dica da noite: Registre pequenas compras do dia antes de dormir para garantir tranquilidade financeira amanhã!`;
-      }
-
-      const smartTag = forceNow ? `financaspro-smart-test-${Date.now()}` : `financaspro-smart-${smartSlotName}-${br.dateStr}`;
-      const sent = await dispatchPushToSubscriptions(userId, subs, smartTitle, smartBody, smartTag);
-      totalDispatched += sent;
-
-      // Mark slot notified
-      if (isSmart09Trigger) markLocalAlertNotified(smart09Key, { slot: 'smart_09h', count: insights.expensesCount });
-      if (isSmart13Trigger) markLocalAlertNotified(smart13Key, { slot: 'smart_13h', count: insights.expensesCount });
-      if (isSmart21Trigger) markLocalAlertNotified(smart21Key, { slot: 'smart_21h', count: insights.expensesCount });
-
-      try {
-        const db = admin.firestore();
-        const activeSmartSlotKey = isSmart09Trigger ? smart09Key : (isSmart13Trigger ? smart13Key : (isSmart21Trigger ? smart21Key : null));
-        if (activeSmartSlotKey) {
-          await db.collection("notified_alerts").doc(activeSmartSlotKey).set({
-            userId,
-            slot: smartSlotName,
-            type: "smart",
+            slot: slotName,
+            type: "combined_bills_and_smart",
+            billsCount: userExpiringBills.length,
             topExpense: insights.topExpense,
             totalExpenses: insights.totalExpenses,
             dispatchedAt: new Date().toISOString()
@@ -836,7 +785,7 @@ async function runBackgroundPushNotificationChecker(
         }
       } catch (e) {}
 
-      console.log(`✅ [SMART PUSH] Alerta inteligente das ${smartSlotName} entregue para ${sent} aparelho(s) do usuário ${userId}.`);
+      console.log(`✅ [COMBINED PUSH] Alerta consolidado das ${slotName} (Contas + Insights juntas) entregue para ${sent} aparelho(s) do usuário ${userId}.`);
     }
   }
 
@@ -1651,13 +1600,8 @@ app.get("/api/push/status/:userId", (req, res) => {
     const br = getBrasiliaDate();
 
     // Slot keys
-    const bills08Key = `push_bills_08h_${userId}_${br.dateStr}`;
-    const bills12Key = `push_bills_12h_${userId}_${br.dateStr}`;
-    const bills20Key = `push_bills_20h_${userId}_${br.dateStr}`;
-
-    const smart09Key = `push_smart_09h_${userId}_${br.dateStr}`;
-    const smart13Key = `push_smart_13h_${userId}_${br.dateStr}`;
-    const smart21Key = `push_smart_21h_${userId}_${br.dateStr}`;
+    const slot08Key = `push_alert_08h_${userId}_${br.dateStr}`;
+    const slot20Key = `push_alert_20h_${userId}_${br.dateStr}`;
 
     res.json({
       userId,
@@ -1665,16 +1609,12 @@ app.get("/api/push/status/:userId", (req, res) => {
       deviceCount: userSubs.length,
       billsCount: userBills.length,
       scheduledHours: {
-        bills: ["08:00 (Contas da Manhã)", "12:00 (Contas do Almoço)", "20:00 (Contas da Noite)"],
-        smart: ["09:00 (Planejamento & Maior Gasto)", "13:00 (Balanço do Mês)", "21:00 (Fechamento Inteligente)"]
+        manha: "08:00 (Contas do Dia + Informações Inteligentes)",
+        noite: "20:00 (Pendências da Noite + Fechamento Inteligente)"
       },
       slots: {
-        bills08: { slot: "08:00", type: "bills", sent: Boolean(notifiedAlerts[bills08Key]?.notified), time: notifiedAlerts[bills08Key]?.timeStr || null },
-        smart09: { slot: "09:00", type: "smart", sent: Boolean(notifiedAlerts[smart09Key]?.notified), time: notifiedAlerts[smart09Key]?.timeStr || null },
-        bills12: { slot: "12:00", type: "bills", sent: Boolean(notifiedAlerts[bills12Key]?.notified), time: notifiedAlerts[bills12Key]?.timeStr || null },
-        smart13: { slot: "13:00", type: "smart", sent: Boolean(notifiedAlerts[smart13Key]?.notified), time: notifiedAlerts[smart13Key]?.timeStr || null },
-        bills20: { slot: "20:00", type: "bills", sent: Boolean(notifiedAlerts[bills20Key]?.notified), time: notifiedAlerts[bills20Key]?.timeStr || null },
-        smart21: { slot: "21:00", type: "smart", sent: Boolean(notifiedAlerts[smart21Key]?.notified), time: notifiedAlerts[smart21Key]?.timeStr || null },
+        manha08: { slot: "08:00", type: "combined", sent: Boolean(notifiedAlerts[slot08Key]?.notified), time: notifiedAlerts[slot08Key]?.timeStr || null },
+        noite20: { slot: "20:00", type: "combined", sent: Boolean(notifiedAlerts[slot20Key]?.notified), time: notifiedAlerts[slot20Key]?.timeStr || null },
       },
       currentBrasiliaTime: br.timeStr,
       currentBrasiliaDate: br.dateStr

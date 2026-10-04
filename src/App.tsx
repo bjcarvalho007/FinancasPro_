@@ -206,13 +206,23 @@ function MainApp() {
     }
   }, [user?.uid]);
   
-  // Quick dynamic splash introduction experience (450ms)
+  // Dynamic splash introduction experience with time greeting and animated emblem (~2400ms)
   useEffect(() => {
     const timer = setTimeout(() => {
       setMinSplashLoading(false);
-    }, 450);
+    }, 2400);
     return () => clearTimeout(timer);
   }, []);
+
+  // Cache user name for instant personalized greeting on next start
+  useEffect(() => {
+    const name = userProfile?.name || userProfile?.displayName || user?.displayName;
+    if (name) {
+      try {
+        localStorage.setItem('finpro_last_username', name);
+      } catch (e) {}
+    }
+  }, [userProfile?.name, userProfile?.displayName, user?.displayName]);
   
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [currency, setCurrency] = useState<'BRL' | 'USD' | 'EUR'>('BRL');
@@ -2839,7 +2849,7 @@ function MainApp() {
   const isLoadingAll = loadingUser || (user ? loadingProfile : false) || minSplashLoading;
 
   if (isLoadingAll) {
-    return <SplashLoader />;
+    return <SplashLoader userName={userProfile?.name || userProfile?.displayName || user?.displayName} />;
   }
 
   if (!user) {

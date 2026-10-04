@@ -251,7 +251,7 @@ export default function SettingsPanel({
       } else {
         const sub = await ensureDevicePushSubscription();
         if (sub) {
-          showToast('Dispositivo conectado com sucesso! Varreduras automáticas às 08:00 (Manhã) e 12:00 (Meio-Dia).', 'success');
+          showToast('Dispositivo conectado com sucesso! Notificações automáticas às 08:00 (Manhã) e 20:00 (Noite).', 'success');
           loadServerStatus();
         }
       }
@@ -835,7 +835,7 @@ export default function SettingsPanel({
                   {t('alertasSegundoPlano', 'Alertas em Segundo Plano (PWA)')}
                 </span>
                 <span className="text-[10px] text-slate-400 block leading-normal mt-0.5">
-                  {t('recebaAvisosInstantaneos', 'Varreduras automáticas de vencimentos pela manhã (08:00) e ao meio-dia (12:00) no horário de Brasília.')}
+                  {t('recebaAvisosInstantaneos', 'Varreduras automáticas pela manhã (08:00) e à noite (20:00) no horário de Brasília.')}
                 </span>
               </div>
               <button

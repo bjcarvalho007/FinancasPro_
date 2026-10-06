@@ -65,7 +65,7 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       description: 'Cadastre suas despesas que se repetem todo mês (aluguel, condomínio, luz, internet, assinaturas). Você só precisa cadastrar uma única vez: o sistema replica essas contas automaticamente para todos os meses futuros aguardando sua quitação.',
       color: "from-indigo-500/20 to-indigo-600/5",
       badge: 'Passo 2 de 7',
-      tip: 'Quando pagar a conta no mês, basta marcar o botão de quitação (Pagar). As contas dos meses futuros continuam abertas e calculadas.'
+      tip: 'Quando pagar a conta no mês, basta marcar o botão de quitação (Marcar como Pago). As contas dos meses futuros continuam abertas e calculadas.'
     },
     {
       title: 'Passo 3: Gastos Variáveis do Dia a Dia',

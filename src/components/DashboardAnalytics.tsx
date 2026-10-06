@@ -134,7 +134,7 @@ export default function DashboardAnalytics({
 
         return {
           ...t,
-          amount: t.paid_amount > 0 ? t.paid_amount : installmentValue,
+          amount: installmentValue,
           total_parcelado: totalOriginalBase
         };
       }
@@ -239,7 +239,7 @@ export default function DashboardAnalytics({
   // Exact pending obligations to pay of the month across fixos, variáveis, and parcelas
   // Calculated per item deficit so excess or settled items never zero out other unpaid bills!
   const unpaidFixosMonth = listActive
-    .filter(t => !t.is_skipped && t.type === 'fixos')
+    .filter(t => !t.is_skipped && (t.type === 'fixos' || (t.type as string) === 'contas'))
     .reduce((sum, t) => sum + Math.max(0, (Number(t.amount) || 0) - (Number(t.paid_amount) || 0)), 0);
 
   const unpaidVariaveisMonth = listActive
@@ -249,11 +249,12 @@ export default function DashboardAnalytics({
   const unpaidParcelasMonth = listActive
     .filter(t => !t.is_skipped && t.type === 'parcelas')
     .reduce((sum, t) => {
-      const amt = (Number(t.amount) > 0)
-        ? Number(t.amount)
-        : (Number(t.total_parcelado) > 0 && Number(t.installmentsCount) > 0
-            ? Number(t.total_parcelado) / Number(t.installmentsCount)
-            : (Number(t.total_parcelado) || 0));
+      const totalParc = Number(t.total_parcelado) || 0;
+      const count = Number(t.installmentsCount) || 1;
+      const rawAmt = Number(t.amount) || 0;
+      const amt = (rawAmt > 0 && !(totalParc > 0 && count > 1 && Math.abs(rawAmt - totalParc) < 0.01))
+        ? rawAmt
+        : (totalParc > 0 && count > 0 ? totalParc / count : (rawAmt || totalParc));
       return sum + Math.max(0, amt - (Number(t.paid_amount) || 0));
     }, 0);
 

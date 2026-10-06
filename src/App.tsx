@@ -2175,8 +2175,24 @@ function MainApp() {
     return all.filter(c => !hidden.includes(c.value));
   }, [categories, settings?.hiddenCategories]);
   const activeMonthTransactions = useMemo(() => {
-    // 1. Get real transactions for this month
-    const realTransactionsThisMonth = transactions.filter(t => t.monthKey === currentMonthKey);
+    const getTxMonth = (t: Transaction): string => {
+      if (t.monthKey && typeof t.monthKey === 'string' && t.monthKey.trim().length >= 7) {
+        return t.monthKey.trim().substring(0, 7);
+      }
+      if (t.due && typeof t.due === 'string' && /^\d{4}-\d{2}/.test(t.due.trim())) {
+        return t.due.trim().substring(0, 7);
+      }
+      if (t.createdAt && typeof t.createdAt === 'string' && /^\d{4}-\d{2}/.test(t.createdAt.trim())) {
+        return t.createdAt.trim().substring(0, 7);
+      }
+      return '';
+    };
+
+    // 1. Get real transactions for this month (matches monthKey or due/createdAt month)
+    const realTransactionsThisMonth = transactions.filter(t => {
+      const m = getTxMonth(t);
+      return m === currentMonthKey || t.monthKey === currentMonthKey;
+    });
 
     // Normalize real transactions of the current month to correctly use their single-month installment value
     const normalizedRealTransactions = realTransactionsThisMonth.map(t => {
@@ -2185,16 +2201,16 @@ function MainApp() {
         const masterTx = transactions.find(m => m.id === masterId) || t;
         const extraGasto = masterTx.extra_gasto || 0;
 
-        const totalOriginalBase = masterTx.total_parcelado || masterTx.amount || 0;
+        const totalOriginalBase = Number(masterTx.total_parcelado) || Number(masterTx.amount) || 0;
         const totalVal = totalOriginalBase + extraGasto;
-        const count = masterTx.installmentsCount || 1;
+        const count = Number(masterTx.installmentsCount) || 1;
         
         const isTotalPlanAmount = t.amount === totalOriginalBase;
-        const hasCustomInstallmentAmount = t.amount && t.amount > 0 && !isTotalPlanAmount;
+        const hasCustomInstallmentAmount = typeof t.amount === 'number' && t.amount > 0 && !isTotalPlanAmount;
 
-        const baseInstallment = (masterTx.amount && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0))
+        const baseInstallment = (typeof masterTx.amount === 'number' && masterTx.amount > 0 && masterTx.amount !== (masterTx.total_parcelado || 0))
           ? masterTx.amount
-          : (totalOriginalBase / count);
+          : (count > 0 ? totalOriginalBase / count : totalOriginalBase);
 
         const installmentValue = hasCustomInstallmentAmount
           ? t.amount
@@ -2210,9 +2226,12 @@ function MainApp() {
     });
 
     // Find the absolute earliest month key where the user actually created/wrote a real transaction
-    const nonVirtualUserTxs = transactions.filter(t => !t.id.startsWith('v_') && !t.is_skipped && t.monthKey);
+    const nonVirtualUserTxs = transactions.filter(t => !t.id.startsWith('v_') && !t.is_skipped && getTxMonth(t));
     const earliestRealMonthKey = nonVirtualUserTxs.length > 0 
-      ? nonVirtualUserTxs.reduce((min, t) => t.monthKey < min ? t.monthKey : min, nonVirtualUserTxs[0].monthKey) 
+      ? nonVirtualUserTxs.reduce((min, t) => {
+          const m = getTxMonth(t);
+          return (m && m < min) ? m : min;
+        }, getTxMonth(nonVirtualUserTxs[0]) || currentMonthKey) 
       : currentMonthKey;
 
     // If the currently viewed month is strictly before the earliest month they started adding data, show nothing
@@ -2221,7 +2240,7 @@ function MainApp() {
     }
 
     // 2. Find all unique master transaction templates (fixed and installments) in database
-    const masterTransactions = transactions.filter(t => (t.type === 'fixos' || t.type === 'parcelas') && !t.id.startsWith('v_'));
+    const masterTransactions = transactions.filter(t => (t.type === 'fixos' || (t.type as string) === 'contas' || t.type === 'parcelas') && !t.id.startsWith('v_'));
     
     // Group them uniquely by recurring identity to avoid duplicates.
     const mastersMap = new Map<string, Transaction>();
@@ -2248,7 +2267,7 @@ function MainApp() {
         if (t.id === masterTx.id) return true;
         if (masterTx.masterId && t.masterId === masterTx.masterId) return true;
         if (t.masterId === masterTx.id) return true;
-        if (t.name.trim().toLowerCase() === masterTx.name.trim().toLowerCase()) return true;
+        if (t.type === masterTx.type && t.name.trim().toLowerCase() === masterTx.name.trim().toLowerCase()) return true;
         return false;
       });
 
@@ -2607,17 +2626,22 @@ function MainApp() {
 
   // Unpaid total estimate for fixed, variables, and installments of the month
   const activeMonthDebits = activeMonthTransactions.filter(
-    t => !t.is_skipped && (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas')
+    t => !t.is_skipped && (t.type === 'fixos' || (t.type as string) === 'contas' || t.type === 'variaveis' || t.type === 'parcelas')
   );
 
   // Safe helper to obtain the monthly obligation amount of a transaction
   const getItemMonthlyAmount = (t: Transaction): number => {
-    if (typeof t.amount === 'number' && !isNaN(t.amount) && t.amount > 0) {
-      return t.amount;
-    }
-    const parsedAmt = Number(t.amount);
-    if (!isNaN(parsedAmt) && parsedAmt > 0) {
-      return parsedAmt;
+    const rawAmt = typeof t.amount === 'number' ? t.amount : Number(t.amount);
+    if (!isNaN(rawAmt) && rawAmt > 0) {
+      if (t.type === 'parcelas') {
+        const totalParc = Number(t.total_parcelado) || 0;
+        const count = Number(t.installmentsCount) || 1;
+        // If rawAmt was saved as the total debt instead of the monthly installment, compute monthly installment
+        if (totalParc > 0 && count > 1 && Math.abs(rawAmt - totalParc) < 0.01) {
+          return totalParc / count;
+        }
+      }
+      return rawAmt;
     }
     if (t.type === 'parcelas') {
       const totalParc = Number(t.total_parcelado) || 0;
@@ -2643,7 +2667,7 @@ function MainApp() {
   // Each item's remaining deficit is Math.max(0, itemAmount - itemPaid) so that
   // any overpaid or already settled item NEVER cancels out or zeroes out another unpaid debt!
   const pendingFixos = activeMonthDebits
-    .filter(t => t.type === 'fixos')
+    .filter(t => t.type === 'fixos' || (t.type as string) === 'contas')
     .reduce((sum, t) => sum + Math.max(0, getItemMonthlyAmount(t) - getItemPaidAmount(t)), 0);
 
   const pendingVariaveis = activeMonthDebits
@@ -2658,7 +2682,7 @@ function MainApp() {
   const pendingTotalDebt = pendingFixos + pendingVariaveis + pendingParcelas;
 
   // Categorical summaries for quick widgets
-  const fixosSum = activeMonthTransactions.filter(t => t.type === 'fixos').reduce((sum, t) => sum + t.amount, 0);
+  const fixosSum = activeMonthTransactions.filter(t => t.type === 'fixos' || (t.type as string) === 'contas').reduce((sum, t) => sum + t.amount, 0);
   const variableSum = activeMonthTransactions.filter(t => t.type === 'variaveis').reduce((sum, t) => sum + t.amount, 0);
   const parcelasSum = activeMonthTransactions.filter(t => t.type === 'parcelas').reduce((sum, t) => sum + t.amount, 0);
   const renderSummaryCardsMobile = () => {
@@ -2673,25 +2697,43 @@ function MainApp() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-20px' }}
           transition={{ duration: 0.35 }}
-          whileHover={{ scale: 1.01 }}
+          whileHover={{ scale: 1.025, y: -2 }}
+          whileTap={{ scale: 0.97 }}
           onClick={handleOpenIncome}
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir entradas e configuração de renda"
           className={`p-6 rounded-3xl ${
             theme === 'light' 
-              ? 'bg-gradient-to-br from-[#effaf3] to-white border-[#b7ebd1] text-slate-900 shadow-sm shadow-emerald-100/30' 
-              : 'bg-gradient-to-br from-emerald-950/70 to-teal-950/15 border-emerald-500/30 text-white shadow-xl shadow-black/20'
-          } border glow-emerald relative overflow-hidden flex flex-col justify-between cursor-pointer group`}
+              ? 'bg-gradient-to-br from-[#effaf3] to-white border-[#b7ebd1] text-slate-900 shadow-sm shadow-emerald-100/30 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-200/40' 
+              : 'bg-gradient-to-br from-emerald-950/70 to-teal-950/15 border-emerald-500/30 text-white shadow-xl shadow-black/20 hover:border-emerald-400/60 hover:shadow-2xl hover:shadow-emerald-950/40'
+          } border glow-emerald relative overflow-hidden flex flex-col justify-between cursor-pointer group select-none transition-all duration-200 ring-1 ring-emerald-500/10 hover:ring-emerald-500/30`}
         >
-          <div className="absolute top-4 right-4 text-emerald-400/40 group-hover:text-emerald-400 group-hover:rotate-12 transition-all">
-            <Sparkles className="w-5 h-5" />
+          <div className="absolute top-4 right-4 flex items-center gap-1.5 text-emerald-400/60 group-hover:text-emerald-400 transition-all">
+            <span className="text-[9px] font-black uppercase tracking-wider hidden sm:inline-block opacity-0 group-hover:opacity-100 transition-opacity">Ver Entradas</span>
+            <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 group-hover:scale-110 transition-all shadow-sm">
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </div>
           </div>
           <div>
-            <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>{t('sobraEstimadaCaixa', 'Sobra Estimada de Caixa')}</span>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-600' : 'text-slate-400'} uppercase tracking-widest`}>
+                {t('sobraEstimadaCaixa', 'Sobra Estimada de Caixa')}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 group-hover:bg-emerald-500/25 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                Toque p/ ver ➔
+              </span>
+            </div>
             <h3 className={`font-mono text-3xl font-extrabold ${theme === 'light' ? 'text-emerald-700' : 'text-white'} tracking-tight leading-none mb-2`}>
               {formatCurrency(leftoverCash)}
             </h3>
           </div>
-          <div className={`text-[11px] ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400/80'} font-bold uppercase tracking-wider mt-4`}>
-            Total de entrada: {formatCurrency(totalInflowsSum)}
+          <div className={`text-[11px] ${theme === 'light' ? 'text-emerald-600' : 'text-emerald-400/80'} font-bold uppercase tracking-wider mt-4 flex items-center justify-between`}>
+            <span>Total de entrada: {formatCurrency(totalInflowsSum)}</span>
+            <span className="text-[9.5px] text-emerald-400/80 font-black flex items-center gap-0.5 group-hover:text-emerald-300">
+              Editar Renda ➔
+            </span>
           </div>
         </motion.div>
 
@@ -2701,22 +2743,43 @@ function MainApp() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-20px' }}
           transition={{ duration: 0.35, delay: 0.08 }}
-          whileHover={{ scale: 1.01 }}
+          whileHover={{ scale: 1.025, y: -2 }}
+          whileTap={{ scale: 0.97 }}
           onClick={() => setIsPendingDebtListOpen(true)}
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir lista de contas pendentes a pagar"
           className={`p-6 rounded-3xl ${
             theme === 'light' 
-              ? 'bg-white border-slate-200 shadow-sm shadow-slate-100/30 text-slate-900 hover:border-indigo-300' 
-              : 'bg-slate-950/40 border-white/5 text-white shadow-xl hover:border-slate-800'
-          } border flex flex-col justify-between cursor-pointer transition-all`}
+              ? 'bg-white border-slate-200 shadow-sm shadow-slate-100/30 text-slate-900 hover:border-rose-400 hover:shadow-lg hover:shadow-rose-100/40' 
+              : 'bg-slate-950/40 border-white/5 text-white shadow-xl hover:border-rose-500/50 hover:shadow-2xl hover:shadow-rose-950/40'
+          } border flex flex-col justify-between cursor-pointer group select-none transition-all duration-200 relative overflow-hidden ring-1 ring-rose-500/10 hover:ring-rose-500/30`}
         >
+          <div className="absolute top-4 right-4 flex items-center gap-1.5 text-rose-400/60 group-hover:text-rose-400 transition-all">
+            <span className="text-[9px] font-black uppercase tracking-wider hidden sm:inline-block opacity-0 group-hover:opacity-100 transition-opacity">Ver Contas</span>
+            <div className="w-8 h-8 rounded-full bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 group-hover:scale-110 transition-all shadow-sm">
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </div>
           <div>
-            <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>{t('totalPagarPendente', 'Total a Pagar Pendente')}</span>
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`text-[10px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest`}>
+                {t('totalPagarPendente', 'Total a Pagar Pendente')}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider bg-rose-500/15 text-rose-400 border border-rose-500/30 group-hover:bg-rose-500/25 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping inline-block" />
+                Toque p/ ver ➔
+              </span>
+            </div>
             <h3 className="font-mono text-3xl font-extrabold text-rose-450 tracking-tight leading-none mb-2">
               {formatCurrency(pendingTotalDebt)}
             </h3>
           </div>
-          <div className={`text-[11px] font-bold uppercase tracking-wider mt-4 ${theme === 'light' ? 'text-slate-500' : 'text-slate-500'}`}>
-            {t('comprometidoDoMes', 'Comprometido do mês:')} {formatCurrency(totalSpentInMonth)}
+          <div className={`text-[11px] font-bold uppercase tracking-wider mt-4 ${theme === 'light' ? 'text-slate-500' : 'text-slate-500'} flex items-center justify-between`}>
+            <span>{t('comprometidoDoMes', 'Comprometido do mês:')} {formatCurrency(totalSpentInMonth)}</span>
+            <span className="text-[9.5px] text-rose-400/90 font-black flex items-center gap-0.5 group-hover:text-rose-300">
+              Ver Contas ➔
+            </span>
           </div>
         </motion.div>
       </div>
@@ -2728,46 +2791,81 @@ function MainApp() {
       <div className="space-y-4 hidden lg:flex flex-col">
         {/* PC Stacked Leftover Card */}
         <motion.div
-          whileHover={{ scale: 1.01 }}
+          whileHover={{ scale: 1.025, y: -2 }}
+          whileTap={{ scale: 0.97 }}
           onClick={handleOpenIncome}
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir entradas e configuração de renda"
           className={`p-6 rounded-3xl ${
             theme === 'light' 
-              ? 'bg-gradient-to-br from-[#f0fdf4] to-white border-emerald-200 text-slate-900 shadow-md shadow-emerald-100/10' 
-              : 'bg-gradient-to-br from-emerald-950/40 to-teal-950/15 border border-emerald-500/20 text-white shadow-xl shadow-black/20'
-          } border glow-emerald relative overflow-hidden flex flex-col h-32 justify-between cursor-pointer group`}
+              ? 'bg-gradient-to-br from-[#f0fdf4] to-white border-emerald-200 text-slate-900 shadow-md shadow-emerald-100/10 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-100/30' 
+              : 'bg-gradient-to-br from-emerald-950/40 to-teal-950/15 border border-emerald-500/20 text-white shadow-xl shadow-black/20 hover:border-emerald-400/60 hover:shadow-2xl hover:shadow-emerald-950/40'
+          } border glow-emerald relative overflow-hidden flex flex-col h-32 justify-between cursor-pointer group select-none transition-all duration-200 ring-1 ring-emerald-500/10 hover:ring-emerald-500/30`}
         >
-          <div className="absolute top-4 right-4 text-emerald-400/40 group-hover:text-emerald-400 group-hover:rotate-12 transition-all">
-            <Sparkles className="w-5 h-5" />
+          <div className="absolute top-4 right-4 flex items-center gap-1.5 text-emerald-400/50 group-hover:text-emerald-400 transition-all">
+            <span className="text-[8.5px] font-black uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">Ver Detalhes</span>
+            <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 group-hover:scale-110 transition-all">
+              <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+            </div>
           </div>
           <div>
-            <span className={`text-[9px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>{t('sobraEstimadaCaixa', 'Sobra Estimada de Caixa')}</span>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className={`text-[9px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest`}>
+                {t('sobraEstimadaCaixa', 'Sobra Estimada de Caixa')}
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 group-hover:bg-emerald-500/25 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                Toque p/ ver ➔
+              </span>
+            </div>
             <h3 className={`font-mono text-2xl font-black ${theme === 'light' ? 'text-emerald-700' : 'text-white'} tracking-tight leading-none`}>
               {formatCurrency(leftoverCash)}
             </h3>
           </div>
-          <div className={`text-[10px] ${theme === 'light' ? 'text-emerald-650' : 'text-emerald-400/80'} font-extrabold uppercase tracking-wider`}>
-            Total de entrada: {formatCurrency(totalInflowsSum)}
+          <div className={`text-[10px] ${theme === 'light' ? 'text-emerald-650' : 'text-emerald-400/80'} font-extrabold uppercase tracking-wider flex items-center justify-between`}>
+            <span>Total de entrada: {formatCurrency(totalInflowsSum)}</span>
+            <span className="text-[9px] text-emerald-400 font-bold group-hover:underline">Toque para abrir ➔</span>
           </div>
         </motion.div>
 
         {/* PC Stacked Liabilities Card */}
         <motion.div
-          whileHover={{ scale: 1.01 }}
+          whileHover={{ scale: 1.025, y: -2 }}
+          whileTap={{ scale: 0.97 }}
           onClick={() => setIsPendingDebtListOpen(true)}
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir lista de contas pendentes a pagar"
           className={`p-6 rounded-3xl ${
             theme === 'light' 
-              ? 'bg-white border-slate-205 shadow-md shadow-slate-100/10 text-slate-900 hover:border-indigo-300' 
-              : 'bg-slate-950/40 border-white/5 text-white shadow-xl shadow-black/20 hover:border-slate-800'
-          } border flex flex-col h-32 justify-between cursor-pointer transition-all`}
+              ? 'bg-white border-slate-205 shadow-md shadow-slate-100/10 text-slate-900 hover:border-rose-400 hover:shadow-lg hover:shadow-rose-100/30' 
+              : 'bg-slate-950/40 border-white/5 text-white shadow-xl shadow-black/20 hover:border-rose-500/50 hover:shadow-2xl hover:shadow-rose-950/40'
+          } border flex flex-col h-32 justify-between cursor-pointer group select-none transition-all duration-200 relative overflow-hidden ring-1 ring-rose-500/10 hover:ring-rose-500/30`}
         >
+          <div className="absolute top-4 right-4 flex items-center gap-1.5 text-rose-400/50 group-hover:text-rose-400 transition-all">
+            <span className="text-[8.5px] font-black uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">Ver Contas</span>
+            <div className="w-6 h-6 rounded-full bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 group-hover:scale-110 transition-all">
+              <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </div>
           <div>
-            <span className={`text-[9px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>Total a Pagar Pendente</span>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className={`text-[9px] font-bold ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest`}>
+                Total a Pagar Pendente
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase bg-rose-500/15 text-rose-400 border border-rose-500/30 group-hover:bg-rose-500/25 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping inline-block" />
+                Toque p/ ver ➔
+              </span>
+            </div>
             <h3 className="font-mono text-2xl font-black text-rose-400 tracking-tight leading-none">
               {formatCurrency(pendingTotalDebt)}
             </h3>
           </div>
-          <div className={`text-[10px] ${theme === 'light' ? 'text-slate-450' : 'text-slate-500'} font-extrabold uppercase tracking-wider`}>
-            Comprometido: {formatCurrency(totalSpentInMonth)}
+          <div className={`text-[10px] ${theme === 'light' ? 'text-slate-450' : 'text-slate-500'} font-extrabold uppercase tracking-wider flex items-center justify-between`}>
+            <span>Comprometido: {formatCurrency(totalSpentInMonth)}</span>
+            <span className="text-[9px] text-rose-400 font-bold group-hover:underline">Toque para abrir ➔</span>
           </div>
         </motion.div>
       </div>
@@ -3487,10 +3585,10 @@ function MainApp() {
                             handleOpenPay(item.id);
                             setIsExpiringBillsModalOpen(false);
                           }}
-                          className="px-4 py-2 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-md shadow-rose-600/20 active:scale-95 flex items-center gap-1.5"
+                          className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-md shadow-emerald-600/20 active:scale-95 flex items-center gap-1.5"
                         >
-                          <DollarSign className="w-3.5 h-3.5" />
-                          <span>Pagar Agora</span>
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          <span>Marcar como Pago</span>
                         </button>
                       </div>
                     </div>
@@ -4069,18 +4167,28 @@ function MainApp() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-20px' }}
                 transition={{ duration: 0.35 }}
-                whileHover={{ scale: 1.01 }}
+                whileHover={{ scale: 1.025, y: -2 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={handleOpenIncome}
+                role="button"
+                tabIndex={0}
+                aria-label="Abrir entradas e configuração de renda"
                 className={`p-5 rounded-3xl ${
                   theme === 'light' 
-                    ? 'bg-gradient-to-br from-[#f0fdf4] to-white border-slate-205 text-slate-900 shadow-md shadow-emerald-100/10 hover:border-emerald-350' 
-                    : 'bg-gradient-to-br from-[#0c2617]/50 to-slate-950/20 border border-emerald-500/15 text-white shadow-xl hover:border-emerald-500/35'
-                } border flex items-center justify-between cursor-pointer transition-all group`}
+                    ? 'bg-gradient-to-br from-[#f0fdf4] to-white border-slate-205 text-slate-900 shadow-md shadow-emerald-100/10 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-100/30' 
+                    : 'bg-gradient-to-br from-[#0c2617]/50 to-slate-950/20 border border-emerald-500/15 text-white shadow-xl hover:border-emerald-500/50 hover:shadow-2xl hover:shadow-emerald-950/40'
+                } border flex items-center justify-between cursor-pointer transition-all group select-none relative overflow-hidden ring-1 ring-emerald-500/10 hover:ring-emerald-500/30`}
               >
                 <div>
-                  <span className={`text-[10px] font-black ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>
-                    💎 {t('sobraEstimada')}
-                  </span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-[10px] font-black ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest`}>
+                      💎 {t('sobraEstimada')}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 group-hover:bg-emerald-500/25 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                      Toque p/ ver ➔
+                    </span>
+                  </div>
                   <h3 className={`font-mono text-2xl font-black ${theme === 'light' ? 'text-emerald-700' : 'text-emerald-450'} tracking-tight leading-none`}>
                     {formatCurrency(leftoverCash)}
                   </h3>
@@ -4088,8 +4196,8 @@ function MainApp() {
                     Total de entrada: {formatCurrency(totalInflowsSum)}
                   </span>
                 </div>
-                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
-                  theme === 'light' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border group-hover:scale-110 group-hover:rotate-6 transition-all duration-200 ${
+                  theme === 'light' ? 'bg-emerald-50 border-emerald-200 text-emerald-600 group-hover:bg-emerald-100' : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400 group-hover:bg-emerald-500/20'
                 }`}>
                   <Sparkles className="w-5 h-5" />
                 </div>
@@ -4101,18 +4209,28 @@ function MainApp() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-20px' }}
                 transition={{ duration: 0.35, delay: 0.08 }}
-                whileHover={{ scale: 1.01 }}
+                whileHover={{ scale: 1.025, y: -2 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => setIsPendingDebtListOpen(true)}
+                role="button"
+                tabIndex={0}
+                aria-label="Abrir lista de contas pendentes a pagar"
                 className={`p-5 rounded-3xl ${
                   theme === 'light' 
-                    ? 'bg-white border-slate-205 shadow-md shadow-slate-100/10 text-slate-900 hover:border-indigo-305' 
-                    : 'bg-slate-950/40 border border-white/5 text-white shadow-xl hover:border-slate-800'
-                } border flex items-center justify-between cursor-pointer transition-all group`}
+                    ? 'bg-white border-slate-205 shadow-md shadow-slate-100/10 text-slate-900 hover:border-rose-400 hover:shadow-lg hover:shadow-rose-100/30' 
+                    : 'bg-slate-950/40 border border-white/5 text-white shadow-xl hover:border-rose-500/50 hover:shadow-2xl hover:shadow-rose-950/40'
+                } border flex items-center justify-between cursor-pointer transition-all group select-none relative overflow-hidden ring-1 ring-rose-500/10 hover:ring-rose-500/30`}
               >
                 <div>
-                  <span className={`text-[10px] font-black ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest block mb-1`}>
-                    💸 {t('totalPendente')}
-                  </span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-[10px] font-black ${theme === 'light' ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest`}>
+                      💸 {t('totalPendente')}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider bg-rose-500/15 text-rose-400 border border-rose-500/30 group-hover:bg-rose-500/25 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping inline-block" />
+                      Toque p/ ver ➔
+                    </span>
+                  </div>
                   <h3 className="font-mono text-2xl font-black text-rose-450 tracking-tight leading-none">
                     {formatCurrency(pendingTotalDebt)}
                   </h3>
@@ -4120,8 +4238,8 @@ function MainApp() {
                     {t('comprometidoMes')}: {formatCurrency(totalSpentInMonth)}
                   </span>
                 </div>
-                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
-                  theme === 'light' ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-rose-500/10 border-rose-500/25 text-rose-400'
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border group-hover:scale-110 group-hover:-rotate-6 transition-all duration-200 ${
+                  theme === 'light' ? 'bg-rose-50 border-rose-200 text-rose-600 group-hover:bg-rose-100' : 'bg-rose-500/10 border-rose-500/25 text-rose-400 group-hover:bg-rose-500/20'
                 }`}>
                   <DollarSign className="w-5 h-5" />
                 </div>
@@ -4328,7 +4446,7 @@ function MainApp() {
                                             : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/5'
                                       }`}
                                     >
-                                      {isPaid ? 'PAGO' : 'PAGAR'}
+                                      {isPaid ? 'PAGO' : 'MARCAR COMO PAGO'}
                                     </button>
 
                                     <button
@@ -4426,7 +4544,7 @@ function MainApp() {
                                   <div className="flex gap-1.5">
                                     <button
                                       onClick={() => handleOpenPay(tx.id)}
-                                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase cursor-pointer transition-all ${
+                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-wider uppercase cursor-pointer transition-all ${
                                         isPaid 
                                           ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
                                           : theme === 'light'
@@ -4434,7 +4552,7 @@ function MainApp() {
                                             : 'bg-white/5 hover:bg-white/10 text-slate-200 border border-white/5'
                                       }`}
                                     >
-                                      {isPaid ? 'PAGO' : 'PAGAR'}
+                                      {isPaid ? 'PAGO' : 'MARCAR COMO PAGO'}
                                     </button>
 
                                     <button
@@ -5161,7 +5279,7 @@ function MainApp() {
                               {formatCurrency(remDue)}
                             </span>
                             <span className="text-[9px] text-indigo-400 uppercase tracking-wider font-extrabold group-hover:underline mt-0.5 block">
-                              PAGAR ➔
+                              MARCAR COMO PAGO ➔
                             </span>
                           </div>
                         </div>
@@ -5218,7 +5336,7 @@ function MainApp() {
               className="bg-[#0f1524] border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative z-10 space-y-4"
             >
               <div>
-                <h4 className="font-display font-extrabold text-sm text-white uppercase tracking-wider mb-1">Confirmar Baixa</h4>
+                <h4 className="font-display font-extrabold text-sm text-white uppercase tracking-wider mb-1">Marcar como Pago</h4>
                 <p className="text-xs text-slate-400">Informe ou parcialize o pagamento de faturas.</p>
               </div>
 
@@ -5239,7 +5357,7 @@ function MainApp() {
                   onClick={handleApplyPayment}
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
                 >
-                  Dar Baixa Completa/Parcial
+                  Marcar como Pago
                 </button>
                 <button
                   onClick={() => setIsPayOpen(false)}
@@ -5982,7 +6100,7 @@ function MainApp() {
                         }}
                         className="py-3.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-450 text-white font-black text-[10.5px] uppercase tracking-wider rounded-2xl transition-all cursor-pointer shadow-lg shadow-emerald-500/15 flex items-center justify-center gap-1.5 border-none"
                       >
-                        ✅ Pagar Agora
+                        ✅ Marcar como Pago
                       </button>
                     </div>
                   </>

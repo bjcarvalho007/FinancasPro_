@@ -230,13 +230,35 @@ export default function DashboardAnalytics({
   // ==========================================
   const totalSpentMonth = listActive.reduce((sum, t) => sum + t.amount, 0);
   const totalPaidMonth = listActive.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
-  const totalUnpaidMonth = Math.max(0, totalSpentMonth - totalPaidMonth);
-  const paidInMonthRatio = totalSpentMonth > 0 ? (totalPaidMonth / totalSpentMonth) * 100 : 100;
 
   // Split spend typologies for month
   const totalFixosMonth = listActive.filter(t => t.type === 'fixos').reduce((sum, t) => sum + t.amount, 0);
   const totalVariaveisMonth = listActive.filter(t => t.type === 'variaveis').reduce((sum, t) => sum + t.amount, 0);
   const totalParcelasMonth = listActive.filter(t => t.type === 'parcelas').reduce((sum, t) => sum + t.amount, 0);
+
+  // Exact pending obligations to pay of the month across fixos, variáveis, and parcelas
+  // Calculated per item deficit so excess or settled items never zero out other unpaid bills!
+  const unpaidFixosMonth = listActive
+    .filter(t => !t.is_skipped && t.type === 'fixos')
+    .reduce((sum, t) => sum + Math.max(0, (Number(t.amount) || 0) - (Number(t.paid_amount) || 0)), 0);
+
+  const unpaidVariaveisMonth = listActive
+    .filter(t => !t.is_skipped && t.type === 'variaveis')
+    .reduce((sum, t) => sum + Math.max(0, (Number(t.amount) || 0) - (Number(t.paid_amount) || 0)), 0);
+
+  const unpaidParcelasMonth = listActive
+    .filter(t => !t.is_skipped && t.type === 'parcelas')
+    .reduce((sum, t) => {
+      const amt = (Number(t.amount) > 0)
+        ? Number(t.amount)
+        : (Number(t.total_parcelado) > 0 && Number(t.installmentsCount) > 0
+            ? Number(t.total_parcelado) / Number(t.installmentsCount)
+            : (Number(t.total_parcelado) || 0));
+      return sum + Math.max(0, amt - (Number(t.paid_amount) || 0));
+    }, 0);
+
+  const totalUnpaidMonth = unpaidFixosMonth + unpaidVariaveisMonth + unpaidParcelasMonth;
+  const paidInMonthRatio = totalSpentMonth > 0 ? (totalPaidMonth / totalSpentMonth) * 100 : 100;
 
   // Indicadores de Equilíbrio
   const liquidezScoreMonth = totalAvailable > 0 

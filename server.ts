@@ -343,6 +343,7 @@ function calculateUserSmartInsights(userBills: any[], brYear: number, brMonth: n
   let topExpense: { name: string; amount: number; category: string } | null = null;
   let totalExpenses = 0;
   let totalPaid = 0;
+  let totalPending = 0;
   const categoryTotals: { [cat: string]: number } = {};
   let count = 0;
 
@@ -362,6 +363,7 @@ function calculateUserSmartInsights(userBills: any[], brYear: number, brMonth: n
     count++;
     totalExpenses += amount;
     totalPaid += paid;
+    totalPending += Math.max(0, amount - paid);
 
     if (!topExpense || amount > topExpense.amount) {
       topExpense = {
@@ -384,7 +386,6 @@ function calculateUserSmartInsights(userBills: any[], brYear: number, brMonth: n
     }
   }
 
-  const totalPending = Math.max(0, totalExpenses - totalPaid);
   const paidPercentage = totalExpenses > 0 ? Math.round((totalPaid / totalExpenses) * 100) : 100;
 
   return {

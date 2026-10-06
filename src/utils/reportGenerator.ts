@@ -125,7 +125,16 @@ export const exportPremiumPDF = ({
   const totalInflow = mIncome + mBalance + mExtra;
   const totalSpent = activeTx.reduce((sum, t) => sum + (t.amount || 0), 0);
   const totalPaid = activeTx.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
-  const totalPending = Math.max(0, totalSpent - totalPaid);
+  const totalPending = activeTx
+    .filter(t => !t.is_skipped && (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas'))
+    .reduce((sum, t) => {
+      const amt = (Number(t.amount) > 0)
+        ? Number(t.amount)
+        : (Number(t.total_parcelado) > 0 && Number(t.installmentsCount) > 0
+            ? Number(t.total_parcelado) / Number(t.installmentsCount)
+            : (Number(t.total_parcelado) || 0));
+      return sum + Math.max(0, amt - (Number(t.paid_amount) || 0));
+    }, 0);
   const netBalance = totalInflow - totalSpent;
 
   let y = 14;
@@ -649,7 +658,16 @@ export const exportPremiumSpreadsheet = ({
   const totalInflow = mIncome + mBalance + mExtra;
   const totalSpent = activeTx.reduce((sum, t) => sum + (t.amount || 0), 0);
   const totalPaid = activeTx.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
-  const totalPending = totalSpent - totalPaid;
+  const totalPending = activeTx
+    .filter(t => !t.is_skipped && (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas'))
+    .reduce((sum, t) => {
+      const amt = (Number(t.amount) > 0)
+        ? Number(t.amount)
+        : (Number(t.total_parcelado) > 0 && Number(t.installmentsCount) > 0
+            ? Number(t.total_parcelado) / Number(t.installmentsCount)
+            : (Number(t.total_parcelado) || 0));
+      return sum + Math.max(0, amt - (Number(t.paid_amount) || 0));
+    }, 0);
   const netBalance = totalInflow - totalSpent;
 
   let csvContent = "\uFEFF"; // BOM strictly required for MS Excel alignment

@@ -2606,10 +2606,56 @@ function MainApp() {
   const leftoverCash = totalInflowsSum - totalSpentInMonth;
 
   // Unpaid total estimate for fixed, variables, and installments of the month
-  const activeMonthDebits = activeMonthTransactions.filter(t => t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas');
-  const spentDebits = activeMonthDebits.reduce((sum, t) => sum + t.amount, 0);
-  const paidDebits = activeMonthDebits.reduce((sum, t) => sum + (t?.paid_amount || 0), 0);
-  const pendingTotalDebt = Math.max(0, spentDebits - paidDebits);
+  const activeMonthDebits = activeMonthTransactions.filter(
+    t => !t.is_skipped && (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas')
+  );
+
+  // Safe helper to obtain the monthly obligation amount of a transaction
+  const getItemMonthlyAmount = (t: Transaction): number => {
+    if (typeof t.amount === 'number' && !isNaN(t.amount) && t.amount > 0) {
+      return t.amount;
+    }
+    const parsedAmt = Number(t.amount);
+    if (!isNaN(parsedAmt) && parsedAmt > 0) {
+      return parsedAmt;
+    }
+    if (t.type === 'parcelas') {
+      const totalParc = Number(t.total_parcelado) || 0;
+      const count = Number(t.installmentsCount) || 1;
+      if (totalParc > 0 && count > 0) {
+        return totalParc / count;
+      }
+      return totalParc;
+    }
+    return 0;
+  };
+
+  // Safe helper to obtain paid amount
+  const getItemPaidAmount = (t: Transaction): number => {
+    if (typeof t.paid_amount === 'number' && !isNaN(t.paid_amount)) {
+      return Math.max(0, t.paid_amount);
+    }
+    const parsedPaid = Number(t.paid_amount);
+    return !isNaN(parsedPaid) ? Math.max(0, parsedPaid) : 0;
+  };
+
+  // Individual pending deficits for each category: fixos, variáveis, and parcelas
+  // Each item's remaining deficit is Math.max(0, itemAmount - itemPaid) so that
+  // any overpaid or already settled item NEVER cancels out or zeroes out another unpaid debt!
+  const pendingFixos = activeMonthDebits
+    .filter(t => t.type === 'fixos')
+    .reduce((sum, t) => sum + Math.max(0, getItemMonthlyAmount(t) - getItemPaidAmount(t)), 0);
+
+  const pendingVariaveis = activeMonthDebits
+    .filter(t => t.type === 'variaveis')
+    .reduce((sum, t) => sum + Math.max(0, getItemMonthlyAmount(t) - getItemPaidAmount(t)), 0);
+
+  const pendingParcelas = activeMonthDebits
+    .filter(t => t.type === 'parcelas')
+    .reduce((sum, t) => sum + Math.max(0, getItemMonthlyAmount(t) - getItemPaidAmount(t)), 0);
+
+  // Total a Pagar Pendente (soma exata de parcelas + fixos + variáveis pendentes do mês)
+  const pendingTotalDebt = pendingFixos + pendingVariaveis + pendingParcelas;
 
   // Categorical summaries for quick widgets
   const fixosSum = activeMonthTransactions.filter(t => t.type === 'fixos').reduce((sum, t) => sum + t.amount, 0);
@@ -3328,8 +3374,8 @@ function MainApp() {
               {expiringBillsList.length > 0 && (() => {
                 const overdueItems = expiringBillsList.filter(b => b.isOverdue);
                 const upcomingItems = expiringBillsList.filter(b => !b.isOverdue);
-                const totalOverdue = overdueItems.reduce((acc, b) => acc + (b.item.amount - (b.item.paid_amount || 0)), 0);
-                const totalUpcoming = upcomingItems.reduce((acc, b) => acc + (b.item.amount - (b.item.paid_amount || 0)), 0);
+                const totalOverdue = overdueItems.reduce((acc, b) => acc + Math.max(0, (Number(b.item.amount) || 0) - (Number(b.item.paid_amount) || 0)), 0);
+                const totalUpcoming = upcomingItems.reduce((acc, b) => acc + Math.max(0, (Number(b.item.amount) || 0) - (Number(b.item.paid_amount) || 0)), 0);
                 const totalPending = totalOverdue + totalUpcoming;
 
                 return (
@@ -5069,7 +5115,7 @@ function MainApp() {
 
               <div className="overflow-y-auto flex-1 pr-1 space-y-3 max-h-[50vh] min-h-[200px]">
                 {activeMonthTransactions.filter(
-                  t => (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas') && (t.paid_amount || 0) < t.amount
+                  t => !t.is_skipped && (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas') && (getItemMonthlyAmount(t) - getItemPaidAmount(t)) > 0.009
                 ).length === 0 ? (
                   <div className="p-8 text-center border border-dashed border-white/5 rounded-2xl text-slate-400 text-xs py-12 flex flex-col items-center justify-center h-full">
                     <CheckCircle className="w-8 h-8 text-emerald-500 mb-3 animate-pulse" />
@@ -5077,10 +5123,10 @@ function MainApp() {
                   </div>
                 ) : (
                   activeMonthTransactions
-                    .filter(t => (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas') && (t.paid_amount || 0) < t.amount)
+                    .filter(t => !t.is_skipped && (t.type === 'fixos' || t.type === 'variaveis' || t.type === 'parcelas') && (getItemMonthlyAmount(t) - getItemPaidAmount(t)) > 0.009)
                     .map((tx) => {
                       const categoryObj = activeMonthCategoryList.find(c => c.value === tx.cat) || { icon: '📦', label: tx.cat || 'Outros' };
-                      const remDue = tx.amount - (tx.paid_amount || 0);
+                      const remDue = Math.max(0, getItemMonthlyAmount(tx) - getItemPaidAmount(tx));
 
                       return (
                         <div

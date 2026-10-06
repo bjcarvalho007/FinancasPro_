@@ -547,8 +547,7 @@ function MainApp() {
   const VIP_EMAILS = useMemo(() => [
     'bjcarvalho07@gmail.com', 
     'msouzacintia600@gmail.com', 
-    'teste@gmail.com', 
-    'irakellygaby1@icloud.com'
+    'teste@gmail.com'
   ], []);
 
   const isVIP = useMemo(() => {
@@ -603,9 +602,6 @@ function MainApp() {
   }, [user, userProfile]);
 
   const hasActiveSubscription = useMemo(() => {
-    if (user && user.email && user.email.toLowerCase().trim() === 'irakellygaby1@icloud.com') {
-      return true;
-    }
     if (!userProfile) return false;
     
     if (userProfile.assinante !== true || !userProfile.dataVencimento) {
@@ -616,7 +612,7 @@ function MainApp() {
     if (isNaN(expiryTime)) return false;
     
     return Date.now() <= expiryTime;
-  }, [user, userProfile]);
+  }, [userProfile]);
 
   const subExpiryDetails = useMemo(() => {
     if (!userProfile || userProfile.assinante !== true || !userProfile.dataVencimento) {
@@ -1100,21 +1096,19 @@ function MainApp() {
     const unsubUserProfile = onSnapshot(userRef, (docSnap) => {
       let profileData = docSnap.exists() ? docSnap.data() : null;
 
-      // Auto-liberação de acesso PRO garantido para a assinante irakellygaby1@icloud.com
+      // Inicialização / Ajuste de acesso PRO para a assinante irakellygaby1@icloud.com com vencimento em 07/10/2026
       if (user && user.email && user.email.toLowerCase().trim() === 'irakellygaby1@icloud.com') {
-        const targetExpiry = new Date('2030-12-31T23:59:59Z');
         const currentExpiryStr = profileData?.dataVencimento;
-        const hasValidSub = profileData?.assinante === true && currentExpiryStr && Date.parse(currentExpiryStr) >= new Date('2027-01-01').getTime();
-
-        if (!hasValidSub) {
+        // Se ainda estiver com a data antiga indevida de 2030 ou sem vencimento definido, ajusta para 07/10/2026
+        if (!currentExpiryStr || currentExpiryStr.includes('2030')) {
           setDoc(userRef, {
             assinante: true,
-            dataVencimento: targetExpiry.toISOString(),
+            dataVencimento: '2026-10-07T23:59:59.999Z',
             paymentStatus: 'approved',
-            paymentSystem: 'MercadoPago',
+            paymentSystem: 'Pro',
             updatedAt: new Date().toISOString()
           }, { merge: true }).catch(err => {
-            console.error("Erro ao auto-liberar acesso pro irakellygaby1@icloud.com:", err);
+            console.error("Erro ao sincronizar vencimento de irakellygaby1@icloud.com:", err);
           });
         }
       }

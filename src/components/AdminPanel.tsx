@@ -36,8 +36,7 @@ const ALLOWED_ADMIN_EMAILS = ['bjcarvalho07@gmail.com'];
 const KNOWN_VIP_EMAILS = [
   'bjcarvalho07@gmail.com',
   'msouzacintia600@gmail.com',
-  'teste@gmail.com',
-  'irakellygaby1@icloud.com'
+  'teste@gmail.com'
 ];
 
 export default function AdminPanel({
@@ -334,10 +333,18 @@ export default function AdminPanel({
           existing.paymentStatus = currentItem.paymentStatus;
         }
 
-        // Pick whichever expiration date is furthest in the future
+        // Pick whichever expiration date is furthest in the future, ignoring outdated 2030 for irakellygaby1@icloud.com
         const existingMs = parseDateToMs(existing.dataVencimento) || 0;
         const currentMs = parseDateToMs(currentItem.dataVencimento) || 0;
-        if (currentMs > existingMs) {
+        if (emailKey === 'irakellygaby1@icloud.com') {
+          if (currentItem.dataVencimento && currentItem.dataVencimento.includes('2030')) {
+            // ignore 2030 date
+          } else if (existing.dataVencimento && existing.dataVencimento.includes('2030')) {
+            existing.dataVencimento = currentItem.dataVencimento;
+          } else if (currentMs > existingMs) {
+            existing.dataVencimento = currentItem.dataVencimento;
+          }
+        } else if (currentMs > existingMs) {
           existing.dataVencimento = currentItem.dataVencimento;
         }
 
@@ -425,6 +432,44 @@ export default function AdminPanel({
         });
       }
     });
+
+    // Trata e corrige o cadastro da usuária Pro irakellygaby1@icloud.com (vencimento até 07/10/2026)
+    const irakellyUser = emailMap.get('irakellygaby1@icloud.com');
+    if (irakellyUser) {
+      // Se ainda estiver com a data antiga indevida de 2030 ou sem vencimento, corrige para 07/10/2026
+      if (!irakellyUser.dataVencimento || irakellyUser.dataVencimento.includes('2030')) {
+        irakellyUser.assinante = true;
+        irakellyUser.dataVencimento = '2026-10-07T23:59:59.999Z';
+        irakellyUser.paymentStatus = 'approved';
+        irakellyUser.paymentSystem = 'Pro';
+        const targetUids = irakellyUser.allUids && irakellyUser.allUids.length > 0 ? irakellyUser.allUids : [irakellyUser.uid];
+        targetUids.forEach((uid) => {
+          if (!uid.startsWith('vip_')) {
+            setDoc(doc(db, 'users', uid), {
+              assinante: true,
+              dataVencimento: '2026-10-07T23:59:59.999Z',
+              paymentStatus: 'approved',
+              paymentSystem: 'Pro',
+              updatedAt: new Date().toISOString()
+            }, { merge: true }).catch(() => {});
+          }
+        });
+      }
+    } else {
+      users.push({
+        uid: 'user_irakellygaby1_icloud_com',
+        allUids: ['user_irakellygaby1_icloud_com'],
+        email: 'irakellygaby1@icloud.com',
+        username: 'irakellygaby1',
+        displayName: 'Irakelly',
+        createdAt: new Date().toISOString(),
+        lastLoginAt: '',
+        assinante: true,
+        dataVencimento: '2026-10-07T23:59:59.999Z',
+        paymentStatus: 'approved',
+        paymentSystem: 'Pro'
+      });
+    }
 
     users.sort((a, b) => {
       const dateA = a.createdAt ? parseDateToMs(a.createdAt) || 0 : 0;

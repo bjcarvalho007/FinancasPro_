@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Transaction } from '../types';
 import { auth, db } from '../firebase';
+import { adjustDueToMonthKey } from '../App';
 import { useLanguage } from '../utils/i18n';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
@@ -577,7 +578,7 @@ export default function SettingsPanel({
         amount: defaultAmount,
         type: masterTx.type,
         cat: masterTx.cat,
-        due: masterTx.due,
+        due: adjustDueToMonthKey(masterTx.due, currentMonthKey),
         paid_amount: 0,
         paid_at: '',
         masterId: masterTx.masterId || masterTx.id,

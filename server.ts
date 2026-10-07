@@ -551,10 +551,28 @@ async function runBackgroundPushNotificationChecker(
 
       if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
         const parts = dueStr.split("-").map(Number);
-        dueDate = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+        let dueYear = parts[0];
+        let dueMonth = parts[1] - 1;
+        const dueDay = parts[2];
+        if (tx.type === 'fixos' || tx.type === 'contas') {
+          dueYear = brYear;
+          dueMonth = brMonth;
+        }
+        const maxDays = new Date(dueYear, dueMonth + 1, 0).getDate();
+        const safeDay = Math.min(Math.max(1, dueDay), maxDays);
+        dueDate = new Date(dueYear, dueMonth, safeDay, 12, 0, 0);
       } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dueStr)) {
         const parts = dueStr.split("/").map(Number);
-        dueDate = new Date(parts[2], parts[1] - 1, parts[0], 12, 0, 0);
+        let dueYear = parts[2];
+        let dueMonth = parts[1] - 1;
+        const dueDay = parts[0];
+        if (tx.type === 'fixos' || tx.type === 'contas') {
+          dueYear = brYear;
+          dueMonth = brMonth;
+        }
+        const maxDays = new Date(dueYear, dueMonth + 1, 0).getDate();
+        const safeDay = Math.min(Math.max(1, dueDay), maxDays);
+        dueDate = new Date(dueYear, dueMonth, safeDay, 12, 0, 0);
       } else {
         const dayMatch = dueStr.match(/\d+/);
         if (dayMatch) {

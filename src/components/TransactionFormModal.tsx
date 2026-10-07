@@ -50,6 +50,7 @@ interface TransactionFormModalProps {
   onDeleteCategory?: (category: Category) => void;
   defaultType?: 'fixos' | 'variaveis' | 'parcelas';
   theme?: 'dark' | 'light';
+  currentMonthKey?: string;
 }
 
 export default function TransactionFormModal({
@@ -61,7 +62,8 @@ export default function TransactionFormModal({
   onCreateCategory,
   onDeleteCategory,
   defaultType = 'fixos',
-  theme = 'dark'
+  theme = 'dark',
+  currentMonthKey
 }: TransactionFormModalProps) {
   const isLight = theme === 'light';
   const { t, formatCurrency } = useLanguage();
@@ -232,7 +234,15 @@ export default function TransactionFormModal({
         setAmountStr('');
         setType(defaultType);
         setCat('moradia');
-        setDue(getTodayISO());
+        let defaultDue = getTodayISO();
+        if (currentMonthKey && /^\d{4}-\d{2}$/.test(currentMonthKey.trim())) {
+          const today = new Date();
+          const [tYear, tMonth] = currentMonthKey.trim().split('-').map(Number);
+          const maxDays = new Date(tYear, tMonth, 0).getDate();
+          const targetDay = Math.min(Math.max(1, today.getDate()), maxDays);
+          defaultDue = `${currentMonthKey.trim()}-${String(targetDay).padStart(2, '0')}`;
+        }
+        setDue(defaultDue);
         setEstablishment('');
         setInstallmentsCount('');
         setInstallmentAmountStr('');
@@ -241,7 +251,7 @@ export default function TransactionFormModal({
       setShowAddCustomCat(false);
       setCustomCatName('');
     }
-  }, [isOpen, initialData, defaultType]);
+  }, [isOpen, initialData, defaultType, currentMonthKey]);
 
   // Dynamically calculate and pre-fill monthly installment if total or count changes (if not already custom modified by user)
   useEffect(() => {
@@ -631,6 +641,15 @@ export default function TransactionFormModal({
                     {due === getTodayISO() ? 'Padrão: Hoje' : 'Data alterada'}
                   </span>
                 </div>
+
+                {type === 'fixos' && due && (
+                  <p className={`text-[10px] mt-2 font-medium flex items-center gap-1.5 ${isLight ? 'text-indigo-600' : 'text-indigo-400'}`}>
+                    <span>💡</span>
+                    <span>
+                      Válida para este mês no <strong>dia {parseInt(due.split('-')[2] || '1', 10)}</strong> e continuará nos próximos meses no mesmo dia.
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
           </div>

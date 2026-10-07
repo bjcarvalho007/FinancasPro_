@@ -131,6 +131,42 @@ export const formatDisplayDueDate = (dueStr?: string): string => {
   return clean;
 };
 
+/**
+ * Converte o vencimento de uma conta para o mês específico que está sendo visualizado/calculado.
+ * Mantém o mesmo DIA (ex: dia 10) e atualiza o ANO e MÊS para o targetMonthKey (ex: '2026-11' -> '2026-11-10').
+ * Se o mês tiver menos dias (ex: dia 31 em fevereiro ou mês de 30 dias), ajusta com segurança para o último dia do mês.
+ */
+export const adjustDueToMonthKey = (originalDue: string | undefined, targetMonthKey: string): string => {
+  if (!originalDue) return '';
+  const clean = originalDue.trim();
+  if (!targetMonthKey || !/^\d{4}-\d{2}$/.test(targetMonthKey.trim())) {
+    return clean;
+  }
+
+  const [tYear, tMonth] = targetMonthKey.trim().split('-').map(Number);
+  const maxDays = new Date(tYear, tMonth, 0).getDate();
+
+  let targetDay = 1;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    const parts = clean.split('-');
+    const day = parseInt(parts[2], 10);
+    if (!isNaN(day) && day >= 1) {
+      targetDay = day;
+    }
+  } else {
+    const dayMatch = clean.match(/\d+/);
+    if (dayMatch) {
+      const parsed = parseInt(dayMatch[0], 10);
+      if (!isNaN(parsed) && parsed >= 1) {
+        targetDay = parsed;
+      }
+    }
+  }
+
+  const safeDay = Math.min(Math.max(1, targetDay), maxDays);
+  return `${targetMonthKey.trim()}-${String(safeDay).padStart(2, '0')}`;
+};
+
 const saveLocalUserCache = (uid: string, key: string, data: any) => {
   try {
     if (data === null || data === undefined) {
@@ -2190,6 +2226,10 @@ function MainApp() {
 
     // Normalize real transactions of the current month to correctly use their single-month installment value
     const normalizedRealTransactions = realTransactionsThisMonth.map(t => {
+      const adjustedDue = (t.type === 'fixos' || (t.type as string) === 'contas' || t.type === 'parcelas') 
+        ? adjustDueToMonthKey(t.due, currentMonthKey) 
+        : t.due;
+
       if (t.type === 'parcelas') {
         const masterId = t.masterId || t.id;
         const masterTx = transactions.find(m => m.id === masterId) || t;
@@ -2212,11 +2252,15 @@ function MainApp() {
 
         return {
           ...t,
+          due: adjustedDue,
           amount: installmentValue,
           total_parcelado: totalOriginalBase
         };
       }
-      return t;
+      return {
+        ...t,
+        due: adjustedDue
+      };
     });
 
     // Find the absolute earliest month key where the user actually created/wrote a real transaction
@@ -2348,7 +2392,7 @@ function MainApp() {
           amount: defaultAmount,
           type: masterTx.type, // Keeps original type: 'fixos' or 'parcelas'
           cat: masterTx.cat,
-          due: masterTx.due,
+          due: adjustDueToMonthKey(masterTx.due, currentMonthKey),
           paid_amount: 0,
           paid_at: '',
           masterId: masterTx.masterId || masterTx.id,
@@ -4799,7 +4843,7 @@ function MainApp() {
                                           amount: currentMonthNewAmount,
                                           type: masterTx.type,
                                           cat: masterTx.cat,
-                                          due: masterTx.due,
+                                          due: adjustDueToMonthKey(masterTx.due, currMonthKey),
                                           paid_amount: existingCurrTx?.paid_amount || tx.paid_amount || 0,
                                           paid_at: existingCurrTx?.paid_at || tx.paid_at || '',
                                           masterId: masterId,
@@ -4827,7 +4871,7 @@ function MainApp() {
                                           amount: nextMonthNewAmount,
                                           type: masterTx.type,
                                           cat: masterTx.cat,
-                                          due: masterTx.due,
+                                          due: adjustDueToMonthKey(masterTx.due, nextMonthKey),
                                           paid_amount: existingNextTx?.paid_amount || 0,
                                           paid_at: existingNextTx?.paid_at || '',
                                           masterId: masterId,
@@ -5309,6 +5353,7 @@ function MainApp() {
         onDeleteCategory={handleDeleteCategory}
         defaultType={(activeTab === 'fixos' || activeTab === 'variaveis' || activeTab === 'parcelas') ? activeTab : 'fixos'}
         theme={theme}
+        currentMonthKey={currentMonthKey}
       />
 
       {/* Sub-Modal confirmation download for Payments */}

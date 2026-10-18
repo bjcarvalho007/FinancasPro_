@@ -6672,25 +6672,43 @@ function MainApp() {
         )}
       </AnimatePresence>
 
-      {/* Floating Action Button (FAB) for recent items on Dashboard */}
+      {/* Floating Action Button (FAB) for recent items on Dashboard - Placed above FAQ button */}
       <AnimatePresence>
         {activeTab === 'dashboard' && (
           <motion.button
             id="floating-recent-btn"
-            initial={{ scale: 0, opacity: 0, y: 50 }}
+            initial={{ scale: 0, opacity: 0, y: 30 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0, opacity: 0, y: 50 }}
-            whileHover={{ scale: 1.05 }}
+            exit={{ scale: 0, opacity: 0, y: 30 }}
+            whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setIsRecentItemsOpen(true)}
-            className="fixed bottom-[148px] lg:bottom-6 right-4 md:right-6 lg:right-[215px] z-40 bg-indigo-600 hover:bg-indigo-500 text-white px-4.5 py-3 rounded-full flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30 transition-all font-black text-xs uppercase tracking-wider border-none"
+            className={`group fixed bottom-[136px] right-6 z-45 w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all cursor-pointer border ${
+              theme === 'light'
+                ? 'bg-indigo-600 border-indigo-700 text-white shadow-indigo-600/35 hover:bg-indigo-500 hover:border-indigo-600'
+                : 'bg-[#0f1524]/95 border-indigo-500/40 text-indigo-400 shadow-indigo-500/20 hover:border-indigo-400 hover:text-indigo-300 hover:bg-indigo-950/40 backdrop-blur-md'
+            }`}
             title={t('ultimosLancamentos', 'Últimos Lançamentos')}
             style={{
-              boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.45)"
+              boxShadow: theme === 'light' 
+                ? "0 8px 22px -4px rgba(79, 70, 229, 0.45)"
+                : "0 8px 24px -4px rgba(99, 102, 241, 0.35)"
             }}
           >
-            <Clock className="w-4.5 h-4.5 shrink-0 text-white" />
-            <span className="font-extrabold text-[10.5px] tracking-wider">{t('ultimosLancados', 'Últimos lançados')}</span>
+            <div className="relative">
+              <Clock className="w-5.5 h-5.5 shrink-0 stroke-[2.2]" />
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping opacity-75" />
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-indigo-500" />
+            </div>
+
+            {/* Floating Tooltip Label on Hover */}
+            <span className={`pointer-events-none absolute right-14 px-2.5 py-1 rounded-xl text-[10.5px] font-extrabold uppercase tracking-wider whitespace-nowrap opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-xl border translate-x-1 group-hover:translate-x-0 ${
+              theme === 'light'
+                ? 'bg-slate-900 border-slate-800 text-white'
+                : 'bg-slate-900/95 border-white/10 text-indigo-200'
+            }`}>
+              {t('ultimosLancados', 'Últimos lançados')}
+            </span>
           </motion.button>
         )}
       </AnimatePresence>

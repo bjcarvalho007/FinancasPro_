@@ -62,17 +62,34 @@ export interface ExtraEarning {
   createdAt?: string;
 }
 
+export interface CobrancaPayment {
+  id: string;
+  amount: number; // Valor pago nesta parcela / pagamento
+  date: string; // Data do pagamento (YYYY-MM-DD)
+  monthKey: string; // Mês em que foi recebido (YYYY-MM) -> somado na renda deste mês!
+  installmentNumber?: number; // Ex: Parcela 1, 2, etc.
+  note?: string; // Observação opcional
+  createdAt?: string;
+}
+
 export interface CobrancaItem {
   id: string;
   debtorName: string; // Nome da pessoa que deve
   description?: string; // Motivo / descrição da dívida
-  amount: number; // Valor da cobrança
-  dueDate?: string; // Data combinada de pagamento (YYYY-MM-DD)
-  monthKey: string; // Mês de competência (YYYY-MM)
-  status: 'pendente' | 'pago'; // Status
-  paidAt?: string; // Data em que foi pago (YYYY-MM-DD)
-  paidMonthKey?: string; // Mês em que foi recebido (YYYY-MM) -> somado na renda deste mês!
-  paidAmount?: number; // Valor recebido
+  amount: number; // Valor total / principal para compatibilidade
+  totalAmount?: number; // Total devido / valor original (ex: R$ 2.500)
+  installmentsCount?: number; // Quantidade de parcelas combinadas (ex: 5)
+  interestRatePercent?: number; // Opção de % de juros a cobrar (ou 0 / se não)
+  totalWithInterest?: number; // Total devido com juros aplicados (ex: R$ 2.500 ou R$ 2.750)
+  installmentAmount?: number; // Valor de cada parcela (ex: R$ 500)
+  remainingAmount?: number; // Saldo devedor restante nos meses seguintes (ex: R$ 2.000 após pagar 500)
+  payments?: CobrancaPayment[]; // Histórico de parcelas/pagamentos mês a mês
+  dueDate?: string; // Data combinada de vencimento / dia do mês
+  monthKey: string; // Mês de competência inicial (YYYY-MM)
+  status: 'pendente' | 'parcial' | 'pago'; // Status
+  paidAt?: string; // Data em que foi quitado ou do último pagamento (YYYY-MM-DD)
+  paidMonthKey?: string; // Mês em que foi recebido (YYYY-MM)
+  paidAmount?: number; // Total acumulado já recebido (soma dos pagamentos)
   notes?: string;
   createdAt: string;
 }

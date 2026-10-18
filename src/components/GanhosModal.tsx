@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Setting, ExtraEarning, CobrancaItem } from '../types';
+import { Setting, ExtraEarning, CobrancaItem, CobrancaPayment } from '../types';
 import { useLanguage } from '../utils/i18n';
 import {
   Wallet,
@@ -22,7 +22,14 @@ import {
   FileCheck,
   ArrowUpRight,
   Search,
-  Sparkles
+  Sparkles,
+  Percent,
+  Layers,
+  Coins,
+  ChevronDown,
+  ChevronUp,
+  History,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -37,9 +44,14 @@ interface GanhosModalProps {
   onAddExtraEarning: (earning: Omit<ExtraEarning, 'id' | 'createdAt'>) => Promise<void>;
   onDeleteExtraEarning: (id: string) => Promise<void>;
   onAddCobranca: (cobranca: Omit<CobrancaItem, 'id' | 'createdAt'>) => Promise<void>;
+  onRegisterCobrancaPayment?: (
+    cobrancaId: string,
+    payment: { amount: number; monthKey: string; date: string; installmentNumber?: number; note?: string }
+  ) => Promise<void>;
+  onDeleteCobrancaPayment?: (cobrancaId: string, paymentId: string) => Promise<void>;
   onToggleCobrancaStatus: (id: string, targetPaidMonthKey?: string) => Promise<void>;
   onDeleteCobranca: (id: string) => Promise<void>;
-  showToast: (msg: string, type?: 'success' | 'error' | 'warning') => void;
+  showToast: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 type GanhosEnvironment = 'renda' | 'extras' | 'cobrancas';
@@ -55,6 +67,8 @@ export default function GanhosModal({
   onAddExtraEarning,
   onDeleteExtraEarning,
   onAddCobranca,
+  onRegisterCobrancaPayment,
+  onDeleteCobrancaPayment,
   onToggleCobrancaStatus,
   onDeleteCobranca,
   showToast
@@ -156,12 +170,84 @@ export default function GanhosModal({
   const [isAddingCobranca, setIsAddingCobranca] = useState<boolean>(false);
   const [cobrancaDebtor, setCobrancaDebtor] = useState<string>('');
   const [cobrancaDesc, setCobrancaDesc] = useState<string>('');
-  const [cobrancaAmountStr, setCobrancaAmountStr] = useState<string>('');
+  const [cobrancaTotalAmountStr, setCobrancaTotalAmountStr] = useState<string>('');
+  const [cobrancaInstallmentsCount, setCobrancaInstallmentsCount] = useState<number>(1);
+  const [cobrancaHasInterest, setCobrancaHasInterest] = useState<boolean>(false);
+  const [cobrancaInterestRate, setCobrancaInterestRate] = useState<number>(0);
   const [cobrancaDueDate, setCobrancaDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [cobrancaMonthKey, setCobrancaMonthKey] = useState<string>(currentMonthKey);
   const [cobrancasScopeFilter, setCobrancasScopeFilter] = useState<'current' | 'all'>('current');
   const [cobrancasStatusFilter, setCobrancasStatusFilter] = useState<'all' | 'pendente' | 'pago'>('all');
   const [cobrancaSearch, setCobrancaSearch] = useState<string>('');
+
+  // Payment Recording Modal State
+  const [payingCobranca, setPayingCobranca] = useState<CobrancaItem | null>(null);
+  const [paymentAmountStr, setPaymentAmountStr] = useState<string>('');
+  const [paymentMonthKey, setPaymentMonthKey] = useState<string>(currentMonthKey);
+  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [paymentNote, setPaymentNote] = useState<string>('');
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState<boolean>(false);
+
+  // Accordion of payments history by cobranca ID
+  const [expandedHistories, setExpandedHistories] = useState<Record<string, boolean>>({});
+
+  const toggleHistory = (cobId: string) => {
+    setExpandedHistories(prev => ({ ...prev, [cobId]: !prev[cobId] }));
+  };
+
+  const handleOpenPayModal = (item: CobrancaItem) => {
+    setPayingCobranca(item);
+    const totalToPay = item.totalWithInterest || item.totalAmount || item.amount;
+    const paidSoFar = item.paidAmount ?? ((item.payments || []).reduce((s, p) => s + (p.amount || 0), 0));
+    const remaining = item.remainingAmount !== undefined ? item.remainingAmount : Math.max(0, totalToPay - paidSoFar);
+
+    const suggested = item.installmentAmount && item.installmentAmount > 0 
+      ? Math.min(item.installmentAmount, remaining)
+      : remaining;
+
+    setPaymentAmountStr(formatCurrency(suggested > 0 ? suggested : remaining));
+    setPaymentMonthKey(currentMonthKey);
+    setPaymentDate(new Date().toISOString().split('T')[0]);
+    const nextNum = (item.payments?.length || 0) + 1;
+    setPaymentNote(`Parcela ${nextNum}${item.installmentsCount ? ` de ${item.installmentsCount}` : ''}`);
+  };
+
+  const handleConfirmPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payingCobranca) return;
+    const amt = parseMoney(paymentAmountStr);
+    if (amt <= 0) {
+      showToast('Informe o valor pago nesta parcela.', 'warning');
+      return;
+    }
+    if (!paymentMonthKey) {
+      showToast('Informe o mês de competência para somar na renda.', 'warning');
+      return;
+    }
+
+    setIsSubmittingPayment(true);
+    try {
+      if (onRegisterCobrancaPayment) {
+        await onRegisterCobrancaPayment(payingCobranca.id, {
+          amount: amt,
+          monthKey: paymentMonthKey,
+          date: paymentDate || new Date().toISOString().split('T')[0],
+          note: paymentNote || undefined
+        });
+      } else {
+        await onToggleCobrancaStatus(payingCobranca.id, paymentMonthKey);
+      }
+      setPayingCobranca(null);
+    } finally {
+      setIsSubmittingPayment(false);
+    }
+  };
+
+  const handleDeletePayment = async (cobrancaId: string, paymentId: string) => {
+    if (onDeleteCobrancaPayment) {
+      await onDeleteCobrancaPayment(cobrancaId, paymentId);
+    }
+  };
 
   const handleCreateCobranca = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,13 +255,19 @@ export default function GanhosModal({
       showToast('Informe o nome da pessoa que deve.', 'warning');
       return;
     }
-    const amt = parseMoney(cobrancaAmountStr);
-    if (amt <= 0) {
-      showToast('Informe o valor da cobrança.', 'warning');
+    const principal = parseMoney(cobrancaTotalAmountStr);
+    if (principal <= 0) {
+      showToast('Informe o total devido da cobrança.', 'warning');
       return;
     }
 
-    // Determine monthKey from due date if not custom
+    const installments = Math.max(1, cobrancaInstallmentsCount || 1);
+    const interest = cobrancaHasInterest ? Math.max(0, cobrancaInterestRate || 0) : 0;
+    const withInterest = interest > 0 
+      ? Math.round((principal * (1 + interest / 100)) * 100) / 100
+      : principal;
+    const perInstallment = Math.round((withInterest / installments) * 100) / 100;
+
     let assignedMonth = cobrancaMonthKey;
     if (cobrancaDueDate && (!assignedMonth || cobrancasScopeFilter === 'current')) {
       const [y, m] = cobrancaDueDate.split('-');
@@ -186,14 +278,25 @@ export default function GanhosModal({
       await onAddCobranca({
         debtorName: cobrancaDebtor.trim(),
         description: cobrancaDesc.trim() || undefined,
-        amount: amt,
+        amount: withInterest,
+        totalAmount: principal,
+        installmentsCount: installments,
+        interestRatePercent: interest,
+        totalWithInterest: withInterest,
+        installmentAmount: perInstallment,
+        remainingAmount: withInterest,
+        paidAmount: 0,
+        payments: [],
         dueDate: cobrancaDueDate || undefined,
         monthKey: assignedMonth || currentMonthKey,
         status: 'pendente'
       });
       setCobrancaDebtor('');
       setCobrancaDesc('');
-      setCobrancaAmountStr('');
+      setCobrancaTotalAmountStr('');
+      setCobrancaInstallmentsCount(1);
+      setCobrancaHasInterest(false);
+      setCobrancaInterestRate(0);
       setIsAddingCobranca(false);
     } catch {
       // handled by parent
@@ -209,9 +312,18 @@ export default function GanhosModal({
 
   // Cobranças pagas no mês ativo (somadas na renda do mês)
   const cobrancasPagasNoMes = useMemo(() => {
-    return cobrancasAll
-      .filter(c => c.status === 'pago' && (c.paidMonthKey === currentMonthKey || (!c.paidMonthKey && c.monthKey === currentMonthKey)))
-      .reduce((sum, c) => sum + (c.paidAmount || c.amount || 0), 0);
+    return cobrancasAll.reduce((sum, c) => {
+      if (c.payments && c.payments.length > 0) {
+        const monthSum = c.payments
+          .filter(p => p.monthKey === currentMonthKey)
+          .reduce((pAcc, p) => pAcc + (p.amount || 0), 0);
+        return sum + monthSum;
+      }
+      if (c.status === 'pago' && (c.paidMonthKey === currentMonthKey || (!c.paidMonthKey && c.monthKey === currentMonthKey))) {
+        return sum + (c.paidAmount || c.amount || 0);
+      }
+      return sum;
+    }, 0);
   }, [cobrancasAll, currentMonthKey]);
 
   // Total de Entradas no Mês
@@ -233,15 +345,18 @@ export default function GanhosModal({
   // Cobranças list filtered
   const filteredCobrancas = useMemo(() => {
     return cobrancasAll.filter(item => {
+      const hasMonthPayment = (item.payments || []).some(p => p.monthKey === currentMonthKey);
+      const isRefMonth = item.monthKey === currentMonthKey || item.paidMonthKey === currentMonthKey;
+      const isPending = item.status !== 'pago';
+
       // Scope filter
       if (cobrancasScopeFilter === 'current') {
-        const matchesRef = item.monthKey === currentMonthKey;
-        const matchesPaid = item.paidMonthKey === currentMonthKey;
-        if (!matchesRef && !matchesPaid) return false;
+        if (!hasMonthPayment && !isRefMonth && !isPending) return false;
       }
       // Status filter
-      if (cobrancasStatusFilter !== 'all' && item.status !== cobrancasStatusFilter) {
-        return false;
+      if (cobrancasStatusFilter !== 'all') {
+        if (cobrancasStatusFilter === 'pago' && item.status !== 'pago') return false;
+        if (cobrancasStatusFilter === 'pendente' && item.status === 'pago') return false;
       }
       // Search filter
       if (cobrancaSearch.trim()) {
@@ -252,9 +367,9 @@ export default function GanhosModal({
       }
       return true;
     }).sort((a, b) => {
-      // Pending first, then by date
+      // Pending/parcial first, then by date
       if (a.status !== b.status) {
-        return a.status === 'pendente' ? -1 : 1;
+        return a.status !== 'pago' ? -1 : 1;
       }
       return (b.dueDate || b.createdAt).localeCompare(a.dueDate || a.createdAt);
     });
@@ -262,13 +377,29 @@ export default function GanhosModal({
 
   // Cobranças metrics
   const totalCobrancasPendentes = useMemo(() => {
-    return cobrancasAll
-      .filter(c => c.status === 'pendente')
-      .reduce((sum, c) => sum + c.amount, 0);
+    return cobrancasAll.reduce((sum, c) => {
+      if (c.status === 'pago') return sum;
+      const targetTotal = c.totalWithInterest || c.totalAmount || c.amount;
+      const paid = c.paidAmount ?? ((c.payments || []).reduce((s, p) => s + (p.amount || 0), 0));
+      const remaining = c.remainingAmount !== undefined ? c.remainingAmount : Math.max(0, targetTotal - paid);
+      return sum + remaining;
+    }, 0);
+  }, [cobrancasAll]);
+
+  const totalCobrancasQuitadas = useMemo(() => {
+    return cobrancasAll.reduce((sum, c) => {
+      if (c.payments && c.payments.length > 0) {
+        return sum + c.payments.reduce((s, p) => s + (p.amount || 0), 0);
+      }
+      if (c.status === 'pago') {
+        return sum + (c.paidAmount || c.amount || 0);
+      }
+      return sum + (c.paidAmount || 0);
+    }, 0);
   }, [cobrancasAll]);
 
   const totalCobrancasGeral = useMemo(() => {
-    return cobrancasAll.reduce((sum, c) => sum + c.amount, 0);
+    return cobrancasAll.reduce((sum, c) => sum + (c.totalWithInterest || c.totalAmount || c.amount), 0);
   }, [cobrancasAll]);
 
   // Monthly income history list
@@ -999,7 +1130,7 @@ export default function GanhosModal({
                       <span>Cobranças & Valores a Receber</span>
                     </h4>
                     <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
-                      Liste quem deve para você. Ao marcar uma cobrança como <strong className="text-emerald-400">PAGA</strong>, ela é somada automaticamente na renda do mês!
+                      Defina o total devido, parcelas e juros opcionais. Ao registrar uma parcela paga no mês, o valor é <strong className="text-emerald-400">somado na sua renda</strong> e o restante fica para os meses seguintes!
                     </p>
                   </div>
 
@@ -1014,17 +1145,18 @@ export default function GanhosModal({
                 </div>
 
                 {/* Metrics Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div className={`p-4 rounded-2xl border ${
                     isLight ? 'bg-amber-50/60 border-amber-200' : 'bg-amber-950/20 border-amber-500/20'
                   }`}>
                     <div className="text-[10px] font-black uppercase tracking-wider text-amber-500 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
-                      <span>Total Pendente a Receber</span>
+                      <span>Total Restante a Receber</span>
                     </div>
                     <div className="text-xl font-black font-mono text-amber-400 mt-1">
                       {formatCurrency(totalCobrancasPendentes)}
                     </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Saldo em aberto</div>
                   </div>
 
                   <div className={`p-4 rounded-2xl border ${
@@ -1032,11 +1164,25 @@ export default function GanhosModal({
                   }`}>
                     <div className="text-[10px] font-black uppercase tracking-wider text-emerald-500 flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Recebido no Mês (Somado na Renda)</span>
+                      <span>Recebido no Mês ({formatMonthKey(currentMonthKey)})</span>
                     </div>
                     <div className="text-xl font-black font-mono text-emerald-400 mt-1">
                       +{formatCurrency(cobrancasPagasNoMes)}
                     </div>
+                    <div className="text-[10px] text-emerald-500/80 mt-0.5">Somado na renda deste mês</div>
+                  </div>
+
+                  <div className={`p-4 rounded-2xl border ${
+                    isLight ? 'bg-indigo-50/60 border-indigo-200' : 'bg-indigo-950/20 border-indigo-500/20'
+                  }`}>
+                    <div className="text-[10px] font-black uppercase tracking-wider text-indigo-400 flex items-center gap-1">
+                      <Coins className="w-3.5 h-3.5" />
+                      <span>Total Já Quitado Geral</span>
+                    </div>
+                    <div className="text-xl font-black font-mono text-indigo-400 mt-1">
+                      {formatCurrency(totalCobrancasQuitadas)}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Histórico recebido</div>
                   </div>
 
                   <div className={`p-4 rounded-2xl border ${
@@ -1044,157 +1190,287 @@ export default function GanhosModal({
                   }`}>
                     <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
                       <Users className="w-3.5 h-3.5" />
-                      <span>Cobranças Cadastradas</span>
+                      <span>Devedores / Cobranças</span>
                     </div>
                     <div className="text-xl font-black font-mono mt-1">
                       {cobrancasAll.length}
                     </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">Cadastrados no sistema</div>
                   </div>
                 </div>
 
                 {/* Form to Add New Cobranca */}
                 <AnimatePresence>
-                  {isAddingCobranca && (
-                    <motion.form
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      onSubmit={handleCreateCobranca}
-                      className={`p-5 rounded-2xl border space-y-4 overflow-hidden ${
-                        isLight ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-950/60 border-amber-500/30'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-black uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
-                          <UserCheck className="w-4 h-4" />
-                          <span>Cadastrar Pessoa que Deve</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingCobranca(false)}
-                          className="text-slate-400 hover:text-white text-xs cursor-pointer"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
+                  {isAddingCobranca && (() => {
+                    const formPrincipal = parseMoney(cobrancaTotalAmountStr);
+                    const formInstallments = Math.max(1, cobrancaInstallmentsCount || 1);
+                    const formInterestPercent = cobrancaHasInterest ? Math.max(0, cobrancaInterestRate || 0) : 0;
+                    const formInterestAmount = formPrincipal * (formInterestPercent / 100);
+                    const formTotalWithInterest = formPrincipal + formInterestAmount;
+                    const formInstallmentVal = formTotalWithInterest / formInstallments;
 
-                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                        <div className="sm:col-span-5">
-                          <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                            isLight ? 'text-slate-600' : 'text-slate-400'
+                    return (
+                      <motion.form
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        onSubmit={handleCreateCobranca}
+                        className={`p-5 rounded-2xl border space-y-4 overflow-hidden ${
+                          isLight ? 'bg-amber-50/40 border-amber-200' : 'bg-slate-950/60 border-amber-500/30'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-black uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                            <UserCheck className="w-4 h-4" />
+                            <span>Nova Cobrança Parcelada</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingCobranca(false)}
+                            className="text-slate-400 hover:text-white text-xs cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                          {/* Debtor Name */}
+                          <div className="sm:col-span-6">
+                            <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
+                              isLight ? 'text-slate-600' : 'text-slate-400'
+                            }`}>
+                              Nome da Pessoa que Deve *
+                            </label>
+                            <input
+                              type="text"
+                              value={cobrancaDebtor}
+                              onChange={(e) => setCobrancaDebtor(e.target.value)}
+                              placeholder="Ex: Carlos Oliveira, Juliana..."
+                              className={`w-full text-xs px-3.5 py-2.5 rounded-xl border focus:outline-none ${
+                                isLight
+                                  ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                                  : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                              }`}
+                              required
+                            />
+                          </div>
+
+                          {/* Motivo / Descrição */}
+                          <div className="sm:col-span-6">
+                            <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
+                              isLight ? 'text-slate-600' : 'text-slate-400'
+                            }`}>
+                              Motivo / Descrição
+                            </label>
+                            <input
+                              type="text"
+                              value={cobrancaDesc}
+                              onChange={(e) => setCobrancaDesc(e.target.value)}
+                              placeholder="Ex: Venda de celular, Empréstimo, Serviço prestado..."
+                              className={`w-full text-xs px-3.5 py-2.5 rounded-xl border focus:outline-none ${
+                                isLight
+                                  ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                                  : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                              }`}
+                            />
+                          </div>
+
+                          {/* Total Devido */}
+                          <div className="sm:col-span-4">
+                            <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
+                              isLight ? 'text-slate-600' : 'text-slate-400'
+                            }`}>
+                              Total Devido (Valor Principal) *
+                            </label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={cobrancaTotalAmountStr}
+                              onChange={(e) => setCobrancaTotalAmountStr(handleMaskMoney(e.target.value))}
+                              placeholder="Ex: R$ 2.500,00"
+                              className={`w-full text-xs font-mono font-bold px-3.5 py-2.5 rounded-xl border focus:outline-none ${
+                                isLight
+                                  ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                                  : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                              }`}
+                              required
+                            />
+                          </div>
+
+                          {/* Quantas parcelas */}
+                          <div className="sm:col-span-4">
+                            <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
+                              isLight ? 'text-slate-600' : 'text-slate-400'
+                            }`}>
+                              Quantas Parcelas ficou pra pagar? *
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min="1"
+                                max="72"
+                                value={cobrancaInstallmentsCount}
+                                onChange={(e) => setCobrancaInstallmentsCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                className={`w-20 text-xs font-mono font-bold px-3 py-2.5 rounded-xl border focus:outline-none text-center ${
+                                  isLight
+                                    ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                                    : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                                }`}
+                                required
+                              />
+                              <div className="flex flex-wrap gap-1">
+                                {[1, 2, 3, 5, 10, 12].map(n => (
+                                  <button
+                                    key={n}
+                                    type="button"
+                                    onClick={() => setCobrancaInstallmentsCount(n)}
+                                    className={`px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-colors border ${
+                                      cobrancaInstallmentsCount === n
+                                        ? 'bg-amber-600 text-white border-amber-600'
+                                        : isLight
+                                        ? 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                        : 'bg-slate-900 text-slate-300 border-white/10 hover:bg-slate-800'
+                                    }`}
+                                  >
+                                    {n === 1 ? '1x (À vista)' : `${n}x`}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Juros (%) */}
+                          <div className="sm:col-span-4">
+                            <div className="flex items-center justify-between mb-1">
+                              <label className={`text-[10px] font-bold uppercase tracking-wider ${
+                                isLight ? 'text-slate-600' : 'text-slate-400'
+                              }`}>
+                                Cobrar Juros?
+                              </label>
+                              <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-amber-500">
+                                <input
+                                  type="checkbox"
+                                  checked={cobrancaHasInterest}
+                                  onChange={(e) => setCobrancaHasInterest(e.target.checked)}
+                                  className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                                />
+                                <span>{cobrancaHasInterest ? 'Sim, com juros' : 'Não (Sem juros)'}</span>
+                              </label>
+                            </div>
+
+                            {cobrancaHasInterest ? (
+                              <div className="relative">
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  max="100"
+                                  value={cobrancaInterestRate || ''}
+                                  onChange={(e) => setCobrancaInterestRate(parseFloat(e.target.value) || 0)}
+                                  placeholder="Ex: 10"
+                                  className={`w-full text-xs font-mono font-bold pl-3 pr-8 py-2.5 rounded-xl border focus:outline-none ${
+                                    isLight
+                                      ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                                      : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                                  }`}
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                              </div>
+                            ) : (
+                              <div className={`text-xs py-2.5 px-3 rounded-xl border text-slate-400 flex items-center gap-1.5 ${
+                                isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-white/5'
+                              }`}>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>0% de juros (Sem acréscimo)</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Data combinada e Mês */}
+                          <div className="sm:col-span-6">
+                            <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
+                              isLight ? 'text-slate-600' : 'text-slate-400'
+                            }`}>
+                              Data Combinada / 1º Vencimento
+                            </label>
+                            <input
+                              type="date"
+                              value={cobrancaDueDate}
+                              onChange={(e) => setCobrancaDueDate(e.target.value)}
+                              className={`w-full text-xs px-3 py-2.5 rounded-xl border focus:outline-none ${
+                                isLight
+                                  ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                                  : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                              }`}
+                            />
+                          </div>
+
+                          <div className="sm:col-span-6">
+                            <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
+                              isLight ? 'text-slate-600' : 'text-slate-400'
+                            }`}>
+                              Mês Inicial de Referência
+                            </label>
+                            <input
+                              type="month"
+                              value={cobrancaMonthKey}
+                              onChange={(e) => setCobrancaMonthKey(e.target.value)}
+                              className={`w-full text-xs px-3 py-2.5 rounded-xl border focus:outline-none ${
+                                isLight
+                                  ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                                  : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Live Calculation Preview Box */}
+                        {formPrincipal > 0 && (
+                          <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+                            isLight ? 'bg-white border-amber-200 shadow-sm' : 'bg-slate-900 border-amber-500/20'
                           }`}>
-                            Nome da Pessoa
-                          </label>
-                          <input
-                            type="text"
-                            value={cobrancaDebtor}
-                            onChange={(e) => setCobrancaDebtor(e.target.value)}
-                            placeholder="Ex: Carlos Oliveira, Juliana..."
-                            className={`w-full text-xs px-3.5 py-2.5 rounded-xl border focus:outline-none ${
-                              isLight
-                                ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
-                                : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
-                            }`}
-                            required
-                          />
-                        </div>
+                            <div className="space-y-0.5">
+                              <div className="text-[10px] font-black uppercase text-amber-500">Resumo do Parcelamento</div>
+                              <div className="font-bold">
+                                Principal: <span className="font-mono">{formatCurrency(formPrincipal)}</span>
+                                {formInterestPercent > 0 && (
+                                  <span> + Juros ({formInterestPercent}%): <span className="text-amber-400 font-mono">+{formatCurrency(formInterestAmount)}</span></span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-400">
+                                Total a receber: <strong className="text-emerald-400 font-mono">{formatCurrency(formTotalWithInterest)}</strong>
+                              </div>
+                            </div>
 
-                        <div className="sm:col-span-4">
-                          <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                            isLight ? 'text-slate-600' : 'text-slate-400'
-                          }`}>
-                            Motivo / Descrição
-                          </label>
-                          <input
-                            type="text"
-                            value={cobrancaDesc}
-                            onChange={(e) => setCobrancaDesc(e.target.value)}
-                            placeholder="Ex: Empréstimo, Venda celular, Aluguel..."
-                            className={`w-full text-xs px-3.5 py-2.5 rounded-xl border focus:outline-none ${
-                              isLight
-                                ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
-                                : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
-                            }`}
-                          />
-                        </div>
+                            <div className="text-left sm:text-right pt-2 sm:pt-0 border-t sm:border-0 border-slate-200 sm:border-transparent">
+                              <div className="text-[10px] uppercase text-slate-400 font-bold">Cada Parcela ({formInstallments}x)</div>
+                              <div className="text-base font-black font-mono text-emerald-400">
+                                {formatCurrency(formInstallmentVal)} <span className="text-[10px] font-normal text-slate-400">/ mês</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
-                        <div className="sm:col-span-3">
-                          <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                            isLight ? 'text-slate-600' : 'text-slate-400'
-                          }`}>
-                            Valor Devido
-                          </label>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            value={cobrancaAmountStr}
-                            onChange={(e) => setCobrancaAmountStr(handleMaskMoney(e.target.value))}
-                            placeholder="R$ 0,00"
-                            className={`w-full text-xs font-mono font-bold px-3.5 py-2.5 rounded-xl border focus:outline-none ${
-                              isLight
-                                ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
-                                : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                        <div className="flex justify-end gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingCobranca(false)}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer ${
+                              isLight ? 'bg-slate-200 text-slate-700' : 'bg-slate-800 text-slate-300'
                             }`}
-                            required
-                          />
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-colors"
+                          >
+                            <Plus className="w-4 h-4" /> Salvar Cobrança
+                          </button>
                         </div>
-
-                        <div className="sm:col-span-6">
-                          <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                            isLight ? 'text-slate-600' : 'text-slate-400'
-                          }`}>
-                            Data Combinada / Vencimento
-                          </label>
-                          <input
-                            type="date"
-                            value={cobrancaDueDate}
-                            onChange={(e) => setCobrancaDueDate(e.target.value)}
-                            className={`w-full text-xs px-3 py-2 rounded-xl border focus:outline-none ${
-                              isLight
-                                ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
-                                : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
-                            }`}
-                          />
-                        </div>
-
-                        <div className="sm:col-span-6">
-                          <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                            isLight ? 'text-slate-600' : 'text-slate-400'
-                          }`}>
-                            Mês de Competência
-                          </label>
-                          <input
-                            type="month"
-                            value={cobrancaMonthKey}
-                            onChange={(e) => setCobrancaMonthKey(e.target.value)}
-                            className={`w-full text-xs px-3 py-2 rounded-xl border focus:outline-none ${
-                              isLight
-                                ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
-                                : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
-                            }`}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end gap-2 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setIsAddingCobranca(false)}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer ${
-                            isLight ? 'bg-slate-200 text-slate-700' : 'bg-slate-800 text-slate-300'
-                          }`}
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="submit"
-                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-colors"
-                        >
-                          <Plus className="w-4 h-4" /> Salvar Cobrança
-                        </button>
-                      </div>
-                    </motion.form>
-                  )}
+                      </motion.form>
+                    );
+                  })()}
                 </AnimatePresence>
 
                 {/* Filter and Search Bar */}
@@ -1252,7 +1528,7 @@ export default function GanhosModal({
                             : isLight ? 'text-slate-600' : 'text-slate-400'
                         }`}
                       >
-                        Pendentes
+                        Em Aberto
                       </button>
                       <button
                         type="button"
@@ -1263,7 +1539,7 @@ export default function GanhosModal({
                             : isLight ? 'text-slate-600' : 'text-slate-400'
                         }`}
                       >
-                        Pagas
+                        Quitadas
                       </button>
                     </div>
                   </div>
@@ -1286,7 +1562,7 @@ export default function GanhosModal({
                 </div>
 
                 {/* List of Cobranças */}
-                <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
                   {filteredCobrancas.length === 0 ? (
                     <div className={`p-8 rounded-2xl border text-center space-y-2 ${
                       isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/20 border-white/5'
@@ -1294,133 +1570,484 @@ export default function GanhosModal({
                       <Users className="w-8 h-8 text-slate-500 mx-auto opacity-50" />
                       <div className="text-xs font-bold text-slate-400">Nenhuma cobrança encontrada</div>
                       <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                        Clique em &quot;Nova Cobrança&quot; para registrar pessoas que devem para você.
+                        Clique em &quot;Nova Cobrança&quot; para registrar dívidas, parcelas e juros de quem deve pra você.
                       </p>
                     </div>
                   ) : (
                     filteredCobrancas.map((item) => {
-                      const isPago = item.status === 'pago';
+                      const totalTarget = item.totalWithInterest || item.totalAmount || item.amount;
+                      const paymentsList = item.payments || [];
+                      const totalPaid = item.paidAmount ?? (paymentsList.reduce((s, p) => s + (p.amount || 0), 0));
+                      const remaining = item.remainingAmount !== undefined ? item.remainingAmount : Math.max(0, totalTarget - totalPaid);
+                      const isQuitado = item.status === 'pago' || remaining <= 0.01;
+                      const installments = Math.max(1, item.installmentsCount || 1);
+                      const installmentVal = item.installmentAmount || Math.round((totalTarget / installments) * 100) / 100;
+                      const paymentsCount = paymentsList.length;
+
+                      // Payments made in current month
+                      const paidInCurrentMonth = paymentsList
+                        .filter(p => p.monthKey === currentMonthKey)
+                        .reduce((s, p) => s + (p.amount || 0), 0) + 
+                        (!paymentsList.length && isQuitado && (item.paidMonthKey === currentMonthKey || item.monthKey === currentMonthKey) ? (item.paidAmount || item.amount) : 0);
+
+                      const progressPercent = Math.min(100, Math.max(0, Math.round((totalPaid / totalTarget) * 100)));
+                      const isExpanded = !!expandedHistories[item.id];
 
                       return (
                         <div
                           key={item.id}
                           className={`p-4 rounded-2xl border transition-all ${
-                            isPago
+                            isQuitado
                               ? isLight
-                                ? 'bg-emerald-50/50 border-emerald-200'
+                                ? 'bg-emerald-50/40 border-emerald-200'
                                 : 'bg-emerald-950/20 border-emerald-500/25'
                               : isLight
                               ? 'bg-white hover:bg-slate-50/80 border-slate-200 shadow-sm'
                               : 'bg-slate-900/60 hover:bg-slate-900 border-white/5'
                           }`}
                         >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            {/* Person info */}
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                            {/* Debtor Info */}
                             <div className="flex items-start gap-3">
                               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm shrink-0 border ${
-                                isPago
+                                isQuitado
                                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                                   : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
                               }`}>
                                 {item.debtorName.charAt(0).toUpperCase()}
                               </div>
 
-                              <div>
-                                <div className="flex items-center gap-2">
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-2">
                                   <span className="font-bold text-sm leading-tight">{item.debtorName}</span>
-                                  {isPago ? (
+                                  {isQuitado ? (
                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                                      <CheckCircle2 className="w-3 h-3" /> Pago
+                                      <CheckCircle2 className="w-3 h-3" /> Quitado Integralmente
+                                    </span>
+                                  ) : paymentsCount > 0 ? (
+                                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                                      <Clock className="w-3 h-3" /> Em Andamento ({paymentsCount}/{installments} parcelas)
                                     </span>
                                   ) : (
                                     <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">
-                                      <Clock className="w-3 h-3" /> A Receber
+                                      <Clock className="w-3 h-3" /> Pendente ({installments}x)
                                     </span>
                                   )}
+
+                                  {item.interestRatePercent && item.interestRatePercent > 0 ? (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 flex items-center gap-0.5">
+                                      <Percent className="w-2.5 h-2.5" /> +{item.interestRatePercent}% juros
+                                    </span>
+                                  ) : null}
                                 </div>
 
                                 {item.description && (
-                                  <div className="text-xs text-slate-400 mt-0.5">{item.description}</div>
+                                  <div className="text-xs text-slate-400">{item.description}</div>
                                 )}
 
-                                <div className="flex flex-wrap items-center gap-3 mt-1.5 text-[10px] text-slate-500">
+                                <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500">
                                   {item.dueDate && (
                                     <span className="flex items-center gap-1 font-mono">
                                       <Calendar className="w-3 h-3" />
-                                      Combinado: {item.dueDate.split('-').reverse().join('/')}
+                                      Vencimento / Combinado: {item.dueDate.split('-').reverse().join('/')}
                                     </span>
                                   )}
-                                  {isPago && item.paidAt && (
-                                    <span className="text-emerald-500 font-bold flex items-center gap-1">
-                                      <FileCheck className="w-3 h-3" />
-                                      Pago em {item.paidAt.split('-').reverse().join('/')}
-                                    </span>
-                                  )}
-                                  {isPago && (
-                                    <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                                      + {formatCurrency(item.paidAmount || item.amount)} somado na renda de {formatMonthKey(item.paidMonthKey || item.monthKey)}
-                                    </span>
-                                  )}
+                                  <span className="flex items-center gap-1">
+                                    <Layers className="w-3 h-3" />
+                                    {installments}x de {formatCurrency(installmentVal)}
+                                  </span>
                                 </div>
                               </div>
                             </div>
 
-                            {/* Amount & Actions */}
-                            <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-0 border-white/5">
-                              <div className="text-left sm:text-right">
-                                <div className="text-[9px] uppercase font-bold text-slate-400">Valor</div>
-                                <div className={`text-base font-black font-mono ${
-                                  isPago ? 'text-emerald-400' : 'text-amber-400'
-                                }`}>
-                                  {formatCurrency(item.amount)}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                {/* Toggle status button */}
-                                {isPago ? (
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2 self-end sm:self-center">
+                              {!isQuitado ? (
+                                <>
                                   <button
                                     type="button"
-                                    onClick={() => onToggleCobrancaStatus(item.id)}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer border ${
+                                    onClick={() => handleOpenPayModal(item)}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
+                                    title="Marcar parcela como paga no mês"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                    <span>Pagar Parcela ({formatCurrency(Math.min(installmentVal, remaining))})</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => onToggleCobrancaStatus(item.id, currentMonthKey)}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer border ${
                                       isLight
                                         ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
                                         : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-white/10'
                                     }`}
-                                    title="Desmarcar pagamento e reabrir cobrança"
+                                    title="Quitar todo o restante de uma vez"
                                   >
-                                    <RotateCcw className="w-3.5 h-3.5" />
-                                    <span>Desmarcar</span>
+                                    Quitar Total
                                   </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => onToggleCobrancaStatus(item.id, currentMonthKey)}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
-                                    title="Marcar como recebido e somar à renda do mês"
-                                  >
-                                    <Check className="w-4 h-4" />
-                                    <span>Marcar Pago</span>
-                                  </button>
-                                )}
-
-                                {/* Delete button */}
+                                </>
+                              ) : (
                                 <button
                                   type="button"
-                                  onClick={() => onDeleteCobranca(item.id)}
-                                  className="w-8 h-8 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 flex items-center justify-center cursor-pointer transition-colors"
-                                  title="Excluir cobrança"
+                                  onClick={() => onToggleCobrancaStatus(item.id)}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer border ${
+                                    isLight
+                                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-white/10'
+                                  }`}
+                                  title="Reabrir cobrança como pendente"
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  <span>Reabrir</span>
                                 </button>
-                              </div>
+                              )}
+
+                              {/* Delete cobrança */}
+                              <button
+                                type="button"
+                                onClick={() => onDeleteCobranca(item.id)}
+                                className="w-8 h-8 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 flex items-center justify-center cursor-pointer transition-colors"
+                                title="Excluir cobrança"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
+
+                          {/* Financial Progress & Breakdown */}
+                          <div className={`mt-3 p-3 rounded-xl border space-y-2 ${
+                            isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/40 border-white/5'
+                          }`}>
+                            <div className="flex items-center justify-between text-xs font-bold">
+                              <span className="text-slate-400 flex items-center gap-1">
+                                <span>Progresso da Quitação:</span>
+                                <strong className="text-emerald-400 font-mono">{progressPercent}%</strong>
+                              </span>
+                              <span className="text-[11px] text-slate-400">
+                                {paymentsCount} de {installments} parcelas pagas
+                              </span>
+                            </div>
+
+                            {/* Progress bar */}
+                            <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                              <div
+                                className={`h-full transition-all duration-500 ${
+                                  isQuitado ? 'bg-emerald-500' : 'bg-amber-500'
+                                }`}
+                                style={{ width: `${progressPercent}%` }}
+                              />
+                            </div>
+
+                            {/* Values Grid */}
+                            <div className="grid grid-cols-3 gap-2 pt-1 text-center sm:text-left">
+                              <div>
+                                <div className="text-[9px] uppercase font-bold text-slate-500">Total Devido</div>
+                                <div className="text-xs font-black font-mono mt-0.5">
+                                  {formatCurrency(totalTarget)}
+                                </div>
+                              </div>
+
+                              <div>
+                                <div className="text-[9px] uppercase font-bold text-emerald-500">Já Recebido</div>
+                                <div className="text-xs font-black font-mono text-emerald-400 mt-0.5">
+                                  {formatCurrency(totalPaid)}
+                                </div>
+                              </div>
+
+                              <div>
+                                <div className="text-[9px] uppercase font-bold text-amber-500">Restante a Pagar</div>
+                                <div className="text-xs font-black font-mono text-amber-400 mt-0.5">
+                                  {formatCurrency(remaining)}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Current month income addition highlight */}
+                            {paidInCurrentMonth > 0 && (
+                              <div className="pt-1.5 border-t border-white/5 flex items-center gap-1.5 text-[11px] font-bold text-emerald-400">
+                                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                                <span>+{formatCurrency(paidInCurrentMonth)} recebido neste mês de {formatMonthKey(currentMonthKey)} (somado aos seus ganhos)!</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Payments History Accordion Toggle */}
+                          {paymentsList.length > 0 && (
+                            <div className="mt-2.5">
+                              <button
+                                type="button"
+                                onClick={() => toggleHistory(item.id)}
+                                className={`text-[11px] font-bold flex items-center gap-1.5 cursor-pointer py-1 px-2 rounded-lg transition-colors ${
+                                  isLight ? 'hover:bg-slate-100 text-slate-600' : 'hover:bg-slate-800 text-slate-400'
+                                }`}
+                              >
+                                <History className="w-3.5 h-3.5" />
+                                <span>Histórico de Parcelas Pagas ({paymentsList.length})</span>
+                                {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                              </button>
+
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  className="mt-2 space-y-1.5 pl-2 border-l-2 border-emerald-500/30"
+                                >
+                                  {paymentsList.map((p, idx) => (
+                                    <div
+                                      key={p.id}
+                                      className={`p-2 rounded-lg border flex items-center justify-between gap-2 text-xs ${
+                                        isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-white/5'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold">
+                                          ✓
+                                        </div>
+                                        <div>
+                                          <div className="font-bold text-[11px]">
+                                            {p.note || `Parcela ${p.installmentNumber || idx + 1}`}
+                                          </div>
+                                          <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                                            <span>{p.date ? p.date.split('-').reverse().join('/') : '-'}</span>
+                                            <span className="px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 font-bold">
+                                              Renda de {formatMonthKey(p.monthKey)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono font-bold text-emerald-400 text-xs">
+                                          +{formatCurrency(p.amount)}
+                                        </span>
+                                        {onDeleteCobrancaPayment && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeletePayment(item.id, p.id)}
+                                            className="w-6 h-6 rounded-md hover:bg-rose-500/20 text-rose-500 flex items-center justify-center cursor-pointer transition-colors"
+                                            title="Desfazer este pagamento e restaurar saldo devedor"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })
                   )}
                 </div>
+
+                {/* Sub-Modal / Popover to Record Monthly Payment */}
+                <AnimatePresence>
+                  {payingCobranca && (() => {
+                    const cob = payingCobranca;
+                    const totalToPay = cob.totalWithInterest || cob.totalAmount || cob.amount;
+                    const paidSoFar = cob.paidAmount ?? ((cob.payments || []).reduce((s, p) => s + (p.amount || 0), 0));
+                    const remaining = cob.remainingAmount !== undefined ? cob.remainingAmount : Math.max(0, totalToPay - paidSoFar);
+                    const installments = Math.max(1, cob.installmentsCount || 1);
+                    const installmentVal = cob.installmentAmount || Math.round((totalToPay / installments) * 100) / 100;
+
+                    const amtEntered = parseMoney(paymentAmountStr);
+                    const projectedRemaining = Math.max(0, remaining - amtEntered);
+
+                    return (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          onClick={() => !isSubmittingPayment && setPayingCobranca(null)}
+                          className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+                        />
+
+                        <motion.div
+                          initial={{ scale: 0.95, y: 15 }}
+                          animate={{ scale: 1, y: 0 }}
+                          exit={{ scale: 0.95, y: 15 }}
+                          className={`w-full max-w-md rounded-3xl p-6 shadow-2xl relative z-10 space-y-4 border ${
+                            isLight ? 'bg-white border-slate-200 text-slate-900' : 'bg-slate-900 border-white/10 text-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                                <DollarSign className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <h3 className="font-bold text-sm leading-tight">Registrar Pagamento de Parcela</h3>
+                                <p className="text-[11px] text-slate-400">Devedor: <strong>{cob.debtorName}</strong></p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setPayingCobranca(null)}
+                              className="text-slate-400 hover:text-white cursor-pointer"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Quick Debt Stats */}
+                          <div className={`p-3 rounded-2xl border grid grid-cols-2 gap-2 text-xs ${
+                            isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/50 border-white/5'
+                          }`}>
+                            <div>
+                              <div className="text-[10px] uppercase text-slate-400 font-bold">Total da Dívida</div>
+                              <div className="text-xs font-mono font-bold mt-0.5">{formatCurrency(totalToPay)}</div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] uppercase text-amber-500 font-bold">Saldo Restante Atual</div>
+                              <div className="text-xs font-mono font-black text-amber-400 mt-0.5">{formatCurrency(remaining)}</div>
+                            </div>
+                          </div>
+
+                          <form onSubmit={handleConfirmPayment} className="space-y-3.5">
+                            {/* Valor Pago */}
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-slate-400">
+                                Valor Recebido nesta Parcela *
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={paymentAmountStr}
+                                onChange={(e) => setPaymentAmountStr(handleMaskMoney(e.target.value))}
+                                className={`w-full text-base font-mono font-black px-3.5 py-2.5 rounded-xl border focus:outline-none ${
+                                  isLight
+                                    ? 'bg-white border-slate-300 text-slate-900 focus:border-emerald-500'
+                                    : 'bg-slate-950 border-white/10 text-emerald-400 focus:border-emerald-500'
+                                }`}
+                                required
+                              />
+
+                              {/* Quick selection chips */}
+                              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setPaymentAmountStr(formatCurrency(Math.min(installmentVal, remaining)))}
+                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer border ${
+                                    isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-white/10'
+                                  }`}
+                                >
+                                  1 Parcela ({formatCurrency(Math.min(installmentVal, remaining))})
+                                </button>
+                                {remaining > installmentVal && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPaymentAmountStr(formatCurrency(remaining))}
+                                    className="px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30"
+                                  >
+                                    Quitar Restante ({formatCurrency(remaining)})
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Mês de Competência */}
+                            <div>
+                              <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-slate-400">
+                                Mês de Competência (Será somado na renda deste mês!) *
+                              </label>
+                              <input
+                                type="month"
+                                value={paymentMonthKey}
+                                onChange={(e) => setPaymentMonthKey(e.target.value)}
+                                className={`w-full text-xs px-3.5 py-2.5 rounded-xl border focus:outline-none ${
+                                  isLight
+                                    ? 'bg-white border-slate-300 text-slate-900 focus:border-emerald-500'
+                                    : 'bg-slate-950 border-white/10 text-white focus:border-emerald-500'
+                                }`}
+                                required
+                              />
+                            </div>
+
+                            {/* Data do Pagamento */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-slate-400">
+                                  Data do Recebimento
+                                </label>
+                                <input
+                                  type="date"
+                                  value={paymentDate}
+                                  onChange={(e) => setPaymentDate(e.target.value)}
+                                  className={`w-full text-xs px-3 py-2 rounded-xl border focus:outline-none ${
+                                    isLight
+                                      ? 'bg-white border-slate-300 text-slate-900 focus:border-emerald-500'
+                                      : 'bg-slate-950 border-white/10 text-white focus:border-emerald-500'
+                                  }`}
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-slate-400">
+                                  Identificação / Parcela
+                                </label>
+                                <input
+                                  type="text"
+                                  value={paymentNote}
+                                  onChange={(e) => setPaymentNote(e.target.value)}
+                                  placeholder="Ex: Parcela 1 de 5"
+                                  className={`w-full text-xs px-3 py-2 rounded-xl border focus:outline-none ${
+                                    isLight
+                                      ? 'bg-white border-slate-300 text-slate-900 focus:border-emerald-500'
+                                      : 'bg-slate-950 border-white/10 text-white focus:border-emerald-500'
+                                  }`}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Impact summary preview */}
+                            {amtEntered > 0 && (
+                              <div className={`p-3 rounded-xl border text-xs space-y-1 ${
+                                isLight ? 'bg-emerald-50/70 border-emerald-200' : 'bg-emerald-950/20 border-emerald-500/25'
+                              }`}>
+                                <div className="font-bold text-emerald-400 flex items-center gap-1">
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  <span>Impacto no seu orçamento:</span>
+                                </div>
+                                <div className="text-[11px] text-slate-400">
+                                  • <strong className="text-emerald-400 font-mono">+{formatCurrency(amtEntered)}</strong> somado na renda de <strong>{formatMonthKey(paymentMonthKey)}</strong>
+                                </div>
+                                <div className="text-[11px] text-slate-400">
+                                  • Restará <strong className="text-amber-400 font-mono">{formatCurrency(projectedRemaining)}</strong> nos meses seguintes {projectedRemaining <= 0 ? '(Dívida 100% quitada!)' : ''}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="flex justify-end gap-2 pt-2">
+                              <button
+                                type="button"
+                                disabled={isSubmittingPayment}
+                                onClick={() => setPayingCobranca(null)}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer ${
+                                  isLight ? 'bg-slate-200 text-slate-700' : 'bg-slate-800 text-slate-300'
+                                }`}
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={isSubmittingPayment}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-md transition-colors"
+                              >
+                                <Check className="w-4 h-4" />
+                                <span>{isSubmittingPayment ? 'Confirmando...' : 'Confirmar Recebimento'}</span>
+                              </button>
+                            </div>
+                          </form>
+                        </motion.div>
+                      </div>
+                    );
+                  })()}
+                </AnimatePresence>
               </div>
             )}
 

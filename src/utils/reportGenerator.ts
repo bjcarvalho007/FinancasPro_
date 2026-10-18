@@ -43,6 +43,22 @@ export const formatCurrency = (val: number, currency: 'BRL' | 'USD' | 'EUR'): st
   return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(val);
 };
 
+export const getCobrancasForMonth = (cobrancas: any[] | undefined, targetMonthKey: string): number => {
+  if (!cobrancas) return 0;
+  return cobrancas.reduce((sum: number, c: any) => {
+    if (c.payments && c.payments.length > 0) {
+      const pSum = c.payments
+        .filter((p: any) => p.monthKey === targetMonthKey)
+        .reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+      return sum + pSum;
+    }
+    if (c.status === 'pago' && (c.paidMonthKey === targetMonthKey || (!c.paidMonthKey && c.monthKey === targetMonthKey))) {
+      return sum + (c.paidAmount || c.amount || 0);
+    }
+    return sum;
+  }, 0);
+};
+
 // Translate transaction types for report readability
 const getTypeLabel = (type: string, instInfo?: string) => {
   if (instInfo) return `Parcela ${instInfo}`;
@@ -110,11 +126,7 @@ export const exportPremiumPDF = ({
       uniqueMonthKeys.forEach(mKey => {
         mIncome += settings?.monthlyIncome?.[mKey] || settings?.income || 0;
         mBalance += settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
-        mExtra += settings?.extras?.[mKey] ?? 0;
-        const cob = (settings?.cobrancas || [])
-          .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === mKey || (!c.paidMonthKey && c.monthKey === mKey)))
-          .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0);
-        mExtra += cob;
+        mExtra += (settings?.extras?.[mKey] ?? 0) + getCobrancasForMonth(settings?.cobrancas, mKey);
       });
     } else {
       mIncome = baseIncome;
@@ -123,11 +135,7 @@ export const exportPremiumPDF = ({
   } else {
     mIncome = settings?.monthlyIncome?.[selectedMonthKey] || settings?.income || baseIncome;
     mBalance = settings?.monthlyBalance?.[selectedMonthKey] || settings?.balance || baseBalance;
-    mExtra = (settings?.extras?.[selectedMonthKey] ?? 0) + (
-      (settings?.cobrancas || [])
-        .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === selectedMonthKey || (!c.paidMonthKey && c.monthKey === selectedMonthKey)))
-        .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0)
-    );
+    mExtra = (settings?.extras?.[selectedMonthKey] ?? 0) + getCobrancasForMonth(settings?.cobrancas, selectedMonthKey);
   }
 
   const totalInflow = mIncome + mBalance + mExtra;
@@ -651,11 +659,7 @@ export const exportPremiumSpreadsheet = ({
       uniqueMonthKeys.forEach(mKey => {
         mIncome += settings?.monthlyIncome?.[mKey] || settings?.income || 0;
         mBalance += settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
-        mExtra += settings?.extras?.[mKey] ?? 0;
-        const cob = (settings?.cobrancas || [])
-          .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === mKey || (!c.paidMonthKey && c.monthKey === mKey)))
-          .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0);
-        mExtra += cob;
+        mExtra += (settings?.extras?.[mKey] ?? 0) + getCobrancasForMonth(settings?.cobrancas, mKey);
       });
     } else {
       mIncome = baseIncome;
@@ -664,11 +668,7 @@ export const exportPremiumSpreadsheet = ({
   } else {
     mIncome = settings?.monthlyIncome?.[selectedMonthKey] || settings?.income || baseIncome;
     mBalance = settings?.monthlyBalance?.[selectedMonthKey] || settings?.balance || baseBalance;
-    mExtra = (settings?.extras?.[selectedMonthKey] ?? 0) + (
-      (settings?.cobrancas || [])
-        .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === selectedMonthKey || (!c.paidMonthKey && c.monthKey === selectedMonthKey)))
-        .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0)
-    );
+    mExtra = (settings?.extras?.[selectedMonthKey] ?? 0) + getCobrancasForMonth(settings?.cobrancas, selectedMonthKey);
   }
 
   const totalInflow = mIncome + mBalance + mExtra;

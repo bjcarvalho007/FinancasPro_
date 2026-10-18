@@ -16,7 +16,7 @@ import {
   getDocFromServer,
   updateDoc
 } from 'firebase/firestore';
-import { Transaction, Category, Goal, Setting, AppNotification, ExtraEarning, ExtraGastoHistoryItem, CobrancaItem } from './types';
+import { Transaction, Category, Goal, Setting, AppNotification, ExtraEarning, ExtraGastoHistoryItem, CobrancaItem, CobrancaPayment } from './types';
 import AuthScreen from './components/AuthScreen';
 import SplashLoader from './components/SplashLoader';
 import TransactionFormModal from './components/TransactionFormModal';
@@ -1918,9 +1918,28 @@ function MainApp() {
   const handleAddCobranca = async (cobrancaData: Omit<CobrancaItem, 'id' | 'createdAt'>) => {
     if (!user || !settings) return;
     const path = `settings/${user.uid}`;
+    
+    const principal = cobrancaData.totalAmount || cobrancaData.amount || 0;
+    const installments = Math.max(1, cobrancaData.installmentsCount || 1);
+    const interest = Math.max(0, cobrancaData.interestRatePercent || 0);
+    const withInterest = interest > 0 
+      ? Math.round((principal * (1 + interest / 100)) * 100) / 100
+      : principal;
+    const perInstallment = Math.round((withInterest / installments) * 100) / 100;
+
     const newCobranca: CobrancaItem = {
       ...cobrancaData,
       id: `cob_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      amount: withInterest,
+      totalAmount: principal,
+      installmentsCount: installments,
+      interestRatePercent: interest,
+      totalWithInterest: withInterest,
+      installmentAmount: perInstallment,
+      remainingAmount: withInterest,
+      paidAmount: 0,
+      payments: [],
+      status: 'pendente',
       createdAt: new Date().toISOString()
     };
     const currentList = settings.cobrancas || [];
@@ -1929,7 +1948,100 @@ function MainApp() {
       await updateDoc(doc(db, 'settings', user.uid), {
         cobrancas: updatedList
       });
-      triggerToast(`Cobrança de ${cobrancaData.debtorName} cadastrada!`, 'success');
+      triggerToast(`Cobrança de ${cobrancaData.debtorName} cadastrada (${installments}x de ${formatCurrency(perInstallment)})!`, 'success');
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleRegisterCobrancaPayment = async (
+    cobrancaId: string,
+    payment: { amount: number; monthKey: string; date: string; installmentNumber?: number; note?: string }
+  ) => {
+    if (!user || !settings) return;
+    const path = `settings/${user.uid}`;
+    const currentList = settings.cobrancas || [];
+    const itemIndex = currentList.findIndex(c => c.id === cobrancaId);
+    if (itemIndex === -1) return;
+
+    const item = currentList[itemIndex];
+    const totalToPay = item.totalWithInterest || item.totalAmount || item.amount;
+    const existingPayments = item.payments || [];
+    
+    const newPayment: CobrancaPayment = {
+      id: `pay_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      amount: payment.amount,
+      monthKey: payment.monthKey,
+      date: payment.date,
+      installmentNumber: payment.installmentNumber || (existingPayments.length + 1),
+      note: payment.note,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedPayments = [...existingPayments, newPayment];
+    const totalPaid = Math.round(updatedPayments.reduce((sum, p) => sum + (p.amount || 0), 0) * 100) / 100;
+    const remaining = Math.max(0, Math.round((totalToPay - totalPaid) * 100) / 100);
+    const isFullyPaid = remaining <= 0.01;
+
+    const updatedItem: CobrancaItem = {
+      ...item,
+      payments: updatedPayments,
+      paidAmount: totalPaid,
+      remainingAmount: remaining,
+      status: isFullyPaid ? 'pago' : 'parcial',
+      paidAt: isFullyPaid ? payment.date : item.paidAt,
+      paidMonthKey: payment.monthKey
+    };
+
+    const updatedList = [...currentList];
+    updatedList[itemIndex] = updatedItem;
+
+    try {
+      await updateDoc(doc(db, 'settings', user.uid), {
+        cobrancas: updatedList
+      });
+      if (isFullyPaid) {
+        triggerToast(`🎉 Cobrança de ${item.debtorName} quitada por completo! Valor somado na renda de ${payment.monthKey}.`, 'success');
+      } else {
+        triggerToast(`✓ Recebido ${formatCurrency(payment.amount)} de ${item.debtorName}! Resta ${formatCurrency(remaining)} para os próximos meses.`, 'success');
+      }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleDeleteCobrancaPayment = async (cobrancaId: string, paymentId: string) => {
+    if (!user || !settings) return;
+    const path = `settings/${user.uid}`;
+    const currentList = settings.cobrancas || [];
+    const itemIndex = currentList.findIndex(c => c.id === cobrancaId);
+    if (itemIndex === -1) return;
+
+    const item = currentList[itemIndex];
+    const existingPayments = item.payments || [];
+    const updatedPayments = existingPayments.filter(p => p.id !== paymentId);
+    const totalPaid = Math.round(updatedPayments.reduce((sum, p) => sum + (p.amount || 0), 0) * 100) / 100;
+    const totalToPay = item.totalWithInterest || item.totalAmount || item.amount;
+    const remaining = Math.max(0, Math.round((totalToPay - totalPaid) * 100) / 100);
+    const newStatus = remaining <= 0.01 ? 'pago' : (totalPaid > 0 ? 'parcial' : 'pendente');
+
+    const updatedItem: CobrancaItem = {
+      ...item,
+      payments: updatedPayments,
+      paidAmount: totalPaid,
+      remainingAmount: remaining,
+      status: newStatus,
+      paidAt: newStatus === 'pago' ? item.paidAt : undefined
+    };
+
+    const updatedList = [...currentList];
+    updatedList[itemIndex] = updatedItem;
+
+    try {
+      await updateDoc(doc(db, 'settings', user.uid), {
+        cobrancas: updatedList
+      });
+      triggerToast('Pagamento desfeito com sucesso.', 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, path);
     }
@@ -1943,13 +2055,48 @@ function MainApp() {
     if (itemIndex === -1) return;
 
     const item = currentList[itemIndex];
+    const totalTarget = item.totalWithInterest || item.totalAmount || item.amount;
     const willBePaid = item.status !== 'pago';
+    
+    let updatedPayments = item.payments || [];
+    let updatedPaidAmount = item.paidAmount || 0;
+    let updatedRemaining = item.remainingAmount ?? totalTarget;
+
+    if (willBePaid) {
+      // Quitar todo o saldo restante de uma vez
+      const currentPaid = updatedPayments.reduce((s, p) => s + (p.amount || 0), 0);
+      const remainingToPay = Math.max(0, totalTarget - currentPaid);
+      if (remainingToPay > 0) {
+        updatedPayments = [
+          ...updatedPayments,
+          {
+            id: `pay_${Date.now()}_full`,
+            amount: remainingToPay,
+            date: new Date().toISOString().split('T')[0],
+            monthKey: targetPaidMonthKey || currentMonthKey,
+            installmentNumber: (item.installmentsCount || updatedPayments.length + 1),
+            note: 'Quitação integral',
+            createdAt: new Date().toISOString()
+          }
+        ];
+      }
+      updatedPaidAmount = totalTarget;
+      updatedRemaining = 0;
+    } else {
+      // Reabrir: limpa pagamentos ou reabre como pendente
+      updatedPayments = [];
+      updatedPaidAmount = 0;
+      updatedRemaining = totalTarget;
+    }
+
     const updatedItem: CobrancaItem = {
       ...item,
       status: willBePaid ? 'pago' : 'pendente',
       paidAt: willBePaid ? new Date().toISOString().split('T')[0] : undefined,
       paidMonthKey: willBePaid ? (targetPaidMonthKey || currentMonthKey) : undefined,
-      paidAmount: willBePaid ? (item.paidAmount || item.amount) : undefined
+      paidAmount: updatedPaidAmount,
+      remainingAmount: updatedRemaining,
+      payments: updatedPayments
     };
 
     const updatedList = [...currentList];
@@ -1960,7 +2107,7 @@ function MainApp() {
         cobrancas: updatedList
       });
       if (willBePaid) {
-        triggerToast(`Recebimento de ${item.debtorName} confirmado! Valor somado na renda do mês.`, 'success');
+        triggerToast(`Cobrança de ${item.debtorName} quitada por completo! Valor somado na renda do mês.`, 'success');
       } else {
         triggerToast(`Cobrança de ${item.debtorName} reaberta como pendente.`, 'warning');
       }
@@ -2777,9 +2924,20 @@ function MainApp() {
   // Cobranças pagas no mês corrente (somadas à renda deste mês)
   const cobrancasRecebidasNoMes = useMemo(() => {
     const list = settings?.cobrancas || [];
-    return list
-      .filter(c => c.status === 'pago' && (c.paidMonthKey === currentMonthKey || (!c.paidMonthKey && c.monthKey === currentMonthKey)))
-      .reduce((sum, c) => sum + (c.paidAmount || c.amount || 0), 0);
+    return list.reduce((sum, c) => {
+      // If it has recorded payments (installments or partial payments)
+      if (c.payments && c.payments.length > 0) {
+        const monthPayments = c.payments
+          .filter(p => p.monthKey === currentMonthKey)
+          .reduce((pSum, p) => pSum + (p.amount || 0), 0);
+        return sum + monthPayments;
+      }
+      // Fallback for legacy single payment
+      if (c.status === 'pago' && (c.paidMonthKey === currentMonthKey || (!c.paidMonthKey && c.monthKey === currentMonthKey))) {
+        return sum + (c.paidAmount || c.amount || 0);
+      }
+      return sum;
+    }, 0);
   }, [settings?.cobrancas, currentMonthKey]);
   
   // Total funds active (Renda base + Reserva + Ganhos Extras + Cobranças Pagas)
@@ -5552,6 +5710,8 @@ function MainApp() {
         onAddExtraEarning={handleAddExtraEarning}
         onDeleteExtraEarning={handleDeleteExtraEarning}
         onAddCobranca={handleAddCobranca}
+        onRegisterCobrancaPayment={handleRegisterCobrancaPayment}
+        onDeleteCobrancaPayment={handleDeleteCobrancaPayment}
         onToggleCobrancaStatus={handleToggleCobrancaStatus}
         onDeleteCobranca={handleDeleteCobranca}
         showToast={triggerToast}

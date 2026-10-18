@@ -568,10 +568,19 @@ export default function DashboardAnalytics({
     const spentMonth = listMonth.reduce((sum, t) => sum + t.amount, 0);
     const mIncome = settings?.monthlyIncome?.[mKey] || settings?.income || 0;
     const mBalance = settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
+    const mCobranca = (settings?.cobrancas || []).reduce((sum: number, c: any) => {
+      if (c.payments && c.payments.length > 0) {
+        const pSum = c.payments
+          .filter((p: any) => p.monthKey === mKey)
+          .reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+        return sum + pSum;
+      }
+      if (c.status === 'pago' && (c.paidMonthKey === mKey || (!c.paidMonthKey && c.monthKey === mKey))) {
+        return sum + (c.paidAmount || c.amount || 0);
+      }
+      return sum;
+    }, 0);
     const mExtra = settings?.extras?.[mKey] ?? 0;
-    const mCobranca = (settings?.cobrancas || [])
-      .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === mKey || (!c.paidMonthKey && c.monthKey === mKey)))
-      .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0);
     const totalInflows = mIncome + mBalance + mExtra + mCobranca;
     if (spentMonth > totalInflows && totalInflows > 0) {
       deficitMonthsCount++;
@@ -787,10 +796,19 @@ export default function DashboardAnalytics({
     // Dynamic per-month metrics using settings mappings
     const mIncome = settings?.monthlyIncome?.[mKey] || settings?.income || 0;
     const mBalance = settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
+    const mCobranca = (settings?.cobrancas || []).reduce((sum: number, c: any) => {
+      if (c.payments && c.payments.length > 0) {
+        const pSum = c.payments
+          .filter((p: any) => p.monthKey === mKey)
+          .reduce((acc: number, p: any) => acc + (p.amount || 0), 0);
+        return sum + pSum;
+      }
+      if (c.status === 'pago' && (c.paidMonthKey === mKey || (!c.paidMonthKey && c.monthKey === mKey))) {
+        return sum + (c.paidAmount || c.amount || 0);
+      }
+      return sum;
+    }, 0);
     const mExtra = settings?.extras?.[mKey] ?? 0;
-    const mCobranca = (settings?.cobrancas || [])
-      .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === mKey || (!c.paidMonthKey && c.monthKey === mKey)))
-      .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0);
     const totalInflows = mIncome + mBalance + mExtra + mCobranca;
     const leftoverMargin = totalInflows - spent;
 

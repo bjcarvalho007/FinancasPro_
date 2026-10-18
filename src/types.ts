@@ -84,8 +84,9 @@ export interface CobrancaItem {
   installmentAmount?: number; // Valor de cada parcela (ex: R$ 500)
   remainingAmount?: number; // Saldo devedor restante nos meses seguintes (ex: R$ 2.000 após pagar 500)
   payments?: CobrancaPayment[]; // Histórico de parcelas/pagamentos mês a mês
-  dueDate?: string; // Data combinada de vencimento / dia do mês
-  monthKey: string; // Mês de competência inicial (YYYY-MM)
+  startDate?: string; // Data de início da cobrança / acordo (YYYY-MM-DD)
+  dueDate?: string; // Data combinada de vencimento / 1º vencimento (YYYY-MM-DD)
+  monthKey: string; // Mês de pagamento da cobrança / competência inicial (YYYY-MM)
   status: 'pendente' | 'parcial' | 'pago'; // Status
   paidAt?: string; // Data em que foi quitado ou do último pagamento (YYYY-MM-DD)
   paidMonthKey?: string; // Mês em que foi recebido (YYYY-MM)

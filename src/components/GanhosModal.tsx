@@ -174,11 +174,22 @@ export default function GanhosModal({
   const [cobrancaInstallmentsCount, setCobrancaInstallmentsCount] = useState<number>(1);
   const [cobrancaHasInterest, setCobrancaHasInterest] = useState<boolean>(false);
   const [cobrancaInterestRate, setCobrancaInterestRate] = useState<number>(0);
+  const [cobrancaStartDate, setCobrancaStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [cobrancaDueDate, setCobrancaDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [cobrancaMonthKey, setCobrancaMonthKey] = useState<string>(currentMonthKey);
   const [cobrancasScopeFilter, setCobrancasScopeFilter] = useState<'current' | 'all'>('current');
   const [cobrancasStatusFilter, setCobrancasStatusFilter] = useState<'all' | 'pendente' | 'pago'>('all');
   const [cobrancaSearch, setCobrancaSearch] = useState<string>('');
+
+  const handleDueDateChange = (dateVal: string) => {
+    setCobrancaDueDate(dateVal);
+    if (dateVal) {
+      const [y, m] = dateVal.split('-');
+      if (y && m) {
+        setCobrancaMonthKey(`${y}-${m}`);
+      }
+    }
+  };
 
   // Payment Recording Modal State
   const [payingCobranca, setPayingCobranca] = useState<CobrancaItem | null>(null);
@@ -268,11 +279,7 @@ export default function GanhosModal({
       : principal;
     const perInstallment = Math.round((withInterest / installments) * 100) / 100;
 
-    let assignedMonth = cobrancaMonthKey;
-    if (cobrancaDueDate && (!assignedMonth || cobrancasScopeFilter === 'current')) {
-      const [y, m] = cobrancaDueDate.split('-');
-      if (y && m) assignedMonth = `${y}-${m}`;
-    }
+    const assignedMonth = cobrancaMonthKey || (cobrancaDueDate ? cobrancaDueDate.substring(0, 7) : currentMonthKey);
 
     try {
       await onAddCobranca({
@@ -287,8 +294,9 @@ export default function GanhosModal({
         remainingAmount: withInterest,
         paidAmount: 0,
         payments: [],
+        startDate: cobrancaStartDate || new Date().toISOString().split('T')[0],
         dueDate: cobrancaDueDate || undefined,
-        monthKey: assignedMonth || currentMonthKey,
+        monthKey: assignedMonth,
         status: 'pendente'
       });
       setCobrancaDebtor('');
@@ -297,6 +305,9 @@ export default function GanhosModal({
       setCobrancaInstallmentsCount(1);
       setCobrancaHasInterest(false);
       setCobrancaInterestRate(0);
+      setCobrancaStartDate(new Date().toISOString().split('T')[0]);
+      setCobrancaDueDate(new Date().toISOString().split('T')[0]);
+      setCobrancaMonthKey(currentMonthKey);
       setIsAddingCobranca(false);
     } catch {
       // handled by parent
@@ -1404,41 +1415,118 @@ export default function GanhosModal({
                                 </div>
                               </div>
 
-                              {/* Data combinada e Mês */}
-                              <div className="sm:col-span-6">
-                                <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                                  isLight ? 'text-slate-600' : 'text-slate-400'
-                                }`}>
-                                  Data Combinada / 1º Vencimento
-                                </label>
-                                <input
-                                  type="date"
-                                  value={cobrancaDueDate}
-                                  onChange={(e) => setCobrancaDueDate(e.target.value)}
-                                  className={`w-full text-xs px-3 py-2.5 rounded-xl border focus:outline-none ${
-                                    isLight
-                                      ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-amber-500 focus:bg-white'
-                                      : 'bg-slate-950 border-white/10 text-white focus:border-amber-500'
-                                  }`}
-                                />
-                              </div>
+                              {/* Seção de Datas e Prazos do Acordo (Data de Início, Data Combinada / 1º Vencimento e Mês de Pagamento) */}
+                              <div className={`sm:col-span-12 p-3.5 rounded-2xl border space-y-3 ${
+                                isLight ? 'bg-slate-50/90 border-slate-200' : 'bg-slate-950/70 border-white/10'
+                              }`}>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-500">
+                                    <Calendar className="w-4 h-4" />
+                                    <span>Prazos e Datas da Cobrança</span>
+                                  </div>
+                                  {cobrancaMonthKey && (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                                      <span>📅 Mês de Pagamento:</span>
+                                      <span className="capitalize">{formatMonthKey(cobrancaMonthKey)}</span>
+                                    </span>
+                                  )}
+                                </div>
 
-                              <div className="sm:col-span-6">
-                                <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                                  isLight ? 'text-slate-600' : 'text-slate-400'
-                                }`}>
-                                  Mês Inicial de Referência
-                                </label>
-                                <input
-                                  type="month"
-                                  value={cobrancaMonthKey}
-                                  onChange={(e) => setCobrancaMonthKey(e.target.value)}
-                                  className={`w-full text-xs px-3 py-2.5 rounded-xl border focus:outline-none ${
-                                    isLight
-                                      ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-amber-500 focus:bg-white'
-                                      : 'bg-slate-950 border-white/10 text-white focus:border-amber-500'
-                                  }`}
-                                />
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                  {/* 1. Data de Início */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className={`block text-[10px] font-bold uppercase tracking-wider ${
+                                        isLight ? 'text-slate-600' : 'text-slate-400'
+                                      }`}>
+                                        Data de Início
+                                      </label>
+                                      <button
+                                        type="button"
+                                        onClick={() => setCobrancaStartDate(new Date().toISOString().split('T')[0])}
+                                        className="text-[9px] font-bold text-amber-500 hover:underline cursor-pointer"
+                                      >
+                                        Hoje
+                                      </button>
+                                    </div>
+                                    <input
+                                      type="date"
+                                      value={cobrancaStartDate}
+                                      onChange={(e) => setCobrancaStartDate(e.target.value)}
+                                      className={`w-full text-xs px-3 py-2.5 rounded-xl border focus:outline-none transition-colors ${
+                                        isLight
+                                          ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                                          : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                                      }`}
+                                    />
+                                    <span className="block text-[9px] text-slate-400 mt-1">Início da dívida / acordo</span>
+                                  </div>
+
+                                  {/* 2. Data Combinada / 1º Vencimento */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className={`block text-[10px] font-bold uppercase tracking-wider ${
+                                        isLight ? 'text-slate-600' : 'text-slate-400'
+                                      }`}>
+                                        Data Combinada / 1º Vencimento *
+                                      </label>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const d = new Date();
+                                          d.setDate(d.getDate() + 30);
+                                          const iso = d.toISOString().split('T')[0];
+                                          handleDueDateChange(iso);
+                                        }}
+                                        className="text-[9px] font-bold text-amber-500 hover:underline cursor-pointer"
+                                      >
+                                        +30 dias
+                                      </button>
+                                    </div>
+                                    <input
+                                      type="date"
+                                      value={cobrancaDueDate}
+                                      onChange={(e) => handleDueDateChange(e.target.value)}
+                                      className={`w-full text-xs px-3 py-2.5 rounded-xl border focus:outline-none transition-colors ${
+                                        isLight
+                                          ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                                          : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                                      }`}
+                                      required
+                                    />
+                                    <span className="block text-[9px] text-slate-400 mt-1">Dia do 1º vencimento combinado</span>
+                                  </div>
+
+                                  {/* 3. Mês de Pagamento da Cobrança */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <label className={`block text-[10px] font-bold uppercase tracking-wider ${
+                                        isLight ? 'text-slate-600' : 'text-slate-400'
+                                      }`}>
+                                        Mês de Pagamento da Cobrança *
+                                      </label>
+                                      <button
+                                        type="button"
+                                        onClick={() => setCobrancaMonthKey(currentMonthKey)}
+                                        className="text-[9px] font-bold text-amber-500 hover:underline cursor-pointer"
+                                      >
+                                        Mês Atual
+                                      </button>
+                                    </div>
+                                    <input
+                                      type="month"
+                                      value={cobrancaMonthKey}
+                                      onChange={(e) => setCobrancaMonthKey(e.target.value)}
+                                      className={`w-full text-xs px-3 py-2.5 rounded-xl border focus:outline-none transition-colors ${
+                                        isLight
+                                          ? 'bg-white border-slate-300 text-slate-900 focus:border-amber-500'
+                                          : 'bg-slate-900 border-white/10 text-white focus:border-amber-500'
+                                      }`}
+                                      required
+                                    />
+                                    <span className="block text-[9px] text-slate-400 mt-1">Competência somada na renda</span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
 
@@ -1668,10 +1756,22 @@ export default function GanhosModal({
                                 )}
 
                                 <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-500">
-                                  {item.dueDate && (
+                                  {item.startDate && (
                                     <span className="flex items-center gap-1 font-mono">
-                                      <Calendar className="w-3 h-3" />
-                                      Vencimento / Combinado: {item.dueDate.split('-').reverse().join('/')}
+                                      <Calendar className="w-3 h-3 text-slate-400" />
+                                      <span>Início: {item.startDate.split('-').reverse().join('/')}</span>
+                                    </span>
+                                  )}
+                                  {item.dueDate && (
+                                    <span className="flex items-center gap-1 font-mono text-amber-500 font-bold">
+                                      <Calendar className="w-3 h-3 text-amber-500" />
+                                      <span>Data Combinada / 1º Vencimento: {item.dueDate.split('-').reverse().join('/')}</span>
+                                    </span>
+                                  )}
+                                  {item.monthKey && (
+                                    <span className="flex items-center gap-1 font-mono text-sky-400 font-bold">
+                                      <Calendar className="w-3 h-3 text-sky-400" />
+                                      <span>Mês de Pagamento: {formatMonthKey(item.monthKey)}</span>
                                     </span>
                                   )}
                                   <span className="flex items-center gap-1">

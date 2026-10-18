@@ -569,7 +569,10 @@ export default function DashboardAnalytics({
     const mIncome = settings?.monthlyIncome?.[mKey] || settings?.income || 0;
     const mBalance = settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
     const mExtra = settings?.extras?.[mKey] ?? 0;
-    const totalInflows = mIncome + mBalance + mExtra;
+    const mCobranca = (settings?.cobrancas || [])
+      .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === mKey || (!c.paidMonthKey && c.monthKey === mKey)))
+      .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0);
+    const totalInflows = mIncome + mBalance + mExtra + mCobranca;
     if (spentMonth > totalInflows && totalInflows > 0) {
       deficitMonthsCount++;
     }
@@ -785,7 +788,10 @@ export default function DashboardAnalytics({
     const mIncome = settings?.monthlyIncome?.[mKey] || settings?.income || 0;
     const mBalance = settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
     const mExtra = settings?.extras?.[mKey] ?? 0;
-    const totalInflows = mIncome + mBalance + mExtra;
+    const mCobranca = (settings?.cobrancas || [])
+      .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === mKey || (!c.paidMonthKey && c.monthKey === mKey)))
+      .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0);
+    const totalInflows = mIncome + mBalance + mExtra + mCobranca;
     const leftoverMargin = totalInflows - spent;
 
     return {
@@ -827,7 +833,10 @@ export default function DashboardAnalytics({
   const prevIncome = settings?.monthlyIncome?.[prevMonthKey] || settings?.income || 0;
   const prevBalanceOld = settings?.monthlyBalance?.[prevMonthKey] || settings?.balance || 0;
   const prevExtra = settings?.extras?.[prevMonthKey] || 0;
-  const prevTotalAvailable = prevIncome + prevBalanceOld + prevExtra;
+  const prevCobranca = (settings?.cobrancas || [])
+    .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === prevMonthKey || (!c.paidMonthKey && c.monthKey === prevMonthKey)))
+    .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0);
+  const prevTotalAvailable = prevIncome + prevBalanceOld + prevExtra + prevCobranca;
   const prevLeftover = prevTotalAvailable - prevSpent;
 
   // Current month stats copy for clarity

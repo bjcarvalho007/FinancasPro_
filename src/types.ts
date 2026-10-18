@@ -62,6 +62,21 @@ export interface ExtraEarning {
   createdAt?: string;
 }
 
+export interface CobrancaItem {
+  id: string;
+  debtorName: string; // Nome da pessoa que deve
+  description?: string; // Motivo / descrição da dívida
+  amount: number; // Valor da cobrança
+  dueDate?: string; // Data combinada de pagamento (YYYY-MM-DD)
+  monthKey: string; // Mês de competência (YYYY-MM)
+  status: 'pendente' | 'pago'; // Status
+  paidAt?: string; // Data em que foi pago (YYYY-MM-DD)
+  paidMonthKey?: string; // Mês em que foi recebido (YYYY-MM) -> somado na renda deste mês!
+  paidAmount?: number; // Valor recebido
+  notes?: string;
+  createdAt: string;
+}
+
 export interface Setting {
   userId: string;
   currency: 'BRL' | 'USD' | 'EUR';
@@ -72,6 +87,7 @@ export interface Setting {
   monthlyBalance?: Record<string, number>; // monthKey -> monthly starting balance
   extras?: Record<string, number>; // monthKey -> sum of extra earnings
   extraEarnings?: ExtraEarning[];
+  cobrancas?: CobrancaItem[];
   emailAlerts?: boolean;
   whatsappAlerts?: boolean;
   alertEmail?: string;

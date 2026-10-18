@@ -90,7 +90,8 @@ service cloud.firestore {
         && (!data.keys().hasAny(['extras']) || data.extras is map)
         && (!data.keys().hasAny(['monthlyIncome']) || data.monthlyIncome is map)
         && (!data.keys().hasAny(['monthlyBalance']) || data.monthlyBalance is map)
-        && (!data.keys().hasAny(['extraEarnings']) || data.extraEarnings is list);
+        && (!data.keys().hasAny(['extraEarnings']) || data.extraEarnings is list)
+        && (!data.keys().hasAny(['cobrancas']) || data.cobrancas is list);
     }
 
     function isValidNotification(data) {

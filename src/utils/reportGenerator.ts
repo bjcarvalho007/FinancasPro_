@@ -111,6 +111,10 @@ export const exportPremiumPDF = ({
         mIncome += settings?.monthlyIncome?.[mKey] || settings?.income || 0;
         mBalance += settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
         mExtra += settings?.extras?.[mKey] ?? 0;
+        const cob = (settings?.cobrancas || [])
+          .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === mKey || (!c.paidMonthKey && c.monthKey === mKey)))
+          .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0);
+        mExtra += cob;
       });
     } else {
       mIncome = baseIncome;
@@ -119,7 +123,11 @@ export const exportPremiumPDF = ({
   } else {
     mIncome = settings?.monthlyIncome?.[selectedMonthKey] || settings?.income || baseIncome;
     mBalance = settings?.monthlyBalance?.[selectedMonthKey] || settings?.balance || baseBalance;
-    mExtra = settings?.extras?.[selectedMonthKey] ?? 0;
+    mExtra = (settings?.extras?.[selectedMonthKey] ?? 0) + (
+      (settings?.cobrancas || [])
+        .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === selectedMonthKey || (!c.paidMonthKey && c.monthKey === selectedMonthKey)))
+        .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0)
+    );
   }
 
   const totalInflow = mIncome + mBalance + mExtra;
@@ -644,6 +652,10 @@ export const exportPremiumSpreadsheet = ({
         mIncome += settings?.monthlyIncome?.[mKey] || settings?.income || 0;
         mBalance += settings?.monthlyBalance?.[mKey] || settings?.balance || 0;
         mExtra += settings?.extras?.[mKey] ?? 0;
+        const cob = (settings?.cobrancas || [])
+          .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === mKey || (!c.paidMonthKey && c.monthKey === mKey)))
+          .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0);
+        mExtra += cob;
       });
     } else {
       mIncome = baseIncome;
@@ -652,7 +664,11 @@ export const exportPremiumSpreadsheet = ({
   } else {
     mIncome = settings?.monthlyIncome?.[selectedMonthKey] || settings?.income || baseIncome;
     mBalance = settings?.monthlyBalance?.[selectedMonthKey] || settings?.balance || baseBalance;
-    mExtra = settings?.extras?.[selectedMonthKey] ?? 0;
+    mExtra = (settings?.extras?.[selectedMonthKey] ?? 0) + (
+      (settings?.cobrancas || [])
+        .filter((c: any) => c.status === 'pago' && (c.paidMonthKey === selectedMonthKey || (!c.paidMonthKey && c.monthKey === selectedMonthKey)))
+        .reduce((sum: number, c: any) => sum + (c.paidAmount || c.amount || 0), 0)
+    );
   }
 
   const totalInflow = mIncome + mBalance + mExtra;

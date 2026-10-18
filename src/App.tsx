@@ -16,7 +16,7 @@ import {
   getDocFromServer,
   updateDoc
 } from 'firebase/firestore';
-import { Transaction, Category, Goal, Setting, AppNotification, ExtraEarning, ExtraGastoHistoryItem } from './types';
+import { Transaction, Category, Goal, Setting, AppNotification, ExtraEarning, ExtraGastoHistoryItem, CobrancaItem } from './types';
 import AuthScreen from './components/AuthScreen';
 import SplashLoader from './components/SplashLoader';
 import TransactionFormModal from './components/TransactionFormModal';
@@ -26,6 +26,7 @@ import SettingsPanel from './components/SettingsPanel';
 import OnboardingTutorial from './components/OnboardingTutorial';
 import ExtraEarningsManager from './components/ExtraEarningsManager';
 import AdminPanel from './components/AdminPanel';
+import GanhosModal from './components/GanhosModal';
 import { 
   TrendingUp, 
   Plus, 
@@ -1862,6 +1863,127 @@ function MainApp() {
     }
   };
 
+  const handleSaveMonthlyIncome = async (newIncome: number, newBalance?: number, applyToFuture?: boolean) => {
+    if (!user || !settings) return;
+    const path = `settings/${user.uid}`;
+    try {
+      const updatedMonthlyIncome = { ...(settings.monthlyIncome || {}), [currentMonthKey]: newIncome };
+      const updatedMonthlyBalance = { ...(settings.monthlyBalance || {}) };
+      if (newBalance !== undefined) {
+        updatedMonthlyBalance[currentMonthKey] = newBalance;
+      }
+
+      if (applyToFuture) {
+        const [yearStr, monthStr] = currentMonthKey.split('-');
+        const y = parseInt(yearStr, 10);
+        const m = parseInt(monthStr, 10);
+        for (let i = m + 1; i <= 12; i++) {
+          const nextKey = `${y}-${String(i).padStart(2, '0')}`;
+          updatedMonthlyIncome[nextKey] = newIncome;
+        }
+      }
+
+      await updateDoc(doc(db, 'settings', user.uid), {
+        monthlyIncome: updatedMonthlyIncome,
+        monthlyBalance: updatedMonthlyBalance,
+        income: newIncome,
+        ...(newBalance !== undefined ? { balance: newBalance } : {})
+      });
+      triggerToast('Renda do mês atualizada com sucesso!', 'success');
+      setIsIncomeOpen(false);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleSaveMonthlyIncomeForMonth = async (targetMonthKey: string, newIncome: number, newBalance?: number) => {
+    if (!user || !settings) return;
+    const path = `settings/${user.uid}`;
+    try {
+      const updatedMonthlyIncome = { ...(settings.monthlyIncome || {}), [targetMonthKey]: newIncome };
+      const updatedMonthlyBalance = { ...(settings.monthlyBalance || {}) };
+      if (newBalance !== undefined) {
+        updatedMonthlyBalance[targetMonthKey] = newBalance;
+      }
+      await updateDoc(doc(db, 'settings', user.uid), {
+        monthlyIncome: updatedMonthlyIncome,
+        monthlyBalance: updatedMonthlyBalance
+      });
+      triggerToast(`Renda de ${targetMonthKey} atualizada!`, 'success');
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleAddCobranca = async (cobrancaData: Omit<CobrancaItem, 'id' | 'createdAt'>) => {
+    if (!user || !settings) return;
+    const path = `settings/${user.uid}`;
+    const newCobranca: CobrancaItem = {
+      ...cobrancaData,
+      id: `cob_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      createdAt: new Date().toISOString()
+    };
+    const currentList = settings.cobrancas || [];
+    const updatedList = [newCobranca, ...currentList];
+    try {
+      await updateDoc(doc(db, 'settings', user.uid), {
+        cobrancas: updatedList
+      });
+      triggerToast(`Cobrança de ${cobrancaData.debtorName} cadastrada!`, 'success');
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleToggleCobrancaStatus = async (id: string, targetPaidMonthKey?: string) => {
+    if (!user || !settings) return;
+    const path = `settings/${user.uid}`;
+    const currentList = settings.cobrancas || [];
+    const itemIndex = currentList.findIndex(c => c.id === id);
+    if (itemIndex === -1) return;
+
+    const item = currentList[itemIndex];
+    const willBePaid = item.status !== 'pago';
+    const updatedItem: CobrancaItem = {
+      ...item,
+      status: willBePaid ? 'pago' : 'pendente',
+      paidAt: willBePaid ? new Date().toISOString().split('T')[0] : undefined,
+      paidMonthKey: willBePaid ? (targetPaidMonthKey || currentMonthKey) : undefined,
+      paidAmount: willBePaid ? (item.paidAmount || item.amount) : undefined
+    };
+
+    const updatedList = [...currentList];
+    updatedList[itemIndex] = updatedItem;
+
+    try {
+      await updateDoc(doc(db, 'settings', user.uid), {
+        cobrancas: updatedList
+      });
+      if (willBePaid) {
+        triggerToast(`Recebimento de ${item.debtorName} confirmado! Valor somado na renda do mês.`, 'success');
+      } else {
+        triggerToast(`Cobrança de ${item.debtorName} reaberta como pendente.`, 'warning');
+      }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleDeleteCobranca = async (id: string) => {
+    if (!user || !settings) return;
+    const path = `settings/${user.uid}`;
+    const currentList = settings.cobrancas || [];
+    const updatedList = currentList.filter(c => c.id !== id);
+    try {
+      await updateDoc(doc(db, 'settings', user.uid), {
+        cobrancas: updatedList
+      });
+      triggerToast('Cobrança removida com sucesso!', 'success');
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  };
+
   // Standard category creating via modal callback
   const handleCreateCustomCategory = async (icon: string, label: string) => {
     if (!user) return;
@@ -2651,9 +2773,17 @@ function MainApp() {
   const inc = settings?.monthlyIncome?.[currentMonthKey] || settings?.income || 0;
   const bal = settings?.monthlyBalance?.[currentMonthKey] || settings?.balance || 0;
   const ext = settings?.extras?.[currentMonthKey] || 0;
+
+  // Cobranças pagas no mês corrente (somadas à renda deste mês)
+  const cobrancasRecebidasNoMes = useMemo(() => {
+    const list = settings?.cobrancas || [];
+    return list
+      .filter(c => c.status === 'pago' && (c.paidMonthKey === currentMonthKey || (!c.paidMonthKey && c.monthKey === currentMonthKey)))
+      .reduce((sum, c) => sum + (c.paidAmount || c.amount || 0), 0);
+  }, [settings?.cobrancas, currentMonthKey]);
   
-  // Total funds active
-  const totalInflowsSum = inc + bal + ext;
+  // Total funds active (Renda base + Reserva + Ganhos Extras + Cobranças Pagas)
+  const totalInflowsSum = inc + bal + ext + cobrancasRecebidasNoMes;
 
   const totalSpentInMonth = activeMonthTransactions.reduce((sum, t) => sum + t.amount, 0);
   const totalPaidInMonth = activeMonthTransactions.reduce((sum, t) => sum + (t?.paid_amount || 0), 0);
@@ -5410,116 +5540,22 @@ function MainApp() {
         </AnimatePresence>
       )}
 
-      {/* Income Adjustment Overlay Modal configuration */}
-      {isIncomeOpen && (
-        <AnimatePresence>
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsIncomeOpen(false)}
-              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
-            />
-            
-            <motion.div
-              initial={{ scale: 0.95, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 20 }}
-              className="bg-[#0f1524] border border-white/10 w-full max-w-4xl rounded-3xl p-6 md:p-8 shadow-2xl relative z-10 space-y-4 max-h-[90vh] overflow-y-auto"
-            >
-              <div>
-                <h4 className="font-display font-extrabold text-base text-white uppercase tracking-wider mb-1">💸 {t('ganhosCompetencia')}</h4>
-                <p className="text-xs text-slate-400">{t('gerenciarGanhos')}</p>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
-                {/* Col 1: Standard configs */}
-                <div className="lg:col-span-5 space-y-4">
-                  <div className="p-4 bg-slate-950/40 border border-white/5 rounded-2xl space-y-3">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t('configuracoesBase', 'Configurações Base')}</div>
-                    
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">{t('rendaMensalDoMes', 'Renda Mensal do Mês')}</label>
-                      <input
-                        id="income-modal-input"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="R$ 0,00"
-                        value={tempIncomeStr}
-                        onChange={(e) => setTempIncomeStr(handleMaskMoney(e.target.value))}
-                        className="w-full bg-slate-950/60 border border-white/5 focus:border-indigo-500 text-slate-100 text-xs px-4 py-3 rounded-xl font-mono focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest mb-1">{t('reservaComercialMaos', 'Reserva / Dinheiro em Mãos')}</label>
-                      <input
-                        id="balance-modal-input"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="R$ 0,00"
-                        value={tempBalanceStr}
-                        onChange={(e) => setTempBalanceStr(handleMaskMoney(e.target.value))}
-                        className="w-full bg-slate-950/60 border border-white/5 focus:border-indigo-500 text-slate-100 text-xs px-4 py-3 rounded-xl font-mono focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-widest">Soma Ganhos Extras</label>
-                        <span className="text-[8px] bg-emerald-500/15 text-emerald-400 font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider">Calculadora</span>
-                      </div>
-                      <input
-                        id="extra-modal-input"
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="R$ 0,00"
-                        value={tempExtraStr}
-                        onChange={(e) => setTempExtraStr(handleMaskMoney(e.target.value))}
-                        className="w-full bg-slate-950/40 border border-white/5 focus:border-indigo-500 text-slate-400 text-xs px-4 py-3 rounded-xl font-mono focus:outline-none"
-                        disabled
-                      />
-                      <p className="text-[8.5px] text-slate-500 leading-relaxed mt-1.5">
-                        {t('somaAtualizadaAutomatica', 'Esta soma é atualizada de forma automática ao preencher/remover itens do histórico ao lado.')}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      id="income-modal-save-btn"
-                      onClick={handleSaveIncomeConfigs}
-                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
-                    >
-                      Salvar Outros Confis
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsIncomeOpen(false)}
-                      className="px-4 py-3 rounded-xl bg-slate-900 border border-white/10 text-slate-450 hover:text-white text-[11px] font-bold cursor-pointer"
-                    >
-                      Voltar
-                    </button>
-                  </div>
-                </div>
-
-                {/* Col 2: Extras detailed history manager */}
-                <div className="lg:col-span-7">
-                  <ExtraEarningsManager
-                    currentMonthKey={currentMonthKey}
-                    extraEarnings={settings?.extraEarnings || []}
-                    currentCurrency={settings?.currency || 'BRL'}
-                    onAddEarning={handleAddExtraEarning}
-                    onDeleteEarning={handleDeleteExtraEarning}
-                    showToast={triggerToast}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </AnimatePresence>
-      )}
+      {/* Central de Ganhos: Renda Mensal, Ganhos Extras e Cobranças */}
+      <GanhosModal
+        isOpen={isIncomeOpen}
+        onClose={() => setIsIncomeOpen(false)}
+        currentMonthKey={currentMonthKey}
+        settings={settings}
+        theme={theme}
+        onSaveMonthlyIncome={handleSaveMonthlyIncome}
+        onSaveMonthlyIncomeForMonth={handleSaveMonthlyIncomeForMonth}
+        onAddExtraEarning={handleAddExtraEarning}
+        onDeleteExtraEarning={handleDeleteExtraEarning}
+        onAddCobranca={handleAddCobranca}
+        onToggleCobrancaStatus={handleToggleCobrancaStatus}
+        onDeleteCobranca={handleDeleteCobranca}
+        showToast={triggerToast}
+      />
 
       {/* Logout Elegant Interactive Alert Modal */}
       {isLogoutOpen && (

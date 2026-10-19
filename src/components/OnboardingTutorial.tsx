@@ -17,7 +17,15 @@ import {
   Bell, 
   MessageCircle,
   BookOpen,
-  ListOrdered
+  ListOrdered,
+  Wallet,
+  Users,
+  Percent,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  Sparkle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -26,12 +34,31 @@ interface OnboardingTutorialProps {
   isOpen: boolean;
   onClose: () => void;
   onOpen: () => void;
+  initialView?: 'step_by_step' | 'summary' | 'faq';
 }
 
-export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: OnboardingTutorialProps) {
+export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen, initialView }: OnboardingTutorialProps) {
   const { t } = useLanguage();
   const [currentStep, setCurrentStep] = useState(0);
-  const [activeView, setActiveView] = useState<'step_by_step' | 'summary'>('step_by_step');
+  const [activeView, setActiveView] = useState<'step_by_step' | 'summary' | 'faq'>(initialView || 'step_by_step');
+  const [expandedFaq, setExpandedFaq] = useState<Record<string, boolean>>({
+    cobrancas_ambientes: true,
+    cobrancas_parcelas: true,
+    cobrancas_competencia: true,
+    cobrancas_datas: false,
+    sobra_caixa: false,
+    contas_fixas: false
+  });
+
+  React.useEffect(() => {
+    if (initialView && isOpen) {
+      setActiveView(initialView);
+    }
+  }, [initialView, isOpen]);
+
+  const toggleFaq = (id: string) => {
+    setExpandedFaq(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleFinish = () => {
     localStorage.setItem('finançaspro_tutorial_seen_v2', 'true');
@@ -50,13 +77,13 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
       tip: 'O sistema calcula automaticamente a sua sobra real de dinheiro somando suas rendas e subtraindo todas as suas contas fixas, gastos e parcelas do mês.'
     },
     {
-      title: 'Passo 1: Ganhos, Salário e Saldo',
-      subtitle: 'Defina o seu ponto de partida',
+      title: 'Passo 1: Ganhos, Salário e Cobranças a Receber',
+      subtitle: 'Defina seu ponto de partida e gerencie quem te deve',
       icon: <DollarSign className="w-9 h-9 text-emerald-400" />,
-      description: 'No botão "Ganhos" (no topo da tela), informe sua Renda/Salário mensal e o Saldo Inicial (dinheiro que sobrou do mês anterior ou está na conta). Você também pode registrar rendimentos Extras sempre que receber valores pontuais.',
+      description: 'No botão "Ganhos" (no topo da tela), você tem 3 ambientes integrados: 1) Renda Mensal (seu salário ou renda base de cada mês e o saldo inicial), 2) Ganhos Extras (rendas avulsas pontuais com histórico), e 3) Cobranças (Valores a Receber), onde você cadastra quem deve para você com parcelas, juros e baixa mensal.',
       color: "from-teal-500/20 to-green-500/5",
       badge: 'Passo 1 de 7',
-      tip: 'Configure seu salário uma vez e o sistema manterá sua renda projetada mensalmente para calcular sua sobra líquida com precisão.'
+      tip: 'Ao registrar o pagamento de uma cobrança no mês, esse valor é somado automaticamente na renda daquele mês (competência), aumentando a sua sobra real de caixa!'
     },
     {
       title: 'Passo 2: Contas Fixas Recorrentes',
@@ -198,23 +225,33 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                   <div className="flex p-0.5 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5">
                     <button
                       onClick={() => setActiveView('step_by_step')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
                         activeView === 'step_by_step'
                           ? 'bg-emerald-500 text-white shadow-sm'
                           : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                       }`}
                     >
-                      <ListOrdered className="w-3 h-3" /> Passo a Passo
+                      <ListOrdered className="w-3 h-3" /> Guia
                     </button>
                     <button
                       onClick={() => setActiveView('summary')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
                         activeView === 'summary'
                           ? 'bg-emerald-500 text-white shadow-sm'
                           : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                       }`}
                     >
                       <BookOpen className="w-3 h-3" /> Resumo
+                    </button>
+                    <button
+                      onClick={() => setActiveView('faq')}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        activeView === 'faq'
+                          ? 'bg-emerald-500 text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                      }`}
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-300" /> FAQ & Novidades
                     </button>
                   </div>
 
@@ -380,8 +417,8 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                         1
                       </div>
                       <div className="text-[11.5px] leading-normal">
-                        <strong className="text-emerald-500 block">Rendas & Ganhos:</strong>
-                        Cadastre seu salário e saldo inicial no botão <strong>Ganhos</strong> no topo para ter a base de cálculo exata.
+                        <strong className="text-emerald-500 block">Rendas, Ganhos & Cobranças:</strong>
+                        Cadastre seu salário, saldo inicial, rendas extras e <strong>cobranças a receber</strong> (com parcelas e juros). Os recebimentos são somados automaticamente na renda do mês escolhido.
                       </div>
                     </div>
 
@@ -443,6 +480,249 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen }: O
                         <strong className="text-pink-500 block">Metas & Poupança:</strong>
                         Crie objetivos financeiros com prazos e acompanhe seus aportes até a realização de cada meta.
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <a
+                      href="https://wa.me/5563992092699?text=Olá!%20Preciso%20de%20ajuda%20ou%20suporte%20no%20FinançasPro."
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full h-10 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider transition-all shadow-md cursor-pointer"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Falar com Suporte no WhatsApp
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* View 3: Dedicated FAQ & Novidades Section */}
+              {activeView === 'faq' && (
+                <div className="pt-4 space-y-3.5 max-h-[60vh] overflow-y-auto pr-1">
+                  {/* Highlight Banner */}
+                  <div className={`p-4 rounded-2xl border relative overflow-hidden ${
+                    theme === 'light'
+                      ? 'bg-gradient-to-br from-amber-50 to-orange-50/50 border-amber-200 text-amber-950'
+                      : 'bg-gradient-to-br from-amber-500/10 to-orange-500/5 border-amber-500/20 text-amber-300'
+                  }`}>
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                      <Sparkles className="w-4 h-4" />
+                      <span>Novidades Recentes: Ganhos & Cobranças</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed mt-1 text-slate-600 dark:text-slate-300">
+                      Entenda como funcionam os novos <strong>Ambientes de Ganhos</strong>, o sistema de <strong>Cobranças Parceladas com Juros</strong> e a <strong>Soma Automática na Renda do Mês (Competência)</strong>.
+                    </p>
+                  </div>
+
+                  {/* FAQ Accordion List */}
+                  <div className="space-y-2.5">
+                    {/* Item 1 */}
+                    <div className={`rounded-2xl border transition-all ${
+                      theme === 'light' ? 'bg-white border-slate-200' : 'bg-white/5 border-white/5'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => toggleFaq('cobrancas_ambientes')}
+                        className="w-full p-3.5 flex items-center justify-between text-left cursor-pointer gap-2"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                            <Wallet className="w-4 h-4" />
+                          </div>
+                          <span className="text-xs font-bold leading-tight">
+                            Quais são os 3 ambientes dentro de Ganhos?
+                          </span>
+                        </div>
+                        {expandedFaq.cobrancas_ambientes ? (
+                          <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                        )}
+                      </button>
+                      {expandedFaq.cobrancas_ambientes && (
+                        <div className="px-3.5 pb-3.5 pt-0 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-white/5 mt-1 space-y-1.5">
+                          <p>Ao clicar no botão <strong>Ganhos</strong> no topo da tela, você tem 3 visões especializadas:</p>
+                          <ul className="list-disc pl-4 space-y-1">
+                            <li><strong>Renda Mensal:</strong> Seu salário ou renda fixa de cada mês e o saldo inicial, com histórico mensal e geral.</li>
+                            <li><strong>Ganhos Extras:</strong> Rendimentos pontuais (comissões, freelancers, vendas avulsas), com histórico mensal e geral.</li>
+                            <li><strong>Cobranças (Valores a Receber):</strong> Gestão completa de quem deve dinheiro para você, permitindo parcelar, aplicar juros e registrar baixas mês a mês.</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Item 2 */}
+                    <div className={`rounded-2xl border transition-all ${
+                      theme === 'light' ? 'bg-white border-slate-200' : 'bg-white/5 border-white/5'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => toggleFaq('cobrancas_parcelas')}
+                        className="w-full p-3.5 flex items-center justify-between text-left cursor-pointer gap-2"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                            <Users className="w-4 h-4" />
+                          </div>
+                          <span className="text-xs font-bold leading-tight">
+                            Como cadastrar uma cobrança parcelada com juros?
+                          </span>
+                        </div>
+                        {expandedFaq.cobrancas_parcelas ? (
+                          <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                        )}
+                      </button>
+                      {expandedFaq.cobrancas_parcelas && (
+                        <div className="px-3.5 pb-3.5 pt-0 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-white/5 mt-1 space-y-1.5">
+                          <p>No ambiente de Cobranças, clique em <strong>+ Nova Cobrança</strong>:</p>
+                          <ul className="list-disc pl-4 space-y-1">
+                            <li>Informe o <strong>Nome da Pessoa que Deve</strong> e o motivo da dívida.</li>
+                            <li>Digite o <strong>Total Devido (valor principal)</strong>, ex: R$ 2.500,00.</li>
+                            <li>Escolha a <strong>Quantidade de Parcelas</strong> (1x até 72x).</li>
+                            <li>Defina se haverá cobrança de <strong>Juros (%)</strong> ou se será sem juros (0%).</li>
+                            <li>O sistema calcula na hora o valor de cada parcela mensal e o montante final.</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Item 3 */}
+                    <div className={`rounded-2xl border transition-all ${
+                      theme === 'light' ? 'bg-white border-slate-200' : 'bg-white/5 border-white/5'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => toggleFaq('cobrancas_datas')}
+                        className="w-full p-3.5 flex items-center justify-between text-left cursor-pointer gap-2"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-indigo-500/15 text-indigo-500 flex items-center justify-center shrink-0">
+                            <Calendar className="w-4 h-4" />
+                          </div>
+                          <span className="text-xs font-bold leading-tight">
+                            Para que servem a Data de Início, Vencimento e Mês de Pagamento?
+                          </span>
+                        </div>
+                        {expandedFaq.cobrancas_datas ? (
+                          <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                        )}
+                      </button>
+                      {expandedFaq.cobrancas_datas && (
+                        <div className="px-3.5 pb-3.5 pt-0 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-white/5 mt-1 space-y-1.5">
+                          <ul className="list-disc pl-4 space-y-1">
+                            <li><strong>Data de Início:</strong> Registra a data em que o acordo ou empréstimo começou.</li>
+                            <li><strong>Data Combinada / 1º Vencimento:</strong> O dia acordado para o devedor pagar a primeira parcela.</li>
+                            <li><strong>Mês de Pagamento da Cobrança:</strong> Define a competência (mês) em que esse dinheiro entrará na sua renda mensal e na sua sobra de caixa.</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Item 4 */}
+                    <div className={`rounded-2xl border transition-all ${
+                      theme === 'light' ? 'bg-white border-slate-200' : 'bg-white/5 border-white/5'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => toggleFaq('cobrancas_competencia')}
+                        className="w-full p-3.5 flex items-center justify-between text-left cursor-pointer gap-2"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                            <TrendingUp className="w-4 h-4" />
+                          </div>
+                          <span className="text-xs font-bold leading-tight">
+                            Como o valor pago entra na renda do mês (Competência)?
+                          </span>
+                        </div>
+                        {expandedFaq.cobrancas_competencia ? (
+                          <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                        )}
+                      </button>
+                      {expandedFaq.cobrancas_competencia && (
+                        <div className="px-3.5 pb-3.5 pt-0 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-white/5 mt-1 space-y-1.5">
+                          <p>
+                            Quando você clica em <strong>Pagar Parcela</strong> e confirma o pagamento:
+                          </p>
+                          <ul className="list-disc pl-4 space-y-1">
+                            <li>O valor pago é <strong>somado instantaneamente na receita do mês escolhido</strong>, aumentando a sua Sobra de Caixa real no Dashboard!</li>
+                            <li>Se a dívida for de R$ 2.500 e a pessoa pagar R$ 500 no mês, o sistema abate esse valor e mantém os R$ 2.000 restantes para os meses seguintes.</li>
+                            <li>Você pode acompanhar todas as parcelas pagas clicando em <strong>Ver Histórico de Pagamentos</strong> no card da cobrança.</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Item 5 */}
+                    <div className={`rounded-2xl border transition-all ${
+                      theme === 'light' ? 'bg-white border-slate-200' : 'bg-white/5 border-white/5'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => toggleFaq('sobra_caixa')}
+                        className="w-full p-3.5 flex items-center justify-between text-left cursor-pointer gap-2"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-violet-500/15 text-violet-500 flex items-center justify-center shrink-0">
+                            <LayoutDashboard className="w-4 h-4" />
+                          </div>
+                          <span className="text-xs font-bold leading-tight">
+                            Como é calculada a Sobra Estimada no Dashboard?
+                          </span>
+                        </div>
+                        {expandedFaq.sobra_caixa ? (
+                          <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                        )}
+                      </button>
+                      {expandedFaq.sobra_caixa && (
+                        <div className="px-3.5 pb-3.5 pt-0 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-white/5 mt-1 space-y-1">
+                          <p>
+                            <strong>Sobra Estimada de Caixa</strong> = (Renda do Mês + Saldo Inicial + Ganhos Extras + Cobranças Recebidas no Mês) − (Contas Fixas + Gastos Variáveis + Parcelas de compras do mês).
+                          </p>
+                          <p>Isso garante previsibilidade absoluta sem precisar fazer contas de cabeça.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Item 6 */}
+                    <div className={`rounded-2xl border transition-all ${
+                      theme === 'light' ? 'bg-white border-slate-200' : 'bg-white/5 border-white/5'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => toggleFaq('contas_fixas')}
+                        className="w-full p-3.5 flex items-center justify-between text-left cursor-pointer gap-2"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-sky-500/15 text-sky-500 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="w-4 h-4" />
+                          </div>
+                          <span className="text-xs font-bold leading-tight">
+                            Preciso recadastrar minhas contas fixas todo mês?
+                          </span>
+                        </div>
+                        {expandedFaq.contas_fixas ? (
+                          <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                        )}
+                      </button>
+                      {expandedFaq.contas_fixas && (
+                        <div className="px-3.5 pb-3.5 pt-0 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 border-t border-slate-100 dark:border-white/5 mt-1">
+                          <p>
+                            Não! Basta cadastrar uma única vez. O FinançasPro replica automaticamente todas as contas fixas para todos os meses futuros. Quando você paga no mês, basta marcar como pago.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 

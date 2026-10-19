@@ -65,7 +65,10 @@ import {
   EyeOff,
   AlertTriangle,
   Smartphone,
-  RefreshCw
+  RefreshCw,
+  Wallet,
+  Users,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LANGUAGES, Language, useLanguage, LanguageProvider } from './utils/i18n';
@@ -1349,10 +1352,34 @@ function MainApp() {
     };
   }, [user]);
 
-  // Updates alert disabled on login per user preference
+  const [tutorialInitialView, setTutorialInitialView] = useState<'step_by_step' | 'summary' | 'faq'>('step_by_step');
+
+  // Novidades de Ganhos, Cobranças e Competências (exibido apenas UMA VEZ quando o cliente entrar)
   useEffect(() => {
+    if (!user) return;
+    const userKey = `novidades_ganhos_competencias_${user.uid}`;
+    const alreadySeen = localStorage.getItem(userKey);
+    if (!alreadySeen) {
+      const timer = setTimeout(() => {
+        setShowUpdateAlert(true);
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [user]);
+
+  const handleDismissUpdateAlert = () => {
+    if (user) {
+      localStorage.setItem(`novidades_ganhos_competencias_${user.uid}`, 'true');
+    }
+    localStorage.setItem('novidades_ganhos_competencias_v1_seen', 'true');
     setShowUpdateAlert(false);
-  }, []);
+  };
+
+  const handleOpenFaqFromUpdateAlert = () => {
+    handleDismissUpdateAlert();
+    setTutorialInitialView('faq');
+    setIsTutorialOpen(true);
+  };
 
   // Alert triggers relocated beneath activeMonthTransactions definition for dynamic virtual projection compatibility
 
@@ -6346,7 +6373,7 @@ function MainApp() {
         )}
       </AnimatePresence>
 
-      {/* Alert for new updates */}
+      {/* Alert for new updates: Ganhos, Cobranças e Competências (Aparece apenas uma vez) */}
       <AnimatePresence>
         {showUpdateAlert && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -6354,10 +6381,7 @@ function MainApp() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => {
-                setSessionClosedAlert(true);
-                setShowUpdateAlert(false);
-              }}
+              onClick={handleDismissUpdateAlert}
               className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-45"
             />
             
@@ -6365,120 +6389,104 @@ function MainApp() {
               initial={{ scale: 0.95, y: 20, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.95, y: 20, opacity: 0 }}
-              className={`w-full max-w-lg rounded-3xl p-6 md:p-8 shadow-2xl relative z-50 border transition-all overflow-hidden ${
+              className={`w-full max-w-lg rounded-3xl p-6 md:p-7 shadow-2xl relative z-50 border transition-all overflow-hidden ${
                 theme === 'light'
                   ? 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
                   : 'bg-[#0b0f1a] border-white/10 text-white shadow-black/80'
               }`}
             >
               {/* Background accent decorations */}
-              <div className="absolute -top-16 -right-16 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -top-16 -right-16 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute -bottom-16 -left-16 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
  
               <div className="flex items-start justify-between pb-4 border-b border-dashed border-slate-200 dark:border-white/5 relative z-10">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-500 shrink-0">
-                    <Sparkles className="w-5 h-5" />
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500/20 to-emerald-500/20 flex items-center justify-center text-amber-400 shrink-0 border border-amber-500/30">
+                    <Sparkles className="w-5 h-5 text-amber-400" />
                   </div>
                   <div>
                     <h3 className="font-display font-black text-base md:text-lg tracking-tight leading-none text-slate-900 dark:text-white">
-                      Novas Atualizações! 🚀
+                      Novidades no FinançasPro! ✨
                     </h3>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-wider mt-1.5">
-                      FinançasPro Premium • Atualizado
+                    <p className="text-[10.5px] text-amber-500 font-extrabold uppercase tracking-wider mt-1.5 flex items-center gap-1">
+                      <span>Módulo de Ganhos, Cobranças & Competências</span>
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    setSessionClosedAlert(true);
-                    setShowUpdateAlert(false);
-                  }}
+                  onClick={handleDismissUpdateAlert}
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer border-none bg-transparent ${
                     theme === 'light' ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-white/5 text-slate-400'
                   }`}
-                  title="Fechar temporariamente"
+                  title="Fechar"
                 >
                   ✕
                 </button>
               </div>
 
               {/* Updates List */}
-              <div className="space-y-4 pt-5 pb-6 text-left relative z-10 max-h-[60vh] overflow-y-auto pr-1">
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-                  Trabalhamos em melhorias contínuas para tornar a organização do seu caixa mais segura, integrada e inteligente. Veja as novidades implementadas nos módulos de parcelamento e cálculos:
+              <div className="space-y-3 pt-4 pb-5 text-left relative z-10 max-h-[58vh] overflow-y-auto pr-1">
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
+                  Confira as novas ferramentas adicionadas para você gerenciar sua renda mensal, rendas extras e valores a receber de terceiros com máxima facilidade:
                 </p>
 
-                <div className="space-y-3.5">
-                  <div className={`p-4 rounded-2xl border flex gap-3.5 transition-all ${
-                    theme === 'light' ? 'bg-indigo-50/40 border-indigo-100/70' : 'bg-indigo-500/5 border-indigo-500/10'
+                <div className="space-y-2.5">
+                  {/* Card 1: 3 Ambientes em Ganhos */}
+                  <div className={`p-3.5 rounded-2xl border flex gap-3 transition-all ${
+                    theme === 'light' ? 'bg-emerald-50/50 border-emerald-200/80' : 'bg-emerald-500/10 border-emerald-500/20'
                   }`}>
-                    <div className="w-8 h-8 rounded-xl bg-indigo-500/15 flex items-center justify-center text-indigo-500 shrink-0 mt-0.5">
-                      <CreditCard className="w-4.5 h-4.5" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                        Sincronização Avançada de Parcelas
-                      </h4>
-                      <p className="text-[11px] text-slate-550 dark:text-slate-300 font-medium leading-relaxed mt-1">
-                        Ao editar informações como <strong>nome, categoria ou dia de vencimento</strong> em uma parcela de qualquer mês, as atualizações são replicadas de forma inteligente para as parcelas futuras e para o modelo mestre.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className={`p-4 rounded-2xl border flex gap-3.5 transition-all ${
-                    theme === 'light' ? 'bg-emerald-50/40 border-emerald-100/70' : 'bg-emerald-500/5 border-emerald-500/10'
-                  }`}>
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-500 shrink-0 mt-0.5">
-                      <CheckCircle className="w-4.5 h-4.5" />
+                    <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <Wallet className="w-4.5 h-4.5 text-emerald-500" />
                     </div>
                     <div>
                       <h4 className="text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                        Valores Customizados Preservados
+                        3 Ambientes de Ganhos
                       </h4>
-                      <p className="text-[11px] text-slate-550 dark:text-slate-300 font-medium leading-relaxed mt-1">
-                        Edições manuais de valores de parcelas em meses individuais agora são <strong>preservadas integralmente</strong>. A abertura e o recálculo do editor de lançamentos não sobrescreverão mais seus ajustes pontuais.
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed mt-0.5">
+                        Ao clicar em <strong>Ganhos</strong>, você tem 3 visões: <strong>Renda Mensal</strong> (salário base e saldo inicial), <strong>Ganhos Extras</strong> (receitas avulsas) e <strong>Cobranças</strong> (valores a receber), todos com históricos mensais ou gerais.
                       </p>
                     </div>
                   </div>
 
-                  <div className={`p-4 rounded-2xl border flex gap-3.5 transition-all ${
-                    theme === 'light' ? 'bg-amber-50/40 border-amber-100/70' : 'bg-amber-500/5 border-amber-500/10'
+                  {/* Card 2: Cobranças Parceladas com Juros */}
+                  <div className={`p-3.5 rounded-2xl border flex gap-3 transition-all ${
+                    theme === 'light' ? 'bg-amber-50/50 border-amber-200/80' : 'bg-amber-500/10 border-amber-500/20'
                   }`}>
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-500 shrink-0 mt-0.5">
-                      <LayoutDashboard className="w-4.5 h-4.5" />
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 mt-0.5">
+                      <Users className="w-4.5 h-4.5" />
                     </div>
                     <div>
                       <h4 className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                        Distribuição de Gastos por Abas
+                        Cobranças Parceladas com Juros
                       </h4>
-                      <p className="text-[11px] text-slate-550 dark:text-slate-300 font-medium leading-relaxed mt-1">
-                        Veja em tempo real o rateio de <strong>Contas Fixas, Variáveis e Parcelados</strong> no Dashboard. Saiba na hora o peso de cada categoria e qual delas é a responsável por consumir mais o seu orçamento mensal.
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed mt-0.5">
+                        Cadastre quem te deve, valor total, parcelas (1x até 72x) e opção de juros (%). Selecione a <strong>Data de Início</strong>, a <strong>Data Combinada / 1º Vencimento</strong> e o <strong>Mês de Pagamento</strong>.
                       </p>
                     </div>
                   </div>
 
-                  <div className={`p-4 rounded-2xl border flex gap-3.5 transition-all ${
-                    theme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/40 border-white/5'
+                  {/* Card 3: Soma Automática na Renda do Mês */}
+                  <div className={`p-3.5 rounded-2xl border flex gap-3 transition-all ${
+                    theme === 'light' ? 'bg-indigo-50/50 border-indigo-200/80' : 'bg-indigo-500/10 border-indigo-500/20'
                   }`}>
-                    <div className="w-8 h-8 rounded-xl bg-slate-500/15 flex items-center justify-center text-slate-400 shrink-0 mt-0.5">
-                      <Zap className="w-4.5 h-4.5 text-indigo-500" />
+                    <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <TrendingUp className="w-4.5 h-4.5 text-indigo-500" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-755 dark:text-slate-300">
-                        Isolamento de Gastos Extras
+                      <h4 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                        Soma Automática na Renda do Mês
                       </h4>
-                      <p className="text-[11px] text-slate-550 dark:text-slate-300 font-medium leading-relaxed mt-1">
-                        A inclusão de "gastos extras" é somada somente no mês solicitado e mantida de forma isolada, evitando erros de duplicidade nas somas e projeções financeiras do Dashboard.
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed mt-0.5">
+                        Ao receber uma parcela no mês (ex: pagou R$ 500 de R$ 2.500), ela é <strong>somada na sua renda do mês</strong> aumentando sua sobra de caixa! O saldo devedor restante continua nos meses seguintes.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                  <p className="text-[10px] text-amber-650 dark:text-amber-400 font-medium">
-                    Este informativo ficará disponível por 2 dias a partir de hoje ou até você marcá-lo como lido.
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2">
+                  <HelpCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <p className="text-[10.5px] text-slate-600 dark:text-emerald-300 font-medium">
+                    Todas as dúvidas detalhadas e perguntas frequentes foram adicionadas na aba <strong>FAQ & Novidades</strong> (botão flutuante no canto inferior).
                   </p>
                 </div>
               </div>
@@ -6487,25 +6495,17 @@ function MainApp() {
               <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-slate-100 dark:border-white/5 relative z-10">
                 <button
                   type="button"
-                  onClick={() => {
-                    setSessionClosedAlert(true);
-                    setShowUpdateAlert(false);
-                  }}
-                  className="flex-1 py-3 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white font-bold text-xs uppercase tracking-wider rounded-2xl transition-all cursor-pointer text-center bg-transparent border border-slate-200 dark:border-white/10"
+                  onClick={handleOpenFaqFromUpdateAlert}
+                  className="flex-1 py-3 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white font-bold text-xs uppercase tracking-wider rounded-2xl transition-all cursor-pointer text-center bg-transparent border border-slate-200 dark:border-white/10"
                 >
-                  Fechar Temporariamente
+                  Ver no FAQ 📖
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (user) {
-                      localStorage.setItem(`update_alert_dismissed_${user.uid}`, 'true');
-                      setShowUpdateAlert(false);
-                    }
-                  }}
-                  className="flex-1 py-3.5 bg-indigo-650 hover:bg-indigo-600 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all cursor-pointer shadow-lg shadow-indigo-600/15 text-center border-none"
+                  onClick={handleDismissUpdateAlert}
+                  className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs uppercase tracking-wider rounded-2xl transition-all cursor-pointer shadow-lg shadow-emerald-500/20 text-center border-none"
                 >
-                  Marcar como Lido ✔
+                  Entendi, Começar Agora 🚀
                 </button>
               </div>
             </motion.div>
@@ -7005,6 +7005,7 @@ function MainApp() {
         isOpen={isTutorialOpen} 
         onClose={() => setIsTutorialOpen(false)} 
         onOpen={() => setIsTutorialOpen(true)} 
+        initialView={tutorialInitialView}
       />
     </div>
   );

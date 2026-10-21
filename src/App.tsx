@@ -4162,11 +4162,11 @@ function MainApp() {
             )}
           </button>
           
-          {/* Mobile 3-dots Menu Button (Celular) */}
+          {/* 3-dots Menu Button */}
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(true)}
-            className={`w-9.5 h-9.5 rounded-xl flex items-center justify-center transition-all cursor-pointer border shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.97] ${
+            className={`w-9.5 h-9.5 rounded-xl flex items-center justify-center transition-all cursor-pointer border shrink-0 hover:scale-[1.03] active:scale-[0.97] ${
               theme === 'light'
                 ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-2xs'
                 : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/10'
@@ -6081,8 +6081,7 @@ function MainApp() {
               { id: 'contas', val: t('fixas'), icon: Receipt },
               { id: 'variaveis', val: t('variados'), icon: Coins },
               { id: 'parcelas', val: t('parcelados'), icon: CreditCard },
-              { id: 'goals', val: t('metas'), icon: Target },
-              ...(isAdmin ? [{ id: 'admin', val: 'Admin', icon: Crown }] : [])
+              { id: 'goals', val: t('metas'), icon: Target }
             ];
             return tabs;
           })().map((tab) => {

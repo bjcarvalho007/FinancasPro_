@@ -69,6 +69,7 @@ import {
   Wallet,
   Users,
   HandCoins,
+  MoreVertical,
   HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -567,6 +568,7 @@ function MainApp() {
   // Income parameters custom configuration trigger modal
   const [isIncomeOpen, setIsIncomeOpen] = useState<boolean>(false);
   const [ganhosInitialEnv, setGanhosInitialEnv] = useState<'renda' | 'extras' | 'cobrancas'>('renda');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [isLogoutOpen, setIsLogoutOpen] = useState<boolean>(false);
   const [tempIncomeStr, setTempIncomeStr] = useState<string>('');
   const [tempBalanceStr, setTempBalanceStr] = useState<string>('');
@@ -4160,15 +4162,32 @@ function MainApp() {
             )}
           </button>
           
-          {/* Logout Button */}
+          {/* Mobile 3-dots Menu Button (Celular) */}
           <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen(true)}
+            className={`w-9.5 h-9.5 rounded-xl flex items-center justify-center transition-all cursor-pointer border shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.97] ${
+              theme === 'light'
+                ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-2xs'
+                : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/10'
+            }`}
+            title="Menu de Opções"
+            aria-label="Menu de Opções"
+          >
+            <MoreVertical className="w-4.5 h-4.5 text-slate-400 group-hover:text-white" />
+          </button>
+
+          {/* Desktop Logout Button (PC) */}
+          <button
+            type="button"
             onClick={handleUserLogout}
-            className={`w-9.5 h-9.5 rounded-xl flex items-center justify-center transition-all cursor-pointer border shrink-0 ${
+            className={`hidden lg:flex w-9.5 h-9.5 rounded-xl items-center justify-center transition-all cursor-pointer border shrink-0 hover:scale-[1.03] active:scale-[0.97] ${
               theme === 'light'
                 ? 'bg-rose-50 border-rose-200 hover:bg-rose-100 text-rose-600'
                 : 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/20 text-rose-400'
             }`}
             title={t('sair')}
+            aria-label={t('sair')}
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -5717,6 +5736,158 @@ function MainApp() {
         showToast={triggerToast}
       />
 
+      {/* Lateral Menu Drawer (Mobile & Responsive) */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-[70] flex justify-end">
+            {/* Backdrop overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs cursor-pointer"
+            />
+
+            {/* Sliding Panel */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className={`relative z-10 w-72 sm:w-80 max-w-[85vw] h-full flex flex-col shadow-2xl border-l backdrop-blur-2xl ${
+                theme === 'light'
+                  ? 'bg-white/98 border-slate-200 text-slate-900 shadow-slate-900/20'
+                  : 'bg-[#0b0f1a]/98 border-white/10 text-white shadow-black/80'
+              }`}
+            >
+              {/* Drawer Header */}
+              <div className="p-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2.5 truncate">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center text-indigo-400 font-black text-sm shrink-0">
+                    {userProfile?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'F'}
+                  </div>
+                  <div className="truncate text-left">
+                    <p className="text-xs font-bold truncate leading-tight">
+                      {userProfile?.name || user?.displayName || 'Minha Conta'}
+                    </p>
+                    <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                      {user?.email || ''}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer border shrink-0 ${
+                    theme === 'light'
+                      ? 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
+                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                  }`}
+                  aria-label="Fechar menu"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Drawer Content / List of Options */}
+              <div className="flex-1 p-3 space-y-2 overflow-y-auto">
+                <div className="px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-400 text-left">
+                  Menu Principal
+                </div>
+
+                {/* Option: Ajustes (Configurações) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('settings');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer text-left border ${
+                    activeTab === 'settings'
+                      ? theme === 'light'
+                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-xs'
+                        : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                      : theme === 'light'
+                      ? 'bg-slate-50/70 hover:bg-slate-100 text-slate-700 border-slate-200/60'
+                      : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/5'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                    activeTab === 'settings'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-indigo-500/15 text-indigo-400'
+                  }`}>
+                    <Settings className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 truncate">
+                    <span className="block text-xs font-extrabold">{t('ajustes', 'Ajustes')}</span>
+                    <span className="block text-[10px] font-normal text-slate-400 truncate">
+                      Preferências, idioma, tema e alertas
+                    </span>
+                  </div>
+                </button>
+
+                {/* Option: Admin Panel (Authorized only) */}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('admin');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer text-left border ${
+                      activeTab === 'admin'
+                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                        : theme === 'light'
+                        ? 'bg-slate-50/70 hover:bg-slate-100 text-slate-700 border-slate-200/60'
+                        : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/5'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+                      <Crown className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 truncate">
+                      <span className="block text-xs font-extrabold">Painel Admin</span>
+                      <span className="block text-[10px] font-normal text-slate-400 truncate">
+                        Gerenciamento administrativo
+                      </span>
+                    </div>
+                  </button>
+                )}
+              </div>
+
+              {/* Drawer Footer - Option: Sair do Sistema (Listed Last) */}
+              <div className="p-3 border-t border-slate-100 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handleUserLogout();
+                  }}
+                  className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer text-left border ${
+                    theme === 'light'
+                      ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                      : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/20'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center shrink-0">
+                    <LogOut className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 truncate">
+                    <span className="block text-xs font-black">{t('sair', 'Sair do Sistema')}</span>
+                    <span className="block text-[10px] font-normal opacity-70 truncate">
+                      Encerrar sessão com segurança
+                    </span>
+                  </div>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Logout Elegant Interactive Alert Modal */}
       {isLogoutOpen && (
         <AnimatePresence shadow-none="true">
@@ -5911,7 +6082,6 @@ function MainApp() {
               { id: 'variaveis', val: t('variados'), icon: Coins },
               { id: 'parcelas', val: t('parcelados'), icon: CreditCard },
               { id: 'goals', val: t('metas'), icon: Target },
-              { id: 'settings', val: t('ajustes'), icon: Settings },
               ...(isAdmin ? [{ id: 'admin', val: 'Admin', icon: Crown }] : [])
             ];
             return tabs;

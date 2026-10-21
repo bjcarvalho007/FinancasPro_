@@ -5,6 +5,7 @@ import {
   Wallet,
   TrendingUp,
   Users,
+  HandCoins,
   Plus,
   Trash2,
   Calendar,
@@ -599,7 +600,7 @@ export default function GanhosModal({
                     : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border-white/5'
                 }`}
               >
-                <Users className="w-4 h-4 shrink-0" />
+                <HandCoins className="w-4 h-4 shrink-0" />
                 <span className="truncate">Cobranças</span>
                 {totalCobrancasPendentes > 0 && (
                   <span className={`w-2 h-2 rounded-full ${activeEnv === 'cobrancas' ? 'bg-white' : 'bg-amber-400'} animate-pulse`} />

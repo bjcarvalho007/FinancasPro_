@@ -68,6 +68,7 @@ import {
   RefreshCw,
   Wallet,
   Users,
+  HandCoins,
   HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -4139,22 +4140,21 @@ function MainApp() {
             <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
           </button>
 
-          {/* Button: Cobranças (Valores a Receber) */}
+          {/* Button: Cobranças (Valores a Receber) - Icon-only */}
           <button
             type="button"
             onClick={handleOpenCobrancas}
-            className={`h-9.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border whitespace-nowrap shrink-0 shadow-2xs hover:scale-[1.02] active:scale-[0.98] ${
+            className={`w-9.5 h-9.5 rounded-xl relative flex items-center justify-center transition-all cursor-pointer border shrink-0 hover:scale-[1.03] active:scale-[0.97] ${
               theme === 'light' 
-                ? 'bg-amber-50 hover:bg-amber-100/90 border-amber-200/90 text-amber-800' 
-                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/25'
+                ? 'bg-amber-50 hover:bg-amber-100 border-amber-200/90 text-amber-700 shadow-2xs' 
+                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/25'
             }`}
             title="Cobranças (Valores a Receber)"
-            aria-label="Cobranças"
+            aria-label="Cobranças (Valores a Receber)"
           >
-            <Users className="w-4 h-4 text-amber-500 shrink-0" />
-            <span className="font-extrabold text-[11px] tracking-wide">Cobranças</span>
+            <HandCoins className="w-4.5 h-4.5 text-amber-500 shrink-0" />
             {pendingCobrancasCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-amber-500 text-slate-950 font-mono leading-none shadow-xs">
+              <span className="absolute -top-1 -right-1 min-w-[17px] h-4 px-1 rounded-full text-[9px] font-black bg-amber-500 text-slate-950 flex items-center justify-center font-mono leading-none shadow-xs ring-2 ring-white dark:ring-slate-950">
                 {pendingCobrancasCount}
               </span>
             )}

@@ -52,9 +52,10 @@ interface GanhosModalProps {
   onToggleCobrancaStatus: (id: string, targetPaidMonthKey?: string) => Promise<void>;
   onDeleteCobranca: (id: string) => Promise<void>;
   showToast: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
+  initialEnv?: GanhosEnvironment;
 }
 
-type GanhosEnvironment = 'renda' | 'extras' | 'cobrancas';
+export type GanhosEnvironment = 'renda' | 'extras' | 'cobrancas';
 
 export default function GanhosModal({
   isOpen,
@@ -62,6 +63,7 @@ export default function GanhosModal({
   currentMonthKey,
   settings,
   theme = 'dark',
+  initialEnv = 'renda',
   onSaveMonthlyIncome,
   onSaveMonthlyIncomeForMonth,
   onAddExtraEarning,
@@ -76,7 +78,13 @@ export default function GanhosModal({
   const { t, formatMonthKey, formatCurrency } = useLanguage();
 
   // Active Environment (Ambiente): 'renda' | 'extras' | 'cobrancas'
-  const [activeEnv, setActiveEnv] = useState<GanhosEnvironment>('renda');
+  const [activeEnv, setActiveEnv] = useState<GanhosEnvironment>(initialEnv || 'renda');
+
+  React.useEffect(() => {
+    if (isOpen && initialEnv) {
+      setActiveEnv(initialEnv);
+    }
+  }, [isOpen, initialEnv]);
 
   // Helpers for currency formatting and parsing
   const handleMaskMoney = (val: string): string => {

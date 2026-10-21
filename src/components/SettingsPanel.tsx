@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { Transaction } from '../types';
 import { auth, db } from '../firebase';
 import { adjustDueToMonthKey } from '../App';
-import { useLanguage } from '../utils/i18n';
+import { useLanguage, LANGUAGES } from '../utils/i18n';
 import { sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { collection, query, where, getDocs, setDoc, doc } from 'firebase/firestore';
-import { Settings, Download, Trash2, ShieldAlert, ShieldCheck, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle, HelpCircle } from 'lucide-react';
+import { Settings, Download, Trash2, ShieldAlert, ShieldCheck, KeyRound, DollarSign, Eye, RefreshCw, Sun, Moon, AlertTriangle, Bell, FileDown, FileSpreadsheet, Mail, Smartphone, Radio, ArrowRight, Check, AlertCircle, MessageCircle, HelpCircle, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportPremiumPDF, exportPremiumSpreadsheet } from '../utils/reportGenerator';
 
@@ -40,7 +40,7 @@ export default function SettingsPanel({
   settings = null,
   onOpenTutorial
 }: SettingsPanelProps) {
-  const { t, lang, formatCurrency } = useLanguage();
+  const { t, lang, setLang, formatCurrency } = useLanguage();
   const [incStr, setIncStr] = useState<string>(
     baseIncome > 0 ? formatCurrency(baseIncome) : ''
   );
@@ -763,6 +763,36 @@ export default function SettingsPanel({
                 <Sun className="w-3.5 h-3.5" /> Light
               </button>
             </div>
+          </div>
+
+          {/* Language selection */}
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold text-slate-300 block flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                {t('idioma', 'Idioma do Sistema')}
+              </span>
+              <span className="text-[10px] text-slate-500">{t('selecionarIdioma', 'Selecione o idioma de exibição do FinançasPro.')}</span>
+            </div>
+            <select
+              value={lang}
+              onChange={(e) => {
+                const newCode = e.target.value as any;
+                setLang(newCode);
+                const opt = LANGUAGES.find(l => l.code === newCode);
+                if (opt && onChangeCurrency) {
+                  onChangeCurrency(opt.currency);
+                }
+                showToast(`Idioma alterado para ${opt?.label || newCode}!`, 'success');
+              }}
+              className="bg-slate-900 border border-white/5 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl focus:outline-none cursor-pointer"
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.flag} {l.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Currency selection */}

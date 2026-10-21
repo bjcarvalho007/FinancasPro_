@@ -269,7 +269,6 @@ function MainApp() {
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
 
   const { lang, setLang, t, monthsList, formatMonthKey, formatCurrency: i18nFormatCurrency } = useLanguage();
-  const [isLangMenuOpen, setIsLangMenuOpen] = useState<boolean>(false);
 
   const handleMainScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const scrollTop = e.currentTarget.scrollTop;
@@ -566,6 +565,7 @@ function MainApp() {
 
   // Income parameters custom configuration trigger modal
   const [isIncomeOpen, setIsIncomeOpen] = useState<boolean>(false);
+  const [ganhosInitialEnv, setGanhosInitialEnv] = useState<'renda' | 'extras' | 'cobrancas'>('renda');
   const [isLogoutOpen, setIsLogoutOpen] = useState<boolean>(false);
   const [tempIncomeStr, setTempIncomeStr] = useState<string>('');
   const [tempBalanceStr, setTempBalanceStr] = useState<string>('');
@@ -1796,6 +1796,7 @@ function MainApp() {
 
   // Preset configuration and extras cumulative earnings save
   const handleOpenIncome = () => {
+    setGanhosInitialEnv('renda');
     const incVal = settings?.monthlyIncome?.[currentMonthKey] || settings?.income || 0;
     const balVal = settings?.monthlyBalance?.[currentMonthKey] || settings?.balance || 0;
     const ext = settings?.extras?.[currentMonthKey] || 0;
@@ -1805,6 +1806,22 @@ function MainApp() {
     setTempExtraStr(ext > 0 ? formatCurrency(ext) : '');
     setIsIncomeOpen(true);
   };
+
+  const handleOpenCobrancas = () => {
+    setGanhosInitialEnv('cobrancas');
+    const incVal = settings?.monthlyIncome?.[currentMonthKey] || settings?.income || 0;
+    const balVal = settings?.monthlyBalance?.[currentMonthKey] || settings?.balance || 0;
+    const ext = settings?.extras?.[currentMonthKey] || 0;
+
+    setTempIncomeStr(incVal > 0 ? formatCurrency(incVal) : '');
+    setTempBalanceStr(balVal > 0 ? formatCurrency(balVal) : '');
+    setTempExtraStr(ext > 0 ? formatCurrency(ext) : '');
+    setIsIncomeOpen(true);
+  };
+
+  const pendingCobrancasCount = useMemo(() => {
+    return (settings?.cobrancas || []).filter(c => c.status !== 'pago').length;
+  }, [settings?.cobrancas]);
 
   const handleSaveIncomeConfigs = async () => {
     if (!user || !settings) return;
@@ -4122,71 +4139,26 @@ function MainApp() {
             <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
           </button>
 
-          {/* Button: Language Selector */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
-              className={`h-9.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border whitespace-nowrap ${
-                theme === 'light' 
-                  ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700 shadow-2xs' 
-                  : 'bg-white/5 hover:bg-white/10 text-slate-200 border-white/10'
-              }`}
-              title={t('selecionarIdioma')}
-            >
-              <Globe className="w-4 h-4 text-indigo-400 shrink-0" />
-              <span className="text-xs leading-none">{LANGUAGES.find(l => l.code === lang)?.flag}</span>
-              <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
-            </button>
-
-            <AnimatePresence>
-              {isLangMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: 8 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: 8 }}
-                  transition={{ duration: 0.15 }}
-                  className={`absolute right-0 mt-2 w-52 rounded-2xl p-1.5 shadow-2xl border z-50 backdrop-blur-xl ${
-                    theme === 'light'
-                      ? 'bg-white/95 border-slate-200 shadow-slate-300/40 text-slate-800'
-                      : 'bg-slate-900/95 border-slate-700/80 shadow-black/60 text-white'
-                  }`}
-                >
-                  <div className="px-3 py-2 border-b border-white/10 mb-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
-                      🌐 {t('idioma')}
-                    </p>
-                  </div>
-                  {LANGUAGES.map((l) => (
-                    <button
-                      key={l.code}
-                      type="button"
-                      onClick={() => {
-                        setLang(l.code);
-                        setCurrency(l.currency);
-                        setIsLangMenuOpen(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        lang === l.code
-                          ? theme === 'light'
-                            ? 'bg-indigo-50 text-indigo-600 font-extrabold'
-                            : 'bg-indigo-500/20 text-indigo-300 font-extrabold border border-indigo-500/30'
-                          : theme === 'light'
-                            ? 'hover:bg-slate-100 text-slate-700'
-                            : 'hover:bg-white/5 text-slate-300'
-                      }`}
-                    >
-                      <span className="flex items-center gap-2.5">
-                        <span className="text-lg leading-none">{l.flag}</span>
-                        <span>{l.label}</span>
-                      </span>
-                      {lang === l.code && <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          {/* Button: Cobranças (Valores a Receber) */}
+          <button
+            type="button"
+            onClick={handleOpenCobrancas}
+            className={`h-9.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border whitespace-nowrap shrink-0 shadow-2xs hover:scale-[1.02] active:scale-[0.98] ${
+              theme === 'light' 
+                ? 'bg-amber-50 hover:bg-amber-100/90 border-amber-200/90 text-amber-800' 
+                : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/25'
+            }`}
+            title="Cobranças (Valores a Receber)"
+            aria-label="Cobranças"
+          >
+            <Users className="w-4 h-4 text-amber-500 shrink-0" />
+            <span className="font-extrabold text-[11px] tracking-wide">Cobranças</span>
+            {pendingCobrancasCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-amber-500 text-slate-950 font-mono leading-none shadow-xs">
+                {pendingCobrancasCount}
+              </span>
+            )}
+          </button>
           
           {/* Logout Button */}
           <button
@@ -5732,6 +5704,7 @@ function MainApp() {
         currentMonthKey={currentMonthKey}
         settings={settings}
         theme={theme}
+        initialEnv={ganhosInitialEnv}
         onSaveMonthlyIncome={handleSaveMonthlyIncome}
         onSaveMonthlyIncomeForMonth={handleSaveMonthlyIncomeForMonth}
         onAddExtraEarning={handleAddExtraEarning}

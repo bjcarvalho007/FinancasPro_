@@ -3584,9 +3584,10 @@ function MainApp() {
               {/* Plan Cards */}
               <div className="space-y-3">
                 {/* Plano 1 Mês: R$ 11,99 */}
-                <div
+                <button
+                  type="button"
                   onClick={() => setSelectedPaymentPlan('1_month')}
-                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative ${
+                  className={`w-full p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative ${
                     selectedPaymentPlan === '1_month'
                       ? 'bg-emerald-500/10 border-emerald-500/60 shadow-lg shadow-emerald-500/10'
                       : 'bg-slate-950/60 border-white/10 hover:border-emerald-500/30'
@@ -3594,7 +3595,7 @@ function MainApp() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-2.5">
-                      <div className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center transition-colors ${
+                      <div className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center transition-colors shrink-0 ${
                         selectedPaymentPlan === '1_month'
                           ? 'border-emerald-500 bg-emerald-500'
                           : 'border-slate-600 bg-transparent'
@@ -3606,19 +3607,9 @@ function MainApp() {
                           <span className="font-bold text-sm text-white">Plano 1 Mês</span>
                           <span className="text-[9px] bg-slate-800 text-slate-300 font-bold px-2 py-0.5 rounded-full border border-white/10">30 Dias</span>
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Acesso Premium completo por 1 mês
+                        <p className="text-[11px] text-slate-300 mt-0.5">
+                          Acesso Premium por 30 dias
                         </p>
-                        <a
-                          href="https://mpago.la/1SfRUJ2"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-[10px] text-emerald-400 hover:text-emerald-300 underline font-mono mt-1.5 inline-flex items-center gap-1"
-                        >
-                          https://mpago.la/1SfRUJ2
-                          <ExternalLink className="w-2.5 h-2.5" />
-                        </a>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -3626,12 +3617,13 @@ function MainApp() {
                       <span className="text-[10px] text-slate-400 font-semibold block">/ mês</span>
                     </div>
                   </div>
-                </div>
+                </button>
 
-                {/* Plano 6 Meses: R$ 71,94 (Promocional) */}
-                <div
+                {/* Plano 6 Meses Promocional: R$ 71,94 */}
+                <button
+                  type="button"
                   onClick={() => setSelectedPaymentPlan('6_months')}
-                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative ${
+                  className={`w-full p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative ${
                     selectedPaymentPlan === '6_months'
                       ? 'bg-amber-500/10 border-amber-500/70 shadow-lg shadow-amber-500/10'
                       : 'bg-slate-950/60 border-white/10 hover:border-amber-500/30'
@@ -3643,7 +3635,7 @@ function MainApp() {
 
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-2.5">
-                      <div className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center transition-colors ${
+                      <div className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center transition-colors shrink-0 ${
                         selectedPaymentPlan === '6_months'
                           ? 'border-amber-400 bg-amber-400'
                           : 'border-slate-600 bg-transparent'
@@ -3652,22 +3644,12 @@ function MainApp() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-white">Plano 6 Meses</span>
+                          <span className="font-bold text-sm text-white">Plano 6 Meses Promocional</span>
                           <span className="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">180 Dias</span>
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Acesso semestral garantido com economia
+                        <p className="text-[11px] text-slate-300 mt-0.5">
+                          Acesso Premium por 180 dias (6 meses)
                         </p>
-                        <a
-                          href="https://mpago.la/2VEfdNP"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-[10px] text-amber-400 hover:text-amber-300 underline font-mono mt-1.5 inline-flex items-center gap-1"
-                        >
-                          https://mpago.la/2VEfdNP
-                          <ExternalLink className="w-2.5 h-2.5" />
-                        </a>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -3675,7 +3657,7 @@ function MainApp() {
                       <span className="text-[10px] text-slate-400 font-semibold block">/ 6 meses</span>
                     </div>
                   </div>
-                </div>
+                </button>
               </div>
 
               <div className="space-y-1.5 pt-1">
@@ -3711,8 +3693,8 @@ function MainApp() {
                     {checkoutLoading
                       ? "Carregando..."
                       : selectedPaymentPlan === '6_months'
-                        ? "Pagar R$ 71,94 (6 Meses Promocional)"
-                        : "Pagar R$ 11,99 (1 Mês)"}
+                        ? "Ir para o Pagamento • R$ 71,94 (6 Meses)"
+                        : "Ir para o Pagamento • R$ 11,99 (1 Mês)"}
                   </span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
@@ -6260,9 +6242,10 @@ function MainApp() {
             {/* Plan Cards */}
             <div className="space-y-3">
               {/* Plano 1 Mês: R$ 11,99 */}
-              <div
+              <button
+                type="button"
                 onClick={() => setSelectedPaymentPlan('1_month')}
-                className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative ${
+                className={`w-full p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative ${
                   selectedPaymentPlan === '1_month'
                     ? 'bg-emerald-500/10 border-emerald-500/60 shadow-lg shadow-emerald-500/10'
                     : 'bg-slate-950/60 border-white/10 hover:border-emerald-500/30'
@@ -6270,7 +6253,7 @@ function MainApp() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2.5">
-                    <div className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center transition-colors ${
+                    <div className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center transition-colors shrink-0 ${
                       selectedPaymentPlan === '1_month'
                         ? 'border-emerald-500 bg-emerald-500'
                         : 'border-slate-600 bg-transparent'
@@ -6282,19 +6265,9 @@ function MainApp() {
                         <span className="font-bold text-sm text-white">Plano 1 Mês</span>
                         <span className="text-[9px] bg-slate-800 text-slate-300 font-bold px-2 py-0.5 rounded-full border border-white/10">30 Dias</span>
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Acesso Premium completo por 1 mês
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Acesso Premium por 30 dias
                       </p>
-                      <a
-                        href="https://mpago.la/1SfRUJ2"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-[10px] text-emerald-400 hover:text-emerald-300 underline font-mono mt-1.5 inline-flex items-center gap-1"
-                      >
-                        https://mpago.la/1SfRUJ2
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -6302,12 +6275,13 @@ function MainApp() {
                     <span className="text-[10px] text-slate-400 font-semibold block">/ mês</span>
                   </div>
                 </div>
-              </div>
+              </button>
 
-              {/* Plano 6 Meses: R$ 71,94 (Promocional) */}
-              <div
+              {/* Plano 6 Meses Promocional: R$ 71,94 */}
+              <button
+                type="button"
                 onClick={() => setSelectedPaymentPlan('6_months')}
-                className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative ${
+                className={`w-full p-3.5 rounded-2xl border text-left transition-all cursor-pointer relative ${
                   selectedPaymentPlan === '6_months'
                     ? 'bg-amber-500/10 border-amber-500/70 shadow-lg shadow-amber-500/10'
                     : 'bg-slate-950/60 border-white/10 hover:border-amber-500/30'
@@ -6319,7 +6293,7 @@ function MainApp() {
 
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2.5">
-                    <div className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center transition-colors ${
+                    <div className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center transition-colors shrink-0 ${
                       selectedPaymentPlan === '6_months'
                         ? 'border-amber-400 bg-amber-400'
                         : 'border-slate-600 bg-transparent'
@@ -6328,22 +6302,12 @@ function MainApp() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-white">Plano 6 Meses</span>
+                        <span className="font-bold text-sm text-white">Plano 6 Meses Promocional</span>
                         <span className="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">180 Dias</span>
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Acesso semestral garantido com economia
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Acesso Premium por 180 dias (6 meses)
                       </p>
-                      <a
-                        href="https://mpago.la/2VEfdNP"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-[10px] text-amber-400 hover:text-amber-300 underline font-mono mt-1.5 inline-flex items-center gap-1"
-                      >
-                        https://mpago.la/2VEfdNP
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -6351,7 +6315,7 @@ function MainApp() {
                     <span className="text-[10px] text-slate-400 font-semibold block">/ 6 meses</span>
                   </div>
                 </div>
-              </div>
+              </button>
             </div>
 
             <div className="space-y-1.5 pt-1">
@@ -6387,8 +6351,8 @@ function MainApp() {
                   {checkoutLoading
                     ? "Carregando..."
                     : selectedPaymentPlan === '6_months'
-                      ? "Pagar R$ 71,94 (6 Meses Promocional)"
-                      : "Pagar R$ 11,99 (1 Mês)"}
+                      ? "Ir para o Pagamento • R$ 71,94 (6 Meses)"
+                      : "Ir para o Pagamento • R$ 11,99 (1 Mês)"}
                 </span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>

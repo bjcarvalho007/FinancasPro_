@@ -870,7 +870,18 @@ const getMercadoPagoPublicKey = (): string => {
 // Mercado Pago dynamic checkout preference creation
 app.post("/api/mercadopago/create-preference", async (req, res) => {
   try {
-    const { email, userId } = req.body;
+    const { email, userId, plan } = req.body;
+    const isSixMonths = plan === "6_months";
+
+    const itemPrice = isSixMonths ? 71.94 : 11.99;
+    const itemTitle = isSixMonths
+      ? "Assinatura Premium FinançasPro - 6 Meses Promocional"
+      : "Assinatura Premium FinançasPro - 30 Dias";
+    const itemId = isSixMonths ? "premium_6_months" : "premium_30_days";
+    const itemDescription = isSixMonths
+      ? "Acesso total de 6 meses (promocional) à gestão financeira corporativa e controle orçamentário."
+      : "Acesso total à gestão financeira corporativa e projeções analíticas automatizadas.";
+    const fallbackDirectUrl = isSixMonths ? "https://mpago.la/2VEfdNP" : "https://mpago.la/1SfRUJ2";
     
     const rawOrigin = process.env.APP_URL || req.get("origin") || req.get("referer") || (req.get("host") ? `${req.protocol}://${req.get("host")}` : "http://localhost:3000");
     let origin = "http://localhost:3000";
@@ -891,7 +902,7 @@ app.post("/api/mercadopago/create-preference", async (req, res) => {
       throw new Error("O ambiente Node.js atual não suporta 'fetch'. Certifique-se de usar Node 18 ou superior.");
     }
     
-    console.log(`\n💳 [MERCADO PAGO] Criando preferência para email=${email || "Novo Usuário"}, userId=${userId || "new_user"}`);
+    console.log(`\n💳 [MERCADO PAGO] Criando preferência para email=${email || "Novo Usuário"}, userId=${userId || "new_user"}, plano=${isSixMonths ? "6_meses_promocional" : "1_mes"}`);
 
     const response = await fetchFn("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
@@ -902,12 +913,12 @@ app.post("/api/mercadopago/create-preference", async (req, res) => {
       body: JSON.stringify({
         items: [
           {
-            id: "premium_30_days",
-            title: "Assinatura Premium FinançasPro - 30 Dias",
-            description: "Acesso total à gestão financeira corporativa e projeções analíticas automatizadas.",
+            id: itemId,
+            title: itemTitle,
+            description: itemDescription,
             quantity: 1,
             currency_id: "BRL",
-            unit_price: 11.99
+            unit_price: itemPrice
           }
         ],
         payer: {
@@ -927,15 +938,17 @@ app.post("/api/mercadopago/create-preference", async (req, res) => {
     if (!response.ok) {
       const errText = await response.text();
       console.error(`❌ [MERCADO PAGO] Erro ao criar preferência: ${response.status} - ${errText}`);
-      throw new Error(`Erro ao criar link de pagamento no Mercado Pago: ${response.statusText}`);
+      // Return direct fallback url instead of hard failing
+      return res.json({ id: itemId, url: fallbackDirectUrl });
     }
 
     const data = await response.json();
     console.log(`✅ [MERCADO PAGO] Preferência criada com sucesso: ID=${data.id}`);
-    res.json({ id: data.id, url: data.init_point });
+    res.json({ id: data.id, url: data.init_point || fallbackDirectUrl });
   } catch (err: any) {
     console.error("Erro ao criar preferência do Mercado Pago:", err);
-    res.status(500).json({ error: err.message || "Erro interno" });
+    const fallbackDirectUrl = req.body?.plan === "6_months" ? "https://mpago.la/2VEfdNP" : "https://mpago.la/1SfRUJ2";
+    res.json({ id: "fallback", url: fallbackDirectUrl });
   }
 });
 
@@ -1009,7 +1022,10 @@ app.post("/api/mercadopago/webhook", async (req, res) => {
         const adminDb = admin.firestore();
         
         const now = new Date();
-        const expiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // Exatamente 30 dias a partir do pagamento
+        const transactionAmount = Number(paymentData.transaction_amount) || 0;
+        const isSixMonthsPlan = transactionAmount >= 50;
+        const daysToAdd = isSixMonthsPlan ? 180 : 30; // 180 dias para plano semestral (R$ 71,94) ou 30 dias para mensal (R$ 11,99)
+        const expiryDate = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
         const dataVencimento = expiryDate.toISOString();
         const paymentApprovedAt = now.toISOString();
 
@@ -1212,7 +1228,10 @@ app.post("/api/mercadopago/verify-payment", async (req, res) => {
       }
 
       const now = new Date();
-      const expiryDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const transactionAmount = Number(paymentData.transaction_amount) || 0;
+      const isSixMonthsPlan = transactionAmount >= 50;
+      const daysToAdd = isSixMonthsPlan ? 180 : 30; // 180 dias para plano semestral (R$ 71,94) ou 30 dias para mensal (R$ 11,99)
+      const expiryDate = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
       const dataVencimento = expiryDate.toISOString();
       const paymentApprovedAt = now.toISOString();
 

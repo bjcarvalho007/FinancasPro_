@@ -42,9 +42,10 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen, ini
   const [currentStep, setCurrentStep] = useState(0);
   const [activeView, setActiveView] = useState<'step_by_step' | 'summary' | 'faq'>(initialView || 'step_by_step');
   const [expandedFaq, setExpandedFaq] = useState<Record<string, boolean>>({
+    agrupamento_variaveis: true,
     cobrancas_ambientes: true,
-    cobrancas_parcelas: true,
-    cobrancas_competencia: true,
+    cobrancas_parcelas: false,
+    cobrancas_competencia: false,
     cobrancas_datas: false,
     sobra_caixa: false,
     contas_fixas: false
@@ -96,12 +97,12 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen, ini
     },
     {
       title: 'Passo 3: Gastos Variáveis do Dia a Dia',
-      subtitle: 'Controle de consumo mensal',
+      subtitle: 'Controle de consumo com agrupamento inteligente',
       icon: <Receipt className="w-9 h-9 text-amber-500" />,
-      description: 'Registre os gastos avulsos do mês atual (alimentação, supermercado, combustível, farmácia, lazer). Esses gastos pertencem apenas ao mês em que foram lançados e ajudam você a enxergar com clareza para onde seu dinheiro foi.',
+      description: 'Registre os gastos avulsos do mês atual (alimentação, supermercado, combustível, farmácia, lazer). Despesas com a mesma descrição (ex: "Futebol", "Padaria") são agrupadas automaticamente com a soma total do valor e histórico organizado por data.',
       color: "from-amber-500/20 to-orange-500/5",
       badge: 'Passo 3 de 7',
-      tip: 'Categorize seus gastos variáveis para identificar facilmente quais categorias estão consumindo a maior fatia da sua renda.'
+      tip: 'Toque no grupo para ver todos os lançamentos ordenados por data ou use o botão na barra superior para alternar entre visão agrupada e individual.'
     },
     {
       title: 'Passo 4: Compras Parceladas e Cartão',
@@ -508,15 +509,53 @@ export default function OnboardingTutorial({ theme, isOpen, onClose, onOpen, ini
                   }`}>
                     <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
                       <Sparkles className="w-4 h-4" />
-                      <span>Novidades Recentes: Ganhos & Cobranças</span>
+                      <span>Novidades Recentes: Agrupamento de Gastos & Cobranças</span>
                     </div>
                     <p className="text-[11px] leading-relaxed mt-1 text-slate-600 dark:text-slate-300">
-                      Entenda como funcionam os novos <strong>Ambientes de Ganhos</strong>, o sistema de <strong>Cobranças Parceladas com Juros</strong> e a <strong>Soma Automática na Renda do Mês (Competência)</strong>.
+                      Entenda como funcionam o novo <strong>Agrupamento Inteligente de Gastos Variáveis por Descrição</strong>, os <strong>Ambientes de Ganhos</strong> e as <strong>Cobranças Parceladas com Juros</strong>.
                     </p>
                   </div>
 
                   {/* FAQ Accordion List */}
                   <div className="space-y-2.5">
+                    {/* Item 0: Agrupamento de Gastos Variáveis por Descrição */}
+                    <div className={`rounded-2xl border transition-all ${
+                      theme === 'light' ? 'bg-amber-50/50 border-amber-200/90 shadow-xs' : 'bg-amber-500/10 border-amber-500/25'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => toggleFaq('agrupamento_variaveis')}
+                        className="w-full p-3.5 flex items-center justify-between text-left cursor-pointer gap-2"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                            <Layers className="w-4 h-4" />
+                          </div>
+                          <span className="text-xs font-black leading-tight text-amber-950 dark:text-amber-200">
+                            Como funciona o Agrupamento de Gastos Variáveis por Descrição?
+                          </span>
+                        </div>
+                        {expandedFaq.agrupamento_variaveis ? (
+                          <ChevronUp className="w-4 h-4 text-amber-500 shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-amber-500 shrink-0" />
+                        )}
+                      </button>
+                      {expandedFaq.agrupamento_variaveis && (
+                        <div className="px-3.5 pb-3.5 pt-0 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300 border-t border-amber-200/60 dark:border-white/5 mt-1 space-y-1.5">
+                          <p>
+                            Agora, na aba <strong>Variados (Gastos Variáveis)</strong>, quando você lançar despesas com a mesma descrição (por exemplo, <em>"Futebol"</em>, <em>"Padaria"</em> ou <em>"Combustível"</em>), o sistema agrupa tudo automaticamente em um único cartão:
+                          </p>
+                          <ul className="list-disc pl-4 space-y-1.5">
+                            <li><strong>Soma Consolidada e Contagem:</strong> O cartão principal exibe o somatório total de todos os gastos daquela descrição e a quantidade de lançamentos (ex: <code className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold">👥 3 Lançamentos</code>).</li>
+                            <li><strong>Histórico Organizado por Data:</strong> Ao clicar no cartão, uma tela detalhada se abre exibindo toda a lista organizada por data do gasto, com a data exata e valor de cada partida/lançamento.</li>
+                            <li><strong>Ações Individuais:</strong> Dentro do detalhe, você pode marcar lançamentos individuais como pagos, editar valor e data, excluir ou clicar em <strong>+ Adicionar Outro</strong> já pré-preenchido com a mesma descrição.</li>
+                            <li><strong>Modo Flexível na Barra:</strong> Você pode alternar entre a visão <strong>👥 Agrupado por Nome</strong> e <strong>Visualização Individual</strong> a qualquer momento pelo botão superior.</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Item 1 */}
                     <div className={`rounded-2xl border transition-all ${
                       theme === 'light' ? 'bg-white border-slate-200' : 'bg-white/5 border-white/5'

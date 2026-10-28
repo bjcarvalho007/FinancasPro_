@@ -1362,24 +1362,24 @@ function MainApp() {
 
   const [tutorialInitialView, setTutorialInitialView] = useState<'step_by_step' | 'summary' | 'faq'>('step_by_step');
 
-  // Novidades de Ganhos, Cobranças e Competências (exibido apenas UMA VEZ quando o cliente entrar)
+  // Novidades: Agrupamento Inteligente de Gastos Variáveis (exibido apenas UMA VEZ assim que o usuário entrar no sistema)
   useEffect(() => {
     if (!user) return;
-    const userKey = `novidades_ganhos_competencias_${user.uid}`;
+    const userKey = `novidades_agrupamento_variaveis_${user.uid}`;
     const alreadySeen = localStorage.getItem(userKey);
     if (!alreadySeen) {
       const timer = setTimeout(() => {
         setShowUpdateAlert(true);
-      }, 1200);
+      }, 1000);
       return () => clearTimeout(timer);
     }
   }, [user]);
 
   const handleDismissUpdateAlert = () => {
     if (user) {
-      localStorage.setItem(`novidades_ganhos_competencias_${user.uid}`, 'true');
+      localStorage.setItem(`novidades_agrupamento_variaveis_${user.uid}`, 'true');
     }
-    localStorage.setItem('novidades_ganhos_competencias_v1_seen', 'true');
+    localStorage.setItem('novidades_agrupamento_variaveis_v1_seen', 'true');
     setShowUpdateAlert(false);
   };
 
@@ -7035,7 +7035,7 @@ function MainApp() {
                       Novidades no FinançasPro! ✨
                     </h3>
                     <p className="text-[10.5px] text-amber-500 font-extrabold uppercase tracking-wider mt-1.5 flex items-center gap-1">
-                      <span>Módulo de Ganhos, Cobranças & Competências</span>
+                      <span>Agrupamento de Gastos Variáveis & Histórico por Data</span>
                     </p>
                   </div>
                 </div>
@@ -7053,45 +7053,45 @@ function MainApp() {
               {/* Updates List */}
               <div className="space-y-3 pt-4 pb-5 text-left relative z-10 max-h-[58vh] overflow-y-auto pr-1">
                 <p className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
-                  Confira as novas ferramentas adicionadas para você gerenciar sua renda mensal, rendas extras e valores a receber de terceiros com máxima facilidade:
+                  Confira a nova melhoria que acaba de chegar para deixar o seu controle de gastos variáveis muito mais limpo, organizado e rápido de analisar:
                 </p>
 
                 <div className="space-y-2.5">
-                  {/* Card 1: 3 Ambientes em Ganhos */}
+                  {/* Card 1: Agrupamento Automático */}
+                  <div className={`p-3.5 rounded-2xl border flex gap-3 transition-all ${
+                    theme === 'light' ? 'bg-amber-50/60 border-amber-200/90 shadow-xs' : 'bg-amber-500/10 border-amber-500/20'
+                  }`}>
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 mt-0.5">
+                      <Layers className="w-4.5 h-4.5 text-amber-500" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                        1. Agrupamento Automático por Descrição
+                      </h4>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed mt-0.5">
+                        Lançamentos com o mesmo nome (ex: <strong>"Futebol"</strong>, <strong>"Padaria"</strong>, <strong>"Combustível"</strong>) agora são agrupados automaticamente em um único cartão, mostrando a <strong>soma total acumulada</strong> e a <strong>quantidade de lançamentos</strong>.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Histórico Detalhado por Data ao Clicar */}
                   <div className={`p-3.5 rounded-2xl border flex gap-3 transition-all ${
                     theme === 'light' ? 'bg-emerald-50/50 border-emerald-200/80' : 'bg-emerald-500/10 border-emerald-500/20'
                   }`}>
                     <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-                      <Wallet className="w-4.5 h-4.5 text-emerald-500" />
+                      <Calendar className="w-4.5 h-4.5 text-emerald-500" />
                     </div>
                     <div>
                       <h4 className="text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                        3 Ambientes de Ganhos
+                        2. Histórico Organizado por Data ao Clicar
                       </h4>
                       <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed mt-0.5">
-                        Ao clicar em <strong>Ganhos</strong>, você tem 3 visões: <strong>Renda Mensal</strong> (salário base e saldo inicial), <strong>Ganhos Extras</strong> (receitas avulsas) e <strong>Cobranças</strong> (valores a receber), todos com históricos mensais ou gerais.
+                        Ao tocar no cartão do grupo, abre-se uma tela com <strong>todos os lançamentos organizados por data</strong>. Você pode dar baixa individual (Marcar como Pago), editar valor/data, excluir ou usar o atalho <strong>+ Adicionar Outro</strong>.
                       </p>
                     </div>
                   </div>
 
-                  {/* Card 2: Cobranças Parceladas com Juros */}
-                  <div className={`p-3.5 rounded-2xl border flex gap-3 transition-all ${
-                    theme === 'light' ? 'bg-amber-50/50 border-amber-200/80' : 'bg-amber-500/10 border-amber-500/20'
-                  }`}>
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0 mt-0.5">
-                      <Users className="w-4.5 h-4.5" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                        Cobranças Parceladas com Juros
-                      </h4>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed mt-0.5">
-                        Cadastre quem te deve, valor total, parcelas (1x até 72x) e opção de juros (%). Selecione a <strong>Data de Início</strong>, a <strong>Data Combinada / 1º Vencimento</strong> e o <strong>Mês de Pagamento</strong>.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Card 3: Soma Automática na Renda do Mês */}
+                  {/* Card 3: Alternador de Visualização */}
                   <div className={`p-3.5 rounded-2xl border flex gap-3 transition-all ${
                     theme === 'light' ? 'bg-indigo-50/50 border-indigo-200/80' : 'bg-indigo-500/10 border-indigo-500/20'
                   }`}>
@@ -7100,10 +7100,10 @@ function MainApp() {
                     </div>
                     <div>
                       <h4 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                        Soma Automática na Renda do Mês
+                        3. Alternador de Visão na Barra
                       </h4>
                       <p className="text-[11px] text-slate-600 dark:text-slate-300 font-medium leading-relaxed mt-0.5">
-                        Ao receber uma parcela no mês (ex: pagou R$ 500 de R$ 2.500), ela é <strong>somada na sua renda do mês</strong> aumentando sua sobra de caixa! O saldo devedor restante continua nos meses seguintes.
+                        Prefere ver os gastos separados? Basta tocar no botão <strong>👥 Agrupado por Nome / Visualização Individual</strong> na barra de ferramentas da aba Variados sempre que quiser.
                       </p>
                     </div>
                   </div>
@@ -7112,7 +7112,7 @@ function MainApp() {
                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2">
                   <HelpCircle className="w-4 h-4 text-emerald-500 shrink-0" />
                   <p className="text-[10.5px] text-slate-600 dark:text-emerald-300 font-medium">
-                    Todas as dúvidas detalhadas e perguntas frequentes foram adicionadas na aba <strong>FAQ & Novidades</strong> (botão flutuante no canto inferior).
+                    Todas as novidades e perguntas frequentes também estão explicadas em detalhes na aba <strong>FAQ & Ajuda</strong> (botão flutuante no canto inferior).
                   </p>
                 </div>
               </div>

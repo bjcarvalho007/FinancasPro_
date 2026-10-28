@@ -1508,7 +1508,9 @@ function MainApp() {
   }, forcePaidState?: 'paid' | 'unpaid') => {
     if (!user) return;
 
-    if (!editingTransaction && data.type === 'variaveis' && !forcePaidState) {
+    const isEditingExisting = Boolean(editingTransaction && editingTransaction.id);
+
+    if (!isEditingExisting && data.type === 'variaveis' && !forcePaidState) {
       setConfirmModal({
         isOpen: true,
         title: 'Gasto variável já pago?',
@@ -1531,12 +1533,12 @@ function MainApp() {
       return;
     }
 
-    const docId = editingTransaction ? editingTransaction.id : `tx_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const docId = isEditingExisting ? editingTransaction!.id : `tx_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const path = `transactions/${docId}`;
     
     // Merge existing item status if editing
-    let fallbackPaid = editingTransaction ? editingTransaction.paid_amount : 0;
-    let fallbackPaidAt = editingTransaction ? editingTransaction.paid_at : '';
+    let fallbackPaid = isEditingExisting ? (editingTransaction?.paid_amount || 0) : 0;
+    let fallbackPaidAt = isEditingExisting ? (editingTransaction?.paid_at || '') : '';
 
     if (forcePaidState === 'paid') {
       fallbackPaid = data.amount;
@@ -1547,8 +1549,8 @@ function MainApp() {
     }
 
     // Determine robust masterId identifier if this belongs to a series
-    let inferredMasterId = editingTransaction?.masterId;
-    if (!inferredMasterId && editingTransaction?.id) {
+    let inferredMasterId = isEditingExisting ? editingTransaction?.masterId : undefined;
+    if (!inferredMasterId && isEditingExisting && editingTransaction?.id) {
       if (editingTransaction.id.startsWith('v_')) {
         const parts = editingTransaction.id.split('_');
         if (parts.length >= 2) {
@@ -1567,10 +1569,10 @@ function MainApp() {
       inferredMasterId = docId;
     }
 
-    let assignedMonthKey = editingTransaction ? editingTransaction.monthKey : currentMonthKey;
+    let assignedMonthKey = (isEditingExisting && editingTransaction?.monthKey) ? editingTransaction.monthKey : currentMonthKey;
     if (data.due && /^\d{4}-\d{2}-\d{2}$/.test(data.due.trim())) {
       const selectedMonthKey = data.due.trim().substring(0, 7);
-      if (!editingTransaction) {
+      if (!isEditingExisting) {
         assignedMonthKey = selectedMonthKey;
       }
     }
@@ -1586,25 +1588,25 @@ function MainApp() {
       monthKey: assignedMonthKey,
       paid_amount: fallbackPaid,
       paid_at: fallbackPaidAt || '',
-      createdAt: editingTransaction?.createdAt || new Date().toISOString(),
+      createdAt: (isEditingExisting && editingTransaction?.createdAt) ? editingTransaction.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
     if (data.total_parcelado !== undefined) {
       newTx.total_parcelado = data.total_parcelado;
-    } else if (editingTransaction?.total_parcelado !== undefined) {
+    } else if (isEditingExisting && editingTransaction?.total_parcelado !== undefined) {
       newTx.total_parcelado = editingTransaction.total_parcelado;
     }
 
     if (data.establishment !== undefined) {
       newTx.establishment = data.establishment;
-    } else if (editingTransaction?.establishment !== undefined) {
+    } else if (isEditingExisting && editingTransaction?.establishment !== undefined) {
       newTx.establishment = editingTransaction.establishment;
     }
 
     if (data.installmentsCount !== undefined) {
       newTx.installmentsCount = data.installmentsCount;
-    } else if (editingTransaction?.installmentsCount !== undefined) {
+    } else if (isEditingExisting && editingTransaction?.installmentsCount !== undefined) {
       newTx.installmentsCount = editingTransaction.installmentsCount;
     }
 
@@ -6039,12 +6041,20 @@ function MainApp() {
         onEdit={(tx) => handleOpenEdit(tx)}
         onDelete={(txId) => handleDeleteTransaction(txId)}
         onAddAnother={(name, defaultCat) => {
+          let defaultDue = new Date().toISOString().substring(0, 10);
+          if (currentMonthKey && /^\d{4}-\d{2}$/.test(currentMonthKey.trim())) {
+            const today = new Date();
+            const [tYear, tMonth] = currentMonthKey.trim().split('-').map(Number);
+            const maxDays = new Date(tYear, tMonth, 0).getDate();
+            const targetDay = Math.min(Math.max(1, today.getDate()), maxDays);
+            defaultDue = `${currentMonthKey.trim()}-${String(targetDay).padStart(2, '0')}`;
+          }
           setEditingTransaction({
             name,
             cat: defaultCat || 'outros',
             type: 'variaveis',
             amount: 0,
-            due: new Date().toISOString().substring(0, 10)
+            due: defaultDue
           } as any);
           setIsAddOpen(true);
         }}
@@ -6366,7 +6376,7 @@ function MainApp() {
       {/* Global Confirmation Modal */}
       <AnimatePresence>
         {confirmModal.isOpen && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

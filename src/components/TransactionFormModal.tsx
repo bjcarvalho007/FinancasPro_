@@ -222,7 +222,8 @@ export default function TransactionFormModal({
       justOpenedRef.current = true;
       if (initialData) {
         setName(initialData.name);
-        setAmountStr(formatMoney(initialData.type === 'parcelas' ? (initialData.total_parcelado || initialData.amount) : initialData.amount));
+        const rawAmt = initialData.type === 'parcelas' ? (initialData.total_parcelado || initialData.amount) : initialData.amount;
+        setAmountStr(rawAmt && rawAmt > 0 ? formatMoney(rawAmt) : '');
         setType(initialData.type);
         setCat(initialData.cat);
         setDue(normalizeToISODate(initialData.due));

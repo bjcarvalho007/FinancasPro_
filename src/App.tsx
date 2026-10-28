@@ -27,6 +27,7 @@ import OnboardingTutorial from './components/OnboardingTutorial';
 import ExtraEarningsManager from './components/ExtraEarningsManager';
 import AdminPanel from './components/AdminPanel';
 import GanhosModal from './components/GanhosModal';
+import GroupedExpensesModal from './components/GroupedExpensesModal';
 import { 
   TrendingUp, 
   Plus, 
@@ -582,6 +583,8 @@ function MainApp() {
   const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
   const [showCelebrationModal, setShowCelebrationModal] = useState<boolean>(false);
   const [celebratedTx, setCelebratedTx] = useState<{ name: string; amount: number } | null>(null);
+  const [selectedGroupedExpenseName, setSelectedGroupedExpenseName] = useState<string | null>(null);
+  const [isGroupVariableEnabled, setIsGroupVariableEnabled] = useState<boolean>(true);
 
   // Pull to refresh support variables
   const [startY, setStartY] = useState<number>(0);
@@ -2972,6 +2975,100 @@ function MainApp() {
     return sorted;
   }, [activeMonthTransactions, activeTab, tabSortBy]);
 
+  const parseDueDayHelper = (dueStr?: string): number => {
+    if (!dueStr) return 99;
+    const clean = dueStr.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+      const parts = clean.split('-');
+      const day = parseInt(parts[2], 10);
+      return isNaN(day) ? 99 : day;
+    }
+    const num = parseInt(clean.replace(/\D/g, ''), 10);
+    return isNaN(num) ? 99 : num;
+  };
+
+  const displayTransactionsOrGroups = useMemo(() => {
+    if (activeTab !== 'variaveis' || !isGroupVariableEnabled) {
+      return activeTabTransactions.map(tx => ({
+        key: tx.id,
+        isGroup: false,
+        tx,
+        name: tx.name,
+        amount: tx.amount,
+        paid_amount: tx.paid_amount || 0,
+        count: 1,
+        transactions: [tx]
+      }));
+    }
+
+    // Group activeTabTransactions by description (normalized lowercase trimmed)
+    const nameGroups = new Map<string, Transaction[]>();
+    for (const tx of activeTabTransactions) {
+      const norm = tx.name.trim().toLowerCase();
+      if (!nameGroups.has(norm)) {
+        nameGroups.set(norm, []);
+      }
+      nameGroups.get(norm)!.push(tx);
+    }
+
+    const seen = new Set<string>();
+    const result: Array<{
+      key: string;
+      isGroup: boolean;
+      tx: Transaction;
+      name: string;
+      amount: number;
+      paid_amount: number;
+      count: number;
+      transactions: Transaction[];
+    }> = [];
+
+    for (const tx of activeTabTransactions) {
+      const norm = tx.name.trim().toLowerCase();
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+
+      const groupTxs = nameGroups.get(norm) || [tx];
+      // Sort transactions inside the group by date
+      const sortedGroupTxs = [...groupTxs].sort((a, b) => {
+        if (a.due && b.due && a.due.length >= 10 && b.due.length >= 10) {
+          return a.due.localeCompare(b.due);
+        }
+        return parseDueDayHelper(a.due) - parseDueDayHelper(b.due);
+      });
+
+      const isGroup = sortedGroupTxs.length > 1;
+      const totalAmount = sortedGroupTxs.reduce((sum, t) => sum + (t.amount || 0), 0);
+      const totalPaid = sortedGroupTxs.reduce((sum, t) => sum + (t.paid_amount || 0), 0);
+
+      result.push({
+        key: isGroup ? `group_${norm}` : tx.id,
+        isGroup,
+        tx: sortedGroupTxs[0],
+        name: sortedGroupTxs[0].name.trim(),
+        amount: isGroup ? totalAmount : tx.amount,
+        paid_amount: isGroup ? totalPaid : (tx.paid_amount || 0),
+        count: sortedGroupTxs.length,
+        transactions: sortedGroupTxs
+      });
+    }
+
+    return result;
+  }, [activeTab, activeTabTransactions, isGroupVariableEnabled]);
+
+  const activeGroupTransactions = useMemo(() => {
+    if (!selectedGroupedExpenseName) return [];
+    const targetNorm = selectedGroupedExpenseName.trim().toLowerCase();
+    return activeMonthTransactions
+      .filter(t => t.type === 'variaveis' && t.name.trim().toLowerCase() === targetNorm)
+      .sort((a, b) => {
+        if (a.due && b.due && a.due.length >= 10 && b.due.length >= 10) {
+          return a.due.localeCompare(b.due);
+        }
+        return parseDueDayHelper(a.due) - parseDueDayHelper(b.due);
+      });
+  }, [selectedGroupedExpenseName, activeMonthTransactions]);
+
   // Summaries Calculations
   const inc = settings?.monthlyIncome?.[currentMonthKey] || settings?.income || 0;
   const bal = settings?.monthlyBalance?.[currentMonthKey] || settings?.balance || 0;
@@ -4765,6 +4862,26 @@ function MainApp() {
                       >
                         📋 Lista Simples
                       </button>
+
+                      {activeTab === 'variaveis' && (
+                        <button
+                          type="button"
+                          onClick={() => setIsGroupVariableEnabled(!isGroupVariableEnabled)}
+                          className={`px-3 py-1.5 rounded-xl text-[10.5px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                            isGroupVariableEnabled 
+                              ? theme === 'light' 
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300 shadow-xs' 
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs'
+                              : theme === 'light' 
+                                ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200' 
+                                : 'bg-white/3 hover:bg-white/8 text-slate-400'
+                          }`}
+                          title="Agrupar despesas com a mesma descrição"
+                        >
+                          <span>👥</span>
+                          <span>{isGroupVariableEnabled ? 'Agrupado por Nome' : 'Visualização Individual'}</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Right: sorting options */}
@@ -4810,7 +4927,190 @@ function MainApp() {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {activeTabTransactions.map((tx) => {
+                        {displayTransactionsOrGroups.map((item) => {
+                          if (item.isGroup) {
+                            const remDue = item.amount - (item.paid_amount || 0);
+                            const isPaid = remDue <= 0.009;
+                            const isPartial = (item.paid_amount || 0) > 0 && !isPaid;
+                            const categoryObj = activeMonthCategoryList.find(c => c.value === item.tx.cat) || { icon: '📦', label: item.tx.cat || 'Outros' };
+
+                            if (tabLayout === 'lista') {
+                              return (
+                                <motion.div
+                                  key={item.key}
+                                  initial={{ opacity: 0, y: 18 }}
+                                  whileInView={{ opacity: 1, y: 0 }}
+                                  viewport={{ once: true, margin: '-10px' }}
+                                  transition={{ duration: 0.3 }}
+                                  onClick={() => setSelectedGroupedExpenseName(item.name)}
+                                  className={`p-3 rounded-2xl border flex flex-col gap-2 transition-all cursor-pointer group ${
+                                    theme === 'light' 
+                                      ? 'bg-amber-50/40 border-amber-200/90 hover:border-amber-400 hover:shadow-xs' 
+                                      : 'bg-amber-500/5 border border-amber-500/20 hover:border-amber-500/40'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-3 w-full animate-fadeIn">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      <div className={`w-8 h-8 rounded-lg border flex items-center justify-center text-base shadow-sm shrink-0 ${
+                                        theme === 'light' ? 'bg-amber-100 border-amber-200 text-amber-800' : 'bg-amber-500/20 border border-amber-500/30 text-amber-300'
+                                      }`}>
+                                        👥
+                                      </div>
+                                      <div className="min-w-0">
+                                        <h4 className={`font-display font-bold text-[13.5px] truncate flex items-center gap-1.5 leading-none ${
+                                          theme === 'light' ? 'text-slate-800 group-hover:text-amber-800' : 'text-white group-hover:text-amber-300'
+                                        }`}>
+                                          {item.name} {isPaid && <span className="text-emerald-450 font-sans font-black">✓</span>}
+                                          <span className="text-[8.5px] shrink-0 font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30">
+                                            {item.count} Lançamentos
+                                          </span>
+                                        </h4>
+                                        <p className="text-[10px] text-slate-550/90 font-medium truncate mt-0.5 flex flex-wrap items-center gap-1">
+                                          <span>{categoryObj.label} • {formatCurrency(item.amount)} acumulado</span>
+                                          <span className="text-amber-600 dark:text-amber-400 font-bold ml-1">Toque p/ ver por data ➔</span>
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedGroupedExpenseName(item.name);
+                                        }}
+                                        className="px-2.5 py-1 rounded-md text-[9.5px] font-black tracking-wider uppercase cursor-pointer transition-all bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
+                                      >
+                                        VER LISTA ({item.count})
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Legend underneath grouped card */}
+                                  <div className={`pt-1.5 border-t border-dashed ${
+                                    theme === 'light' ? 'border-amber-200/60' : 'border-white/5'
+                                  } flex items-center justify-between gap-1.5 text-[9.5px]`}>
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[10px]">{isPaid ? '🟢' : isPartial ? '🟡' : '⚪'}</span>
+                                      <span className={`font-extrabold uppercase tracking-wider ${
+                                        isPaid 
+                                          ? theme === 'light' ? 'text-emerald-700/90' : 'text-emerald-400'
+                                          : isPartial 
+                                            ? theme === 'light' ? 'text-amber-600/90' : 'text-amber-500'
+                                            : theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                                      }`}>
+                                        {isPaid 
+                                          ? 'Todos quitados' 
+                                          : isPartial 
+                                            ? `Parcial: ${formatCurrency(item.paid_amount)} pago de ${formatCurrency(item.amount)}` 
+                                            : `${item.count} gastos agrupados com mesma descrição`
+                                        }
+                                      </span>
+                                    </div>
+                                    <span className="text-amber-600 dark:text-amber-400 font-bold">
+                                      Ver detalhes ➔
+                                    </span>
+                                  </div>
+                                </motion.div>
+                              );
+                            }
+
+                            // DETALHADO Group Card
+                            return (
+                              <motion.div
+                                key={item.key}
+                                initial={{ opacity: 0, y: 18 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true, margin: '-10px' }}
+                                transition={{ duration: 0.3 }}
+                                onClick={() => setSelectedGroupedExpenseName(item.name)}
+                                className={`p-4 rounded-3xl border flex flex-col gap-3.5 transition-all cursor-pointer group ${
+                                  theme === 'light' 
+                                    ? 'bg-amber-50/40 border-amber-200/90 hover:border-amber-400 hover:shadow-md' 
+                                    : 'bg-amber-500/5 border border-amber-500/20 hover:border-amber-500/40'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-4 w-full">
+                                  <div className="flex items-center gap-3.5 min-w-0">
+                                    <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-lg shadow-sm shrink-0 ${
+                                      theme === 'light' ? 'bg-amber-100 border-amber-200 text-amber-800' : 'bg-amber-500/20 border border-amber-500/30 text-amber-300'
+                                    }`}>
+                                      👥
+                                    </div>
+                                    <div className="min-w-0">
+                                      <h4 className={`font-display font-bold text-[14.5px] truncate flex items-center gap-1.5 leading-tight ${
+                                        theme === 'light' ? 'text-slate-800 group-hover:text-amber-800' : 'text-white group-hover:text-amber-300'
+                                      }`}>
+                                        {item.name} {isPaid && <span className="text-emerald-450 font-sans">✓</span>}
+                                        <span className="text-[9.5px] shrink-0 font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                                          👥 {item.count} Lançamentos Agrupados
+                                        </span>
+                                      </h4>
+                                      <p className="text-[11.5px] text-slate-500 mt-1 uppercase font-semibold tracking-wider flex flex-wrap items-center gap-1.5">
+                                        <span>{categoryObj.icon} {categoryObj.label}</span>
+                                        <span>•</span>
+                                        <span className="text-amber-600 dark:text-amber-400 font-bold">Clique para ver lista organizada por data</span>
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-3">
+                                    <div className="text-right">
+                                      <span className={`font-mono text-[15px] font-black shrink-0 block leading-tight ${
+                                        theme === 'light' ? 'text-slate-900' : 'text-white'
+                                      }`}>
+                                        {formatCurrency(item.amount)}
+                                      </span>
+                                      <span className="text-[9px] text-amber-500 font-extrabold uppercase tracking-wider block mt-0.5">
+                                        Soma do Grupo
+                                      </span>
+                                    </div>
+
+                                    <div className="flex gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedGroupedExpenseName(item.name);
+                                        }}
+                                        className="px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-wider uppercase cursor-pointer transition-all bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/25"
+                                      >
+                                        VER LISTA ({item.count})
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className={`pt-2 border-t border-dashed ${
+                                  theme === 'light' ? 'border-amber-200/60' : 'border-white/5'
+                                } flex flex-wrap items-center justify-between gap-2`}>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs shrink-0">{isPaid ? '🟢' : isPartial ? '🟡' : '⚪'}</span>
+                                    <span className={`text-[10.5px] font-bold uppercase tracking-wider ${
+                                      isPaid 
+                                        ? theme === 'light' ? 'text-emerald-700/95' : 'text-emerald-400'
+                                        : isPartial 
+                                          ? theme === 'light' ? 'text-amber-600/95' : 'text-amber-500/90'
+                                          : theme === 'light' ? 'text-slate-600' : 'text-slate-400'
+                                    }`}>
+                                      {isPaid 
+                                        ? 'Todos os lançamentos quitados' 
+                                        : isPartial 
+                                          ? `Parcialmente pago: ${formatCurrency(item.paid_amount)} de ${formatCurrency(item.amount)}` 
+                                          : 'Lançamentos aguardando quitação'
+                                      }
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                                    <span>Ver histórico detalhado ({item.count})</span>
+                                    <ArrowRight className="w-3 h-3" />
+                                  </div>
+                                </div>
+                              </motion.div>
+                            );
+                          }
+
+                          const tx = item.tx;
                           const categoryObj = activeMonthCategoryList.find(c => c.value === tx.cat) || { icon: '📦', label: tx.cat || 'Outros' };
                           const remDue = tx.amount - (tx.paid_amount || 0);
                           const isPaid = remDue <= 0;
@@ -5728,6 +6028,31 @@ function MainApp() {
         </AnimatePresence>
       )}
 
+      {/* Grouped Expenses Details Modal */}
+      <GroupedExpensesModal
+        isOpen={!!selectedGroupedExpenseName}
+        onClose={() => setSelectedGroupedExpenseName(null)}
+        groupName={selectedGroupedExpenseName || ''}
+        transactions={activeGroupTransactions}
+        theme={theme}
+        onPay={(txId) => handleOpenPay(txId)}
+        onEdit={(tx) => handleOpenEdit(tx)}
+        onDelete={(txId) => handleDeleteTransaction(txId)}
+        onAddAnother={(name, defaultCat) => {
+          setEditingTransaction({
+            name,
+            cat: defaultCat || 'outros',
+            type: 'variaveis',
+            amount: 0,
+            due: new Date().toISOString().substring(0, 10)
+          } as any);
+          setIsAddOpen(true);
+        }}
+        categoryList={activeMonthCategoryList}
+        currentMonthName={monthsList[calendarDate.getMonth()]}
+        formatCurrency={formatCurrency}
+      />
+
       {/* Transaction Add/Edit Form Overlay Modal */}
       <TransactionFormModal
         isOpen={isAddOpen}
@@ -5748,7 +6073,7 @@ function MainApp() {
       {/* Sub-Modal confirmation download for Payments */}
       {isPayOpen && (
         <AnimatePresence>
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[75] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
